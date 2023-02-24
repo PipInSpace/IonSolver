@@ -1,43 +1,24 @@
-use std::{fs, env::args, io};
+use micro_ndarray::Array;
 
-use readformat::readf;
 
-type Vec2i = (i64, i64);
+type Vec2 = (f64, f64);
 
-type Poly = [Vec2i; 4];
-
-struct IonSource {
-    origin: Poly,
-    direction: Vec2i,
-    direction_randomness: i64,
+struct Engine {
+    particles: Array<f64, 2>,
+    velocity: Array<Vec2, 2>,
+    gravity: f64,
 }
 
-struct EngineData {
-    walls: Vec<Poly>,
-    sources: Vec<IonSource>,
-}
-
-fn main() -> Result<(), io::Error> {
-    let mut args = args().skip(1);
-    let data = fs::read_to_string(args.next().expect("please provide a file as an argument"))?;
-
-    let data: EngineData = data.into();
-
-    Ok(())
-}
-
-impl From<String> for EngineData {
-    fn from(value: String) -> Self {
-        let value = readf("walls: {}\nsources: {}", value.as_str()).expect("invalid data: parse step 1");
-        EngineData { 
-            walls: {
-                let mut r = Vec::new();
-                for wall in value[0].split(", ") {
-                    
-                }
-                r
-            }, 
-            sources: (),
-        }
+impl Engine {
+    pub fn step(&mut self) {
+        
     }
+}
+
+fn main() {
+    Engine {
+        particles: Array::new([200, 200]),
+        velocity: Array::new([200, 200]),
+        gravity: 1.0,
+    }.step();
 }
