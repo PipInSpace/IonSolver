@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 micro_ndarray = "0.2"
+multicall = "0.1.3"
 readformat = "0.1.2"

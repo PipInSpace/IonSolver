@@ -9,6 +9,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f996e08cdef95f8c1fe63f63b2efe72b8be6d8ec6113d0e41f5f1416daa09d9c"
 
 [[package]]
+name = "multicall"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a8c8ab788aebb96144e8eff2b193a8e41beeddb1168491b16e1a5aff444118a"
+
+[[package]]
 name = "readformat"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19,5 +25,6 @@ name = "sim"
 version = "0.1.0"
 dependencies = [
  "micro_ndarray",
+ "multicall",
  "readformat",
 ]
