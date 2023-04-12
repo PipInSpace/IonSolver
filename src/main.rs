@@ -1,9 +1,13 @@
+extern crate image;
+
+use image::{ImageBuffer, Rgb};
+
 use micro_ndarray::Array;
 use multicall::multicall;
 
 type Vec2 = (f64, f64);
 
-use std::mem::swap;
+use std::{io::stdin, mem::swap};
 
 macro_rules! swap {
     ($o:expr, $a:tt, $b:tt) => {
@@ -88,31 +92,50 @@ impl Engine {
         swap!(self, velo_y, velo_y_prev);
         diffuse(self.n, &mut self.velo_x, &mut self.velo_x_prev, visc, dt);
         diffuse(self.n, &mut self.velo_y, &mut self.velo_y_prev, visc, dt);
-        self.project();
+        // self.project();
     }
-
-    fn project(&mut self) {
-        let h = 1.0 / self.n as f64;
-        for ([x, y], item) in self.velo_y_prev.iter_mut() {
-            *item = -0.5
-                * h
-                * (self.velo_x[[x + 1, y]] - self.velo_x[[x - 1, y]] + self.velo_y[[x, y + 1]]
-                    - self.velo_y[[x, y - 1]]);
-            self.velo_x_prev[[x, y]] = 0.0;
-        }
-        for k in 0..20 {
-            for ([x, y], item) in self.velo_x_prev.iter_mut() {
-                *iter = (self.velo_y_prev[[x, y]]
-                    + p[[x - 1, y]]
-                    + p[[x + 1, y]]
-                    + p[[x, y - 1]]
-                    + p[[x, y + 1]])
-                    / 4;
-            }
-        }
-    }
+    // fn project(&mut self) {
+    //     let h = 1.0 / self.n as f64;
+    //     for ([x, y], item) in self.velo_y_prev.iter_mut() {
+    //         *item = -0.5
+    //             * h
+    //             * (self.velo_x[[x + 1, y]] - self.velo_x[[x - 1, y]] + self.velo_y[[x, y + 1]]
+    //                 - self.velo_y[[x, y - 1]]);
+    //         self.velo_x_prev[[x, y]] = 0.0;
+    //     }
+    //     for k in 0..20 {
+    //         for ([x, y], item) in self.velo_x_prev.iter_mut() {
+    //             *item= (self.velo_y_prev[[x, y]]
+    //                 + p[[x - 1, y]]
+    //                 + p[[x + 1, y]]
+    //                 + p[[x, y - 1]]
+    //                 + p[[x, y + 1]])
+    //                 / 4.0;
+    //         }
+    //     }
+    // }
 
     pub fn step(&mut self) {}
 }
 
-fn main() {}
+fn main() {
+    let mut img = ImageBuffer::new(640, 480);
+
+    let num: Vec<u8> = stdin()
+        .lines()
+        .next()
+        .unwrap()
+        .unwrap()
+        .split(" ")
+        .map(str::parse)
+        .map(Result::unwrap)
+        .collect();
+
+    // Set every pixel to red
+    for (_, _, pixel) in img.enumerate_pixels_mut() {
+        *pixel = Rgb([num[0], num[1], num[2]]);
+    }
+
+    // Save the image as a PNG file
+    img.save("output.png").unwrap();
+}

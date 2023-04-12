@@ -5,6 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "java",
+            "name": "LatticeBoltzmannDemo",
+            "request": "launch",
+            "mainClass": "LatticeBoltzmannDemo",
+            "projectName": "sim_7587451d"
+        },
+        {
             "type": "lldb",
             "request": "launch",
             "name": "Debug executable 'sim'",
@@ -19,7 +26,9 @@
                     "kind": "bin"
                 }
             },
-            "args": ["test.ions"],
+            "args": [
+                "test.ions"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {
