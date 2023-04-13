@@ -95,6 +95,8 @@ impl Engine {
         // self.project();
     }
     fn project(&mut self) {
+        // variable names in this context:
+	// p = vel_prev
         let h = 1.0 / self.n as f64;
         for ([x, y], item) in self.velo_y_prev.iter_mut() {
             *item = -0.5
