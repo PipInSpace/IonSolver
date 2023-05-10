@@ -94,31 +94,53 @@ impl Engine {
         diffuse(self.n, &mut self.velo_y, &mut self.velo_y_prev, visc, dt);
         // self.project();
     }
-    fn project(&mut self) {
-        // variable names in this context:
-	// p = vel_prev
-        let h = 1.0 / self.n as f64;
-        for ([x, y], item) in self.velo_y_prev.iter_mut() {
-            *item = -0.5
-                * h
-                * (self.velo_x[[x + 1, y]] - self.velo_x[[x - 1, y]] + self.velo_y[[x, y + 1]]
-                    - self.velo_y[[x, y - 1]]);
-            self.velo_x_prev[[x, y]] = 0.0;
-        }
-        for k in 0..20 {
-            for ([x, y], item) in self.velo_x_prev.iter_mut() {
-                *item= (self.velo_y_prev[[x, y]]
-                    + p[[x - 1, y]]
-                    + p[[x + 1, y]]
-                    + p[[x, y - 1]]
-                    + p[[x, y + 1]])
-                    / 4.0;
-            }
-        }
-    }
+    
 
     pub fn step(&mut self) {}
 }
+
+pub fn project(N: usize, u: &mut Array<f32, 2>, v: &mut Array<f32, 2>, p: &mut Array<f32, 2>, div: &mut Array<f32, 2>) {
+    // variable names in this context:
+    // u = u in global context
+    // v = v in global context
+    // p = u_prev
+    // div = v_prev
+
+    let h = 1.0 / N as f64;
+    for ([x, y], item) in div.iter_mut() {
+        *item = -0.5
+            * h
+            * (u[[x + 1, y]] - u[[x - 1, y]] + v[[x, y + 1]]
+                - self.velo_y[[x, y - 1]]);
+        self.velo_x_prev[[x, y]] = 0.0;
+    }
+    for k in 0..20 {
+        for ([x, y], item) in self.velo_x_prev.iter_mut() {
+            *item= (self.velo_y_prev[[x, y]]
+                + p[[x - 1, y]]
+                + p[[x + 1, y]]
+                + p[[x, y - 1]]
+                + p[[x, y + 1]])
+                / 4.0;
+        }
+        set_bnd (N, 0, p);
+    }
+}
+
+pub fn set_bnd(N: usize, b: i32, x: &mut Array<f32, 2>) {
+    for i in 1..=N {
+        x[[0, i]] = if b == 1 {-x[[1,i]]} else {x[[1,i]]};
+        x[[N+1, i]] = if b == 1 {-x[[N,i]]} else {x[[N,i]]};
+        x[[i, 0]] = if b == 2 {-x[[i,1]]} else {x[[i,1]]};
+        x[[i, N+1]] = if b == 2 {-x[[i,N]]} else {x[[i,N]]};
+    }
+    x[[0, 0]] = 0.5 * (x[[1, 0]] + x[[0, 1]]);
+    x[[0, N+1]] = 0.5 * (x[[1, N+1]] + x[[0, N]]);
+    x[[N+1, 0]] = 0.5 * (x[[N, 0]] + x[[N+1, 1]]);
+    x[[N+1, N+1]] = 0.5 * (x[[N, N+1]] + x[[N+1, N]]);
+}
+
+
 
 fn main() {
     let mut img = ImageBuffer::new(640, 480);
