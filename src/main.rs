@@ -106,17 +106,17 @@ pub fn project(N: usize, u: &mut Array<f32, 2>, v: &mut Array<f32, 2>, p: &mut A
     // p = u_prev
     // div = v_prev
 
-    let h = 1.0 / N as f64;
+    let h = 1.0 / N as f32;
     for ([x, y], item) in div.iter_mut() {
         *item = -0.5
             * h
             * (u[[x + 1, y]] - u[[x - 1, y]] + v[[x, y + 1]]
-                - self.velo_y[[x, y - 1]]);
-        self.velo_x_prev[[x, y]] = 0.0;
+                - v[[x, y - 1]]);
+        p[[x, y]] = 0.0;
     }
-    for k in 0..20 {
+    for _k in 0..20 {
         for ([x, y], item) in self.velo_x_prev.iter_mut() {
-            *item= (self.velo_y_prev[[x, y]]
+            *item= (div[[x, y]]
                 + p[[x - 1, y]]
                 + p[[x + 1, y]]
                 + p[[x, y - 1]]
