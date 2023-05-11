@@ -3,7 +3,6 @@ extern crate image;
 use image::{ImageBuffer, Rgb};
 
 use micro_ndarray::Array;
-use multicall::multicall;
 
 type Vec2 = (f64, f64);
 
@@ -32,7 +31,7 @@ fn add_source(cur: &mut Array<f64, 2>, prev: &mut Array<f64, 2>, dt: f64) {
 }
 fn diffuse(n: usize, cur: &mut Array<f64, 2>, prev: &mut Array<f64, 2>, diff: f64, dt: f64) {
     let a = dt * diff * n as f64;
-    for k in 0..20 {
+    for _k in 0..20 {
         let d = cur.clone();
         for (([x, y], item), (_, item_old)) in cur.iter_mut().zip(prev.iter()) {
             *item = *item_old
@@ -114,8 +113,11 @@ pub fn project(N: usize, u: &mut Array<f32, 2>, v: &mut Array<f32, 2>, p: &mut A
                 - v[[x, y - 1]]);
         p[[x, y]] = 0.0;
     }
+    set_bnd(N, 0, div);
+    set_bnd(N, 0, p);
+
     for _k in 0..20 {
-        for ([x, y], item) in self.velo_x_prev.iter_mut() {
+        for ([x, y], item) in p.iter_mut() {
             *item= (div[[x, y]]
                 + p[[x - 1, y]]
                 + p[[x + 1, y]]
