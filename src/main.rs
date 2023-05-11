@@ -4,114 +4,33 @@ use image::{ImageBuffer, Rgb};
 
 use micro_ndarray::Array;
 
-type Vec2 = (f64, f64);
-
 use std::{io::stdin, mem::swap};
 
-macro_rules! swap {
-    ($o:expr, $a:tt, $b:tt) => {
-        swap(&mut $o.$a, &mut $o.$b);
-    };
-}
-
-struct Engine {
-    n: usize,
-    velo_x: Array<f64, 2>,
-    velo_x_prev: Array<f64, 2>,
-    velo_y: Array<f64, 2>,
-    velo_y_prev: Array<f64, 2>,
-    dens: Array<f64, 2>,
-    dens_prev: Array<f64, 2>,
-}
-
-fn add_source(cur: &mut Array<f64, 2>, prev: &mut Array<f64, 2>, dt: f64) {
-    for ([x, y], item) in cur.iter_mut() {
-        *item += dt * prev[[x, y]];
-    }
-}
-fn diffuse(n: usize, cur: &mut Array<f64, 2>, prev: &mut Array<f64, 2>, diff: f64, dt: f64) {
-    let a = dt * diff * n as f64;
-    for _k in 0..20 {
-        let d = cur.clone();
-        for (([x, y], item), (_, item_old)) in cur.iter_mut().zip(prev.iter()) {
-            *item = *item_old
-                + a * (d[[x - 1, y]] + d[[x + 1, y]] + d[[x, y - 1]] + d[[x, y + 1]])
-                    / (1.0 + 4.0 * a);
-        }
+pub fn add_source(N: usize, x: &mut Array<f64, 2>, s: &mut Array<f64, 2>, dt: f64) {
+    for (c, item) in x.iter_mut() {
+        *item += dt * s[c];
     }
 }
 
-impl Engine {
-    /// dt = &delta;time
-    /// b = ???
-    #[cfg_attr(rustfmt, rustfmt_skip)]
-    pub fn advect(&mut self, dt: f64) {
-        let dt0 = dt * self.n as f64;
-        for ([cx, cy], item) in self.dens.iter_mut() {
-            let x = cx as f64 - dt0 * self.velo_x[[cx, cy]];
-            let y = cy as f64 - dt0 * self.velo_y[[cx, cy]];
-            let x = x.clamp(0.5, self.n as f64 + 0.5);
-            let y = y.clamp(0.5, self.n as f64 + 0.5);
-
-            // Interpolate: 
-            //    xl  xh
-            // yh X   X
-            //      
-            // yl X   X
-            let factor_xh = x % 1.0;
-            let factor_xl = 1.0 - factor_xh;
-            let factor_yh = y % 1.0;
-            let factor_yl = 1.0 - factor_yh;
-            let x = x as usize;
-            let y = y as usize;
-            *item = 
-            factor_xl * (
-                factor_yl * self.dens_prev[[x, y]] + 
-                factor_yh * self.dens_prev[[x, y + 1]]
-            ) + 
-            factor_xh * (
-                factor_yl * self.dens_prev[[x + 1, y]] +
-                factor_yh * self.dens_prev[[x + 1, y + 1]]
-            );
-        }
-    }
-
-    pub fn step_density(&mut self, diff: f64, dt: f64) {
-        add_source(&mut self.dens, &mut self.dens_prev, dt);
-        swap!(self, dens, dens_prev);
-        diffuse(self.n, &mut self.dens, &mut self.dens_prev, diff, dt);
-        swap!(self, dens, dens_prev);
-        self.advect(dt);
-    }
-
-    pub fn step_velocity(&mut self, visc: f64, dt: f64) {
-        add_source(&mut self.velo_x, &mut self.velo_x_prev, dt);
-        add_source(&mut self.velo_y, &mut self.velo_y_prev, dt);
-        swap!(self, velo_x, velo_x_prev);
-        swap!(self, velo_y, velo_y_prev);
-        diffuse(self.n, &mut self.velo_x, &mut self.velo_x_prev, visc, dt);
-        diffuse(self.n, &mut self.velo_y, &mut self.velo_y_prev, visc, dt);
-        // self.project();
-    }
-    
-
-    pub fn step(&mut self) {}
+pub fn diffuse(N: usize, b: i32, x: &mut Array<f64, 2>, x0: &mut Array<f64, 2>, diff: f64, dt: f64) {
+    let a = dt * diff * N as f64 * N as f64;
+    lin_solve(N, b, x, x0, a, 1.0 + 4.0 * a)
 }
 
-pub fn project(N: usize, u: &mut Array<f32, 2>, v: &mut Array<f32, 2>, p: &mut Array<f32, 2>, div: &mut Array<f32, 2>) {
+pub fn project(N: usize, u: &mut Array<f64, 2>, v: &mut Array<f64, 2>, p: &mut Array<f64, 2>, div: &mut Array<f64, 2>) {
     // variable names in this context:
     // u = u in global context
     // v = v in global context
     // p = u_prev
     // div = v_prev
 
-    let h = 1.0 / N as f32;
-    for ([x, y], item) in div.iter_mut() {
-        *item = -0.5
-            * h
-            * (u[[x + 1, y]] - u[[x - 1, y]] + v[[x, y + 1]]
-                - v[[x, y - 1]]);
-        p[[x, y]] = 0.0;
+    let h = 1.0 / N as f64;
+    for i in 1..=N {
+        for j in 1..=N {
+            div[[i, j]] =
+                -0.5 * (u[[i + 1, j]] - u[[i - 1, j]] + v[[i, j + 1]] - v[[i, j - 1]]) / N as f64;
+            p[[i, j]] = 0.0;
+        }
     }
     set_bnd(N, 0, div);
     set_bnd(N, 0, p);
@@ -120,8 +39,8 @@ pub fn project(N: usize, u: &mut Array<f32, 2>, v: &mut Array<f32, 2>, p: &mut A
 
     for xi in 1..=N {
         for yi in 1..=N {
-            u[[xi, yi]] -= 0.5 * N as f32 * (p[[xi + 1, yi]] - p[[xi - 1, yi]]);
-            v[[xi, yi]] -= 0.5 * N as f32 * (p[[xi, yi + 1]] - p[[xi, yi - 1]]);
+            u[[xi, yi]] -= 0.5 * N as f64 * (p[[xi + 1, yi]] - p[[xi - 1, yi]]);
+            v[[xi, yi]] -= 0.5 * N as f64 * (p[[xi, yi + 1]] - p[[xi, yi - 1]]);
         }
     }
     set_bnd(N, 1, u);
@@ -129,7 +48,7 @@ pub fn project(N: usize, u: &mut Array<f32, 2>, v: &mut Array<f32, 2>, p: &mut A
 
 }
 
-fn lin_solve(N: usize, b: i32, x: &mut Array<f32, 2>, x0: &mut Array<f32, 2>, a: f32, c: f32) {
+fn lin_solve(N: usize, b: i32, x: &mut Array<f64, 2>, x0: &mut Array<f64, 2>, a: f64, c: f64) {
     for _k in 0..20 {
         for xi in 1..=N {
             for yi in 1..=N {
@@ -140,7 +59,48 @@ fn lin_solve(N: usize, b: i32, x: &mut Array<f32, 2>, x0: &mut Array<f32, 2>, a:
     }
 }
 
-pub fn set_bnd(N: usize, b: i32, x: &mut Array<f32, 2>) {
+pub fn advect(
+    n: usize,
+    b: i32,
+    d: &mut Array<f64, 2>,
+    d0: &mut Array<f64, 2>,
+    u: &mut Array<f64, 2>,
+    v: &mut Array<f64, 2>,
+    dt: f64,
+) {
+    let dt0 = dt * n as f64;
+    for i in 1..=n {
+        for j in 1..=n {
+            let mut x = i as f64 - dt0 * u[[i, j]];
+            let mut y = j as f64 - dt0 * v[[i, j]];
+            if x < 0.5 {
+                x = 0.5;
+            }
+            if x > n as f64 + 0.5 {
+                x = n as f64 + 0.5;
+            }
+            let i0 = x as usize;
+            let i1 = i0 + 1;
+            if y < 0.5 {
+                y = 0.5;
+            };
+            if y > n as f64 + 0.5 {
+                y = n as f64 + 0.5
+            };
+            let j0 = y as usize;
+            let j1 = j0 + 1;
+            let s1 = x - i0 as f64;
+            let s0 = 1.0 - s1;
+            let t1 = y - j0 as f64;
+            let t0 = 1.0 - t1;
+            d[[i, j]] = s0 * (t0 * d0[[i0, j0]] + t1 * d0[[i0, j1]])
+                + s1 * (t0 * d0[[i1, j0]] + t1 * d0[[i1, j1]]);
+        }
+    }
+    set_bnd(n, b, d);
+}
+
+pub fn set_bnd(N: usize, b: i32, x: &mut Array<f64, 2>) {
     for i in 1..=N {
         x[[0, i]] = if b == 1 {-x[[1,i]]} else {x[[1,i]]};
         x[[N+1, i]] = if b == 1 {-x[[N,i]]} else {x[[N,i]]};
@@ -153,25 +113,73 @@ pub fn set_bnd(N: usize, b: i32, x: &mut Array<f32, 2>) {
     x[[N+1, N+1]] = 0.5 * (x[[N, N+1]] + x[[N+1, N]]);
 }
 
+pub fn dens_step(
+    N: usize,
+    x: &mut Array<f64, 2>,
+    x0: &mut Array<f64, 2>,
+    u: &mut Array<f64, 2>,
+    v: &mut Array<f64, 2>,
+    diff: f64,
+    dt: f64,
+) {
+    add_source(N, x, x0, dt);
+    swap(x0, x);
+    diffuse(N, 0, x, x0, diff, dt);
+    swap(x0, x);
+    advect(N, 0, x, x0, u, v, dt);
+}
+
+pub fn vel_step(
+    N: usize,
+    u: &mut Array<f64, 2>,
+    v: &mut Array<f64, 2>,
+    u0: &mut Array<f64, 2>,
+    v0: &mut Array<f64, 2>,
+    visc: f64,
+    dt: f64,
+) {
+    add_source(N, u, u0, dt);
+    add_source(N, v, v0, dt);
+    swap(u0, u);
+    diffuse(N, 1, u, u0, visc, dt);
+    swap(v0, v);
+    diffuse(N, 2, v, v0, visc, dt);
+    project(N, u, v, u0, v0);
+    swap(u0, u);
+    swap(v0, v);
+    advect(N, 1, u, u0, &mut u0.clone(), v0, dt);
+    advect(N, 2, v, v0, u0, &mut v0.clone(), dt);
+    project(N, u, v, u0, v0);
+}
+
+
 fn main() {
-    let mut img = ImageBuffer::new(640, 480);
-    
-    // Get space-seperated RGB input
-    let num: Vec<u8> = stdin()
-        .lines()
-        .next()
-        .unwrap()
-        .unwrap()
-        .split(" ")
-        .map(str::parse)
-        .map(Result::unwrap)
-        .collect();
+    //let mut img = ImageBuffer::new(640, 480);
+    //
+    //// Set every pixel to input color
+    //for (_, _, pixel) in img.enumerate_pixels_mut() {
+    //    *pixel = Rgb([num[0], num[1], num[2]]);
+    //}
 
-    // Set every pixel to input color
-    for (_, _, pixel) in img.enumerate_pixels_mut() {
-        *pixel = Rgb([num[0], num[1], num[2]]);
+    //// Save the image as a PNG file
+    //img.save("output.png").unwrap();
+    let N: usize = 22;
+    let mut u: Array<f64, 2> = Array::new([N, N]);
+    let mut u0: Array<f64, 2> = Array::new([N, N]);
+    let mut v: Array<f64, 2> = Array::new([N, N]);
+    let mut v0: Array<f64, 2> = Array::new([N, N]);
+
+    let mut x: Array<f64, 2> = Array::new([N, N]);
+    let mut x0: Array<f64, 2> = Array::new([N, N]);
+
+    let visc = 1.0;
+    let diff = 1.0;
+    let dt = 1.0;
+
+    let N: usize = 20;
+    for _i in 0..20 {
+        vel_step(N, &mut u, &mut v, &mut u0, &mut v0, visc, dt);
+        dens_step(N, &mut x, &mut x0, &mut u, &mut v, diff, dt);
+        draw_dens(x);
     }
-
-    // Save the image as a PNG file
-    img.save("output.png").unwrap();
 }
