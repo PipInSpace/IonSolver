@@ -172,7 +172,7 @@ pub fn draw_dens(N: usize, dens: &Array<f64, 2>, step: i32, name: &'static str) 
         let r = (dens[[x as usize, y as usize]] * 255.0) as u8;
         *pixel = Rgb([r, 255 - r, 255 - r]);
     }
-    img.save(format!("origin/{name}{step}.png")).unwrap();
+    img.save(format!("{name}{step}.png")).unwrap();
 }
 
 fn main() {
