@@ -152,6 +152,14 @@ pub fn vel_step(
     project(N, u, v, u0, v0);
 }
 
+pub fn draw_dens(N: usize, dens: &Array<f64, 2>, step: i32) {
+    let mut img = ImageBuffer::new(N as u32, N as u32);
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+
+        *pixel = Rgb([(dens[[x as usize, y as usize]] * 255.0) as u8, 0, 0]);
+    }
+    img.save(format!("{step}.png")).unwrap();
+}
 
 fn main() {
     //let mut img = ImageBuffer::new(640, 480);
@@ -176,10 +184,12 @@ fn main() {
     let diff = 1.0;
     let dt = 1.0;
 
+    x[[10, 10]] = 1.0;
+
     let N: usize = 20;
-    for _i in 0..20 {
+    for i in 0..20 {
         vel_step(N, &mut u, &mut v, &mut u0, &mut v0, visc, dt);
         dens_step(N, &mut x, &mut x0, &mut u, &mut v, diff, dt);
-        draw_dens(x);
+        draw_dens(N, &x, i);
     }
 }
