@@ -172,7 +172,7 @@ pub fn draw_dens(N: usize, dens: &Array<f64, 2>, step: i32, name: &'static str) 
         let r = (dens[[x as usize, y as usize]] * 255.0) as u8;
         *pixel = Rgb([r, 255 - r, 255 - r]);
     }
-    img.save(format!("{name}{step}.png")).unwrap();
+    img.save(format!(r"out\ {name}{step}.png")).unwrap();
 }
 
 fn main() {
@@ -185,7 +185,7 @@ fn main() {
 
     //// Save the image as a PNG file
     //img.save("output.png").unwrap();
-    let N: usize = 22;
+    let N: usize = 42;
     let mut u: Array<f64, 2> = Array::new([N, N]);
     let mut u0: Array<f64, 2> = Array::new([N, N]);
     let mut v: Array<f64, 2> = Array::new([N, N]);
@@ -194,28 +194,36 @@ fn main() {
     let mut x: Array<f64, 2> = Array::new_with([N, N], 0.5);
     let mut x0: Array<f64, 2> = Array::new([N, N]);
 
-    let visc = 0.5;
+    let visc = 0.1;
     let diff = 0.05;
     let dt = 0.01;
 
-    x[[10, 10]] = 1.0;
-    x[[11, 10]] = 1.0;
-    x[[12, 10]] = 1.0;
-    x[[13, 10]] = 1.0;
-    x[[14, 10]] = 1.0;
-    v[[14, 10]] = 70.0;
-    u[[14, 10]] = 70.0;
-    x[[15, 10]] = 1.0;
+    //x[[10, 10]] = 1.0;
+    //x[[11, 10]] = 1.0;
+    //x[[12, 10]] = 1.0;
+    //x[[13, 10]] = 1.0;
+    //x[[14, 10]] = 2.0;
+    //v[[14, 10]] = 1.0;
+    //u[[14, 10]] = 1.0;
+    //x[[15, 10]] = 2.0;
+    //v[[15, 10]] = 1.0;
+    //u[[15, 10]] = 1.0;
 
-    let N: usize = 20;
+    let N: usize = 40;
     for i in 0..10 {
-        println!(
-            "MAX DENS: {:?}",
-            x.iter()
-                .map(|x| *x.1)
-                .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
-        );
+        //println!(
+        //    "MAX DENS: {:?}",
+        //    x.iter()
+        //        .map(|x| *x.1)
+        //        .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
+        //);
+        println!("Step {}", i);
         draw_dens(N, &x, i, "dens");
+
+        x[[10, 20]] = 1.0;
+        v[[10, 20]] = 0.0;
+        u[[10, 20]] = 20.0;
+
         vel_step(N, &mut u, &mut v, &mut u0, &mut v0, visc, dt);
         dens_step(N, &mut x, &mut x0, &mut u, &mut v, diff, dt);
         //draw_dens(N, &u0, i, "velx");
