@@ -116,16 +116,27 @@ pub fn project(N: usize, u: &mut Array<f32, 2>, v: &mut Array<f32, 2>, p: &mut A
     set_bnd(N, 0, div);
     set_bnd(N, 0, p);
 
-    for _k in 0..20 {
-        for ([x, y], item) in p.iter_mut() {
-            *item= (div[[x, y]]
-                + p[[x - 1, y]]
-                + p[[x + 1, y]]
-                + p[[x, y - 1]]
-                + p[[x, y + 1]])
-                / 4.0;
+    lin_solve(N, 0, p, div, 1.0, 4.0);
+
+    for xi in 1..=N {
+        for yi in 1..=N {
+            u[[xi, yi]] -= 0.5 * N as f32 * (p[[xi + 1, yi]] - p[[xi - 1, yi]]);
+            v[[xi, yi]] -= 0.5 * N as f32 * (p[[xi, yi + 1]] - p[[xi, yi - 1]]);
         }
-        set_bnd (N, 0, p);
+    }
+    set_bnd(N, 1, u);
+    set_bnd(N, 2, v);
+
+}
+
+fn lin_solve(N: usize, b: i32, x: &mut Array<f32, 2>, x0: &mut Array<f32, 2>, a: f32, c: f32) {
+    for _k in 0..20 {
+        for xi in 1..=N {
+            for yi in 1..=N {
+                x[[xi, yi]] = (x0[[xi, yi]] + a * (x[[xi-1, yi]] + x[[xi+1, yi]] + x[[xi, yi-1]] + x[[xi, yi+1]])) / c;
+            }
+        }
+        set_bnd(N, b, x)
     }
 }
 
@@ -141,8 +152,6 @@ pub fn set_bnd(N: usize, b: i32, x: &mut Array<f32, 2>) {
     x[[N+1, 0]] = 0.5 * (x[[N, 0]] + x[[N+1, 1]]);
     x[[N+1, N+1]] = 0.5 * (x[[N, N+1]] + x[[N+1, N]]);
 }
-
-
 
 fn main() {
     let mut img = ImageBuffer::new(640, 480);
