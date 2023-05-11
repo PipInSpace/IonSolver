@@ -8,16 +8,29 @@ use std::{io::stdin, mem::swap};
 
 pub fn add_source(N: usize, x: &mut Array<f64, 2>, s: &mut Array<f64, 2>, dt: f64) {
     for (c, item) in x.iter_mut() {
-        *item += dt * s[c];
+        //*item += dt * s[c];
     }
 }
 
-pub fn diffuse(N: usize, b: i32, x: &mut Array<f64, 2>, x0: &mut Array<f64, 2>, diff: f64, dt: f64) {
+pub fn diffuse(
+    N: usize,
+    b: i32,
+    x: &mut Array<f64, 2>,
+    x0: &mut Array<f64, 2>,
+    diff: f64,
+    dt: f64,
+) {
     let a = dt * diff * N as f64 * N as f64;
     lin_solve(N, b, x, x0, a, 1.0 + 4.0 * a)
 }
 
-pub fn project(N: usize, u: &mut Array<f64, 2>, v: &mut Array<f64, 2>, p: &mut Array<f64, 2>, div: &mut Array<f64, 2>) {
+pub fn project(
+    N: usize,
+    u: &mut Array<f64, 2>,
+    v: &mut Array<f64, 2>,
+    p: &mut Array<f64, 2>,
+    div: &mut Array<f64, 2>,
+) {
     // variable names in this context:
     // u = u in global context
     // v = v in global context
@@ -45,14 +58,15 @@ pub fn project(N: usize, u: &mut Array<f64, 2>, v: &mut Array<f64, 2>, p: &mut A
     }
     set_bnd(N, 1, u);
     set_bnd(N, 2, v);
-
 }
 
 fn lin_solve(N: usize, b: i32, x: &mut Array<f64, 2>, x0: &mut Array<f64, 2>, a: f64, c: f64) {
     for _k in 0..20 {
         for xi in 1..=N {
             for yi in 1..=N {
-                x[[xi, yi]] = (x0[[xi, yi]] + a * (x[[xi-1, yi]] + x[[xi+1, yi]] + x[[xi, yi-1]] + x[[xi, yi+1]])) / c;
+                x[[xi, yi]] = (x0[[xi, yi]]
+                    + a * (x[[xi - 1, yi]] + x[[xi + 1, yi]] + x[[xi, yi - 1]] + x[[xi, yi + 1]]))
+                    / c;
             }
         }
         set_bnd(N, b, x)
@@ -102,15 +116,15 @@ pub fn advect(
 
 pub fn set_bnd(N: usize, b: i32, x: &mut Array<f64, 2>) {
     for i in 1..=N {
-        x[[0, i]] = if b == 1 {-x[[1,i]]} else {x[[1,i]]};
-        x[[N+1, i]] = if b == 1 {-x[[N,i]]} else {x[[N,i]]};
-        x[[i, 0]] = if b == 2 {-x[[i,1]]} else {x[[i,1]]};
-        x[[i, N+1]] = if b == 2 {-x[[i,N]]} else {x[[i,N]]};
+        x[[0, i]] = if b == 1 { -x[[1, i]] } else { x[[1, i]] };
+        x[[N + 1, i]] = if b == 1 { -x[[N, i]] } else { x[[N, i]] };
+        x[[i, 0]] = if b == 2 { -x[[i, 1]] } else { x[[i, 1]] };
+        x[[i, N + 1]] = if b == 2 { -x[[i, N]] } else { x[[i, N]] };
     }
     x[[0, 0]] = 0.5 * (x[[1, 0]] + x[[0, 1]]);
-    x[[0, N+1]] = 0.5 * (x[[1, N+1]] + x[[0, N]]);
-    x[[N+1, 0]] = 0.5 * (x[[N, 0]] + x[[N+1, 1]]);
-    x[[N+1, N+1]] = 0.5 * (x[[N, N+1]] + x[[N+1, N]]);
+    x[[0, N + 1]] = 0.5 * (x[[1, N + 1]] + x[[0, N]]);
+    x[[N + 1, 0]] = 0.5 * (x[[N, 0]] + x[[N + 1, 1]]);
+    x[[N + 1, N + 1]] = 0.5 * (x[[N, N + 1]] + x[[N + 1, N]]);
 }
 
 pub fn dens_step(
@@ -152,13 +166,13 @@ pub fn vel_step(
     project(N, u, v, u0, v0);
 }
 
-pub fn draw_dens(N: usize, dens: &Array<f64, 2>, step: i32) {
-    let mut img = ImageBuffer::new(N as u32, N as u32);
+pub fn draw_dens(N: usize, dens: &Array<f64, 2>, step: i32, name: &'static str) {
+    let mut img = ImageBuffer::new(N as u32 + 2, N as u32 + 2);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
-
-        *pixel = Rgb([(dens[[x as usize, y as usize]] * 255.0) as u8, 0, 0]);
+        let r = (dens[[x as usize, y as usize]] * 255.0) as u8;
+        *pixel = Rgb([r, 255 - r, 255 - r]);
     }
-    img.save(format!("{step}.png")).unwrap();
+    img.save(format!("origin/{name}{step}.png")).unwrap();
 }
 
 fn main() {
@@ -177,19 +191,34 @@ fn main() {
     let mut v: Array<f64, 2> = Array::new([N, N]);
     let mut v0: Array<f64, 2> = Array::new([N, N]);
 
-    let mut x: Array<f64, 2> = Array::new([N, N]);
+    let mut x: Array<f64, 2> = Array::new_with([N, N], 0.5);
     let mut x0: Array<f64, 2> = Array::new([N, N]);
 
-    let visc = 1.0;
-    let diff = 1.0;
-    let dt = 1.0;
+    let visc = 0.5;
+    let diff = 0.05;
+    let dt = 0.01;
 
     x[[10, 10]] = 1.0;
+    x[[11, 10]] = 1.0;
+    x[[12, 10]] = 1.0;
+    x[[13, 10]] = 1.0;
+    x[[14, 10]] = 1.0;
+    v[[14, 10]] = 70.0;
+    u[[14, 10]] = 70.0;
+    x[[15, 10]] = 1.0;
 
     let N: usize = 20;
-    for i in 0..20 {
+    for i in 0..10 {
+        println!(
+            "MAX DENS: {:?}",
+            x.iter()
+                .map(|x| *x.1)
+                .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
+        );
+        draw_dens(N, &x, i, "dens");
         vel_step(N, &mut u, &mut v, &mut u0, &mut v0, visc, dt);
         dens_step(N, &mut x, &mut x0, &mut u, &mut v, diff, dt);
-        draw_dens(N, &x, i);
+        //draw_dens(N, &u0, i, "velx");
+        //draw_dens(N, &v0, i, "vely");
     }
 }
