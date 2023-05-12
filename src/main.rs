@@ -169,22 +169,16 @@ pub fn vel_step(
 pub fn draw_dens(N: usize, dens: &Array<f64, 2>, step: i32, name: &'static str) {
     let mut img = ImageBuffer::new(N as u32 + 2, N as u32 + 2);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
-        let r = (dens[[x as usize, y as usize]] * 255.0) as u8;
-        *pixel = Rgb([r, 255 - r, 255 - r]);
+        let r = ((4.0 * dens[[x as usize, y as usize]] - 2.0).clamp(0.0, 1.0) * 255.0) as u8;
+        let g = ((-(4.0 * dens[[x as usize, y as usize]] - 2.0).abs() + 2.0).clamp(0.0, 1.0) * 255.0) as u8; 
+        let b = ((4.0 * -dens[[x as usize, y as usize]] + 2.0).clamp(0.0, 1.0) * 255.0) as u8;
+        *pixel = Rgb([r, g, b]);
     }
-    img.save(format!(r"out\ {name}{step}.png")).unwrap();
+    img.save(format!(r"out/{name}{step}.png")).unwrap();
 }
 
 fn main() {
-    //let mut img = ImageBuffer::new(640, 480);
-    //
-    //// Set every pixel to input color
-    //for (_, _, pixel) in img.enumerate_pixels_mut() {
-    //    *pixel = Rgb([num[0], num[1], num[2]]);
-    //}
-
-    //// Save the image as a PNG file
-    //img.save("output.png").unwrap();
+    //N is the size of the simulation
     let N: usize = 42;
     let mut u: Array<f64, 2> = Array::new([N, N]);
     let mut u0: Array<f64, 2> = Array::new([N, N]);
@@ -201,7 +195,7 @@ fn main() {
     //x[[10, 10]] = 1.0;
     //x[[11, 10]] = 1.0;
     //x[[12, 10]] = 1.0;
-    //x[[13, 10]] = 1.0;
+    //x[[13, 10]] = 1.0;w
     //x[[14, 10]] = 2.0;
     //v[[14, 10]] = 1.0;
     //u[[14, 10]] = 1.0;
@@ -210,7 +204,7 @@ fn main() {
     //u[[15, 10]] = 1.0;
 
     let N: usize = 40;
-    for i in 0..10 {
+    for i in 0..400 {
         //println!(
         //    "MAX DENS: {:?}",
         //    x.iter()
@@ -218,11 +212,16 @@ fn main() {
         //        .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
         //);
         println!("Step {}", i);
-        draw_dens(N, &x, i, "dens");
+        if i % 10 == 0 {
+            draw_dens(N, &x, i, "dens");
+        }
 
-        x[[10, 20]] = 1.0;
-        v[[10, 20]] = 0.0;
-        u[[10, 20]] = 20.0;
+        x[[10, 20]] = 3.0;
+        //v[[12, 20]] = 0.0;
+        u[[12, 20]] = 20.0;
+
+        x[[30, 30]] = 3.0;
+        v[[28, 30]] = -20.0;
 
         vel_step(N, &mut u, &mut v, &mut u0, &mut v0, visc, dt);
         dens_step(N, &mut x, &mut x0, &mut u, &mut v, diff, dt);
