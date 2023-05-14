@@ -166,7 +166,7 @@ pub fn vel_step(
     project(N, u, v, u0, v0);
 }
 
-pub fn draw_dens(N: usize, dens: &Array<f64, 2>, step: i32, name: &'static str) {
+pub fn draw_spectrum(N: usize, dens: &Array<f64, 2>, step: i32, name: &'static str) {
     let mut img = ImageBuffer::new(N as u32 + 2, N as u32 + 2);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
         let r = ((4.0 * dens[[x as usize, y as usize]] - 2.0).clamp(0.0, 1.0) * 255.0) as u8;
@@ -177,34 +177,41 @@ pub fn draw_dens(N: usize, dens: &Array<f64, 2>, step: i32, name: &'static str) 
     img.save(format!(r"out/{name}{step}.png")).unwrap();
 }
 
+pub fn draw_multichannel(
+    N: usize, 
+    r_channel: &Array<f64, 2>, 
+    g_channel: &Array<f64, 2>, 
+    b_channel: &Array<f64, 2>, 
+    step: i32, 
+    name: &'static str) {
+    let mut img = ImageBuffer::new(N as u32 + 2, N as u32 + 2);
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+        let r = (r_channel[[x as usize, y as usize]].clamp(0.0, 1.0) * 255.0) as u8;
+        let g = (g_channel[[x as usize, y as usize]].clamp(0.0, 1.0) * 255.0) as u8;
+        let b = (b_channel[[x as usize, y as usize]].clamp(0.0, 1.0) * 255.0) as u8;
+        *pixel = Rgb([r, g, b]);
+    }
+    img.save(format!(r"out/{name}{step}.png")).unwrap();
+}
+
 fn main() {
     //N is the size of the simulation
-    let N: usize = 42;
+    let N: usize = 102;
     let mut u: Array<f64, 2> = Array::new([N, N]);
     let mut u0: Array<f64, 2> = Array::new([N, N]);
     let mut v: Array<f64, 2> = Array::new([N, N]);
     let mut v0: Array<f64, 2> = Array::new([N, N]);
 
-    let mut x: Array<f64, 2> = Array::new_with([N, N], 0.5);
-    let mut x0: Array<f64, 2> = Array::new([N, N]);
+    let mut x: Array<f64, 2> = Array::new_with([N, N], 0.0);
+    let mut x0: Array<f64, 2> = Array::new_with([N, N], 0.0);
 
-    let visc = 0.1;
-    let diff = 0.05;
+    let visc = 0.3;
+    let diff = 0.03;
     let dt = 0.01;
 
-    //x[[10, 10]] = 1.0;
-    //x[[11, 10]] = 1.0;
-    //x[[12, 10]] = 1.0;
-    //x[[13, 10]] = 1.0;w
-    //x[[14, 10]] = 2.0;
-    //v[[14, 10]] = 1.0;
-    //u[[14, 10]] = 1.0;
-    //x[[15, 10]] = 2.0;
-    //v[[15, 10]] = 1.0;
-    //u[[15, 10]] = 1.0;
+    let N: usize = 100;
 
-    let N: usize = 40;
-    for i in 0..400 {
+    for i in 0..2500 {
         //println!(
         //    "MAX DENS: {:?}",
         //    x.iter()
@@ -212,20 +219,16 @@ fn main() {
         //        .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
         //);
         println!("Step {}", i);
-        if i % 10 == 0 {
-            draw_dens(N, &x, i, "dens");
+        if i % 50 == 0 {
+            draw_spectrum(N, &x, i, "dens");
+            //draw_dens(N, &u, i, "velx");
+            //draw_dens(N, &v, i, "vely");
+            draw_multichannel(N, &x, &x, &x, i, "densGrey")
         }
 
-        x[[10, 20]] = 3.0;
-        //v[[12, 20]] = 0.0;
-        u[[12, 20]] = 20.0;
-
-        x[[30, 30]] = 3.0;
-        v[[28, 30]] = -20.0;
+        x[[20, 50]] += 1.0;
 
         vel_step(N, &mut u, &mut v, &mut u0, &mut v0, visc, dt);
         dens_step(N, &mut x, &mut x0, &mut u, &mut v, diff, dt);
-        //draw_dens(N, &u0, i, "velx");
-        //draw_dens(N, &v0, i, "vely");
     }
 }
