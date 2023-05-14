@@ -5,3 +5,5 @@ a ion-engine simulation software
 ## First fluid sim implementation:
 <img src="https://raw.githubusercontent.com/PipInSpace/IonSolver/main/pics/dens2450.png">
 <img src="https://raw.githubusercontent.com/PipInSpace/IonSolver/main/pics/densGrey2450.png">
+<img src="https://raw.githubusercontent.com/PipInSpace/IonSolver/main/pics/spectrumSolverWorking.gif">
+<img src="https://raw.githubusercontent.com/PipInSpace/IonSolver/main/pics/greySolverWorking.gif">

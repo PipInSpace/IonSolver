@@ -225,15 +225,17 @@ fn main() {
         //        .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
         //);
         println!("Step {}", i);
-        if i % 10 == 0 {
+        if i % 1 == 0 {
             draw_spectrum(n, &x, i, "dens");
             draw_multichannel(n, &x, &x, &x, i, "densGrey");
             draw_multichannel(n, &x, &u, &v, i, "combined");
         }
 
-        x0[[20, 50]] += 30.0;
-        u0[[20, 50]] += 50.0;
+        x0[[10, 20]] += 1.0;
+        u0[[10, 20]] = 5.0;
         //v[[20, 50]] += 20.0;
+        x0[[50, 50]] += 1.0;
+        v0[[50, 50]] = -5.0;
 
         vel_step(n, &mut u, &mut v, &mut u0, &mut v0, visc, dt);
         dens_step(n, &mut x, &mut x0, &mut u, &mut v, diff, dt);
