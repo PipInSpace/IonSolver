@@ -164,13 +164,33 @@ pub fn vel_step(
     project(n, u, v, u0, v0);
 }
 
-pub fn draw_spectrum(n: usize, dens: &Array<f64, 2>, step: i32, name: &'static str) {
+pub fn draw_spectrum(n: usize, array: &Array<f64, 2>, step: i32, name: &'static str) {
     // exports png image of a 2D float array with range 0-1 in blue-green-red spectrum
-    let mut img = ImageBuffer::new(n as u32 + 2, n as u32 + 2);
+    let mut img = ImageBuffer::new(n as u32, n as u32);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
-        let r = ((4.0 * dens[[x as usize, y as usize]] - 2.0).clamp(0.0, 1.0) * 255.0) as u8;
-        let g = ((-(4.0 * dens[[x as usize, y as usize]] - 2.0).abs() + 2.0).clamp(0.0, 1.0) * 255.0) as u8; 
-        let b = ((4.0 * -dens[[x as usize, y as usize]] + 2.0).clamp(0.0, 1.0) * 255.0) as u8;
+        let r = ((4.0 * array[[x as usize + 1, y as usize + 1]] - 2.0).clamp(0.0, 1.0) * 255.0) as u8;
+        let g = ((-(4.0 * array[[x as usize + 1, y as usize + 1]] - 2.0).abs() + 2.0).clamp(0.0, 1.0) * 255.0) as u8; 
+        let b = ((4.0 * -array[[x as usize + 1, y as usize + 1]] + 2.0).clamp(0.0, 1.0) * 255.0) as u8;
+        *pixel = Rgb([r, g, b]);
+    }
+    img.save(format!(r"out/{name}{step}.png")).unwrap();
+}
+
+pub fn draw_spectrum_relative(n: usize, array: &mut Array<f64, 2>, step: i32, name: &'static str) {
+    // exports png image of a 2D float array with dynamic range in blue-green-red spectrum.
+    // Highest value is red, 0 is blue.
+    //TODO: Implement
+    let f = 1.0 / array
+        .iter()
+        .map(|x| *x.1)
+        .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
+        .expect("empty array should not be possible");
+    
+    let mut img = ImageBuffer::new(n as u32, n as u32);
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+        let r = ((4.0 * (array[[x as usize + 1, y as usize + 1]] * f) - 2.0).clamp(0.0, 1.0) * 255.0) as u8;
+        let g = ((-(4.0 * (array[[x as usize + 1, y as usize + 1]] * f) - 2.0).abs() + 2.0).clamp(0.0, 1.0) * 255.0) as u8; 
+        let b = ((4.0 * -(array[[x as usize + 1, y as usize + 1]] * f) + 2.0).clamp(0.0, 1.0) * 255.0) as u8;
         *pixel = Rgb([r, g, b]);
     }
     img.save(format!(r"out/{name}{step}.png")).unwrap();
@@ -185,24 +205,25 @@ pub fn draw_multichannel(
     name: &'static str) 
     {
     // exports png image of 3 2D float arrays with range 0-1 in the three RGB channels
-    let mut img = ImageBuffer::new(n as u32 + 2, n as u32 + 2);
+    let mut img = ImageBuffer::new(n as u32, n as u32);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
-        let r = (r_channel[[x as usize, y as usize]].clamp(0.0, 1.0) * 255.0) as u8;
-        let g = (g_channel[[x as usize, y as usize]].clamp(0.0, 1.0) * 255.0) as u8;
-        let b = (b_channel[[x as usize, y as usize]].clamp(0.0, 1.0) * 255.0) as u8;
+        let r = (r_channel[[x as usize + 1, y as usize + 1]].clamp(0.0, 1.0) * 255.0) as u8;
+        let g = (g_channel[[x as usize + 1, y as usize + 1]].clamp(0.0, 1.0) * 255.0) as u8;
+        let b = (b_channel[[x as usize + 1, y as usize + 1]].clamp(0.0, 1.0) * 255.0) as u8;
         *pixel = Rgb([r, g, b]);
     }
     img.save(format!(r"out/{name}{step}.png")).unwrap();
 }
 
 fn main() {
-    // N is the size of the simulation. Size: N*N
+    // n is the size of the simulation. Size: N*N
     // u stores x force, v stores y force
     // "Symbol"0 variables store previous values
     // visc: viscosity, default 0.0
     // diff: diffusion rate, default 0.0
     // dt: multiplier in add_source function, default 0.1
     let n: usize = 66;
+    // Arrays need to be 1px wider on each side, therefor n is initialised 2 bigger
     let mut u: Array<f64, 2> = Array::new([n, n]);
     let mut u0: Array<f64, 2> = Array::new([n, n]);
     let mut v: Array<f64, 2> = Array::new([n, n]);
@@ -216,6 +237,7 @@ fn main() {
     let dt = 0.1;
 
     let n: usize = 64;
+    //n value is corrected here
 
     for i in 0..200 {
         //println!(
@@ -227,8 +249,9 @@ fn main() {
         println!("Step {}", i);
         if i % 1 == 0 {
             draw_spectrum(n, &x, i, "dens");
-            draw_multichannel(n, &x, &x, &x, i, "densGrey");
-            draw_multichannel(n, &x, &u, &v, i, "combined");
+            draw_spectrum_relative(n, &mut x, i, "densRel")
+            //draw_multichannel(n, &x, &x, &x, i, "densGrey");
+            //draw_multichannel(n, &x, &u, &v, i, "combined");
         }
 
         x0[[10, 20]] += 1.0;
