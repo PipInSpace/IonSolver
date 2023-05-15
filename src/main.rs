@@ -7,6 +7,8 @@ use micro_ndarray::Array;
 use std::{mem::swap};
 
 pub fn add_source(x: &mut Array<f64, 2>, s: &mut Array<f64, 2>, dt: f64) {
+    // Adds sources, used in the density and velocity steps
+    // Can also be called independently of those
     for (c, item) in x.iter_mut() {
         *item += dt * s[c];
     }
@@ -26,36 +28,36 @@ pub fn diffuse(
 
 pub fn project(
     n: usize,
-    u: &mut Array<f64, 2>,
-    v: &mut Array<f64, 2>,
-    p: &mut Array<f64, 2>,
-    div: &mut Array<f64, 2>,
+    force_x: &mut Array<f64, 2>,
+    force_y: &mut Array<f64, 2>,
+    force_x_prev: &mut Array<f64, 2>,
+    force_y_prev: &mut Array<f64, 2>,
 ) {
-    // variable names in this context:
+    // Variable names in this context:
     // u = u in global context
     // v = v in global context
     // p = u_prev
     // div = v_prev
     for i in 1..=n {
         for j in 1..=n {
-            div[[i, j]] =
-                -0.5 * (u[[i + 1, j]] - u[[i - 1, j]] + v[[i, j + 1]] - v[[i, j - 1]]) / n as f64;
-            p[[i, j]] = 0.0;
+            force_y_prev[[i, j]] =
+                -0.5 * (force_x[[i + 1, j]] - force_x[[i - 1, j]] + force_y[[i, j + 1]] - force_y[[i, j - 1]]) / n as f64;
+            force_x_prev[[i, j]] = 0.0;
         }
     }
-    set_bnd(n, 0, div);
-    set_bnd(n, 0, p);
+    set_bnd(n, 0, force_y_prev);
+    set_bnd(n, 0, force_x_prev);
 
-    lin_solve(n, 0, p, div, 1.0, 4.0);
+    lin_solve(n, 0, force_x_prev, force_y_prev, 1.0, 4.0);
 
     for xi in 1..=n {
         for yi in 1..=n {
-            u[[xi, yi]] -= 0.5 * n as f64 * (p[[xi + 1, yi]] - p[[xi - 1, yi]]);
-            v[[xi, yi]] -= 0.5 * n as f64 * (p[[xi, yi + 1]] - p[[xi, yi - 1]]);
+            force_x[[xi, yi]] -= 0.5 * n as f64 * (force_x_prev[[xi + 1, yi]] - force_x_prev[[xi - 1, yi]]);
+            force_y[[xi, yi]] -= 0.5 * n as f64 * (force_x_prev[[xi, yi + 1]] - force_x_prev[[xi, yi - 1]]);
         }
     }
-    set_bnd(n, 1, u);
-    set_bnd(n, 2, v);
+    set_bnd(n, 1, force_x);
+    set_bnd(n, 2, force_y);
 }
 
 fn lin_solve(n: usize, b: i32, x: &mut Array<f64, 2>, x0: &mut Array<f64, 2>, a: f64, c: f64) {
@@ -127,42 +129,44 @@ pub fn set_bnd(n: usize, b: i32, x: &mut Array<f64, 2>) {
 
 pub fn dens_step(
     n: usize,
-    x: &mut Array<f64, 2>,
-    x0: &mut Array<f64, 2>,
-    u: &mut Array<f64, 2>,
-    v: &mut Array<f64, 2>,
+    dens: &mut Array<f64, 2>,
+    dens_prev: &mut Array<f64, 2>,
+    force_x: &mut Array<f64, 2>,
+    force_y: &mut Array<f64, 2>,
     diff: f64,
     dt: f64,
 ) {
-    add_source(x, x0, dt);
-    swap(x0, x);
-    diffuse(n, 0, x, x0, diff, dt);
-    swap(x0, x);
-    advect(n, 0, x, x0, u, v, dt);
+    add_source(dens, dens_prev, dt);
+    swap(dens_prev, dens);
+    diffuse(n, 0, dens, dens_prev, diff, dt);
+    swap(dens_prev, dens);
+    advect(n, 0, dens, dens_prev, force_x, force_y, dt);
 }
 
 pub fn vel_step(
     n: usize,
-    u: &mut Array<f64, 2>,
-    v: &mut Array<f64, 2>,
-    u0: &mut Array<f64, 2>,
-    v0: &mut Array<f64, 2>,
+    force_x: &mut Array<f64, 2>,
+    force_y: &mut Array<f64, 2>,
+    force_x_prev: &mut Array<f64, 2>,
+    force_y_prev: &mut Array<f64, 2>,
     visc: f64,
     dt: f64,
 ) {
-    add_source(u, u0, dt);
-    add_source(v, v0, dt);
-    swap(u0, u);
-    diffuse(n, 1, u, u0, visc, dt);
-    swap(v0, v);
-    diffuse(n, 2, v, v0, visc, dt);
-    project(n, u, v, u0, v0);
-    swap(u0, u);
-    swap(v0, v);
-    advect(n, 1, u, u0, &mut u0.clone(), v0, dt);
-    advect(n, 2, v, v0, u0, &mut v0.clone(), dt);
-    project(n, u, v, u0, v0);
+    add_source(force_x, force_x_prev, dt);
+    add_source(force_y, force_y_prev, dt);
+    swap(force_x_prev, force_x);
+    diffuse(n, 1, force_x, force_x_prev, visc, dt);
+    swap(force_y_prev, force_y);
+    diffuse(n, 2, force_y, force_y_prev, visc, dt);
+    project(n, force_x, force_y, force_x_prev, force_y_prev);
+    swap(force_x_prev, force_x);
+    swap(force_y_prev, force_y);
+    advect(n, 1, force_x, force_x_prev, &mut force_x_prev.clone(), force_y_prev, dt);
+    advect(n, 2, force_y, force_y_prev, force_x_prev, &mut force_y_prev.clone(), dt);
+    project(n, force_x, force_y, force_x_prev, force_y_prev);
 }
+
+// Visualisation functions and debug info
 
 pub fn draw_spectrum(n: usize, array: &Array<f64, 2>, step: i32, name: &'static str) {
     // exports png image of a 2D float array with range 0-1 in blue-green-red spectrum
@@ -179,7 +183,6 @@ pub fn draw_spectrum(n: usize, array: &Array<f64, 2>, step: i32, name: &'static 
 pub fn draw_spectrum_relative(n: usize, array: &Array<f64, 2>, step: i32, name: &'static str) {
     // exports png image of a 2D float array with dynamic range in blue-green-red spectrum.
     // Highest value is red, 0 is blue.
-    //TODO: Implement
     let f = 1.0 / array
         .iter()
         .map(|x| *x.1)
@@ -215,54 +218,51 @@ pub fn draw_multichannel(
     img.save(format!(r"out/{name}{step}.png")).unwrap();
 }
 
+pub fn print_maxval (x: &Array<f64, 2>, name: &'static str) {
+    println!(
+        "Max {name}: {:?}", x.iter().map(|x| *x.1).max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
+    );
+}
+
+// main method
+
 fn main() {
-    // n is the size of the simulation. Size: N*N
-    // u stores x force, v stores y force
-    // "Symbol"0 variables store previous values
+    // n is the size of the simulation. Size: n*n
     // visc: viscosity, default 0.0
     // diff: diffusion rate, default 0.0
     // dt: multiplier in add_source function, default 0.1
-    let n: usize = 66;
-    // Arrays need to be 1px wider on each side, therefor n is initialised 2 bigger
-    let mut u: Array<f64, 2> = Array::new([n, n]);
-    let mut u0: Array<f64, 2> = Array::new([n, n]);
-    let mut v: Array<f64, 2> = Array::new([n, n]);
-    let mut v0: Array<f64, 2> = Array::new([n, n]);
+    let n: usize = 64;
+    // Arrays need to be 1px wider on each side, therefor n is used 2 bigger
+    let mut force_x: Array<f64, 2> = Array::new([n+2, n+2]);
+    let mut force_x_prev: Array<f64, 2> = Array::new([n+2, n+2]);
+    let mut force_y: Array<f64, 2> = Array::new([n+2, n+2]);
+    let mut force_y_prev: Array<f64, 2> = Array::new([n+2, n+2]);
 
-    let mut x: Array<f64, 2> = Array::new_with([n, n], 0.0);
-    let mut x0: Array<f64, 2> = Array::new_with([n, n], 0.0);
+    let mut dens: Array<f64, 2> = Array::new_with([n+2, n+2], 0.0);
+    let mut dens_prev: Array<f64, 2> = Array::new_with([n+2, n+2], 0.0);
 
     let visc = 0.0;
     let diff = 0.0;
     let dt = 0.1;
 
-    let n: usize = 64;
-    //n value is corrected here
-
     for i in 0..200 {
-        //println!(
-        //    "MAX DENS: {:?}",
-        //    x.iter()
-        //        .map(|x| *x.1)
-        //        .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
-        //);
         println!("Step {}", i);
         if i % 1 == 0 {
             //draw_spectrum(n, &x, i, "dens");
-            draw_spectrum_relative(n, &mut x, i, "densRel")
+            draw_spectrum_relative(n, &mut dens, i, "densRel")
             //draw_multichannel(n, &x, &x, &x, i, "densGrey");
             //draw_multichannel(n, &x, &u, &v, i, "combined");
         }
 
         if i < 200 {
-            x0[[10, 20]] += 1.0;
-            u0[[10, 20]] = 5.0;
+            dens_prev[[10, 20]] += 1.0;
+            force_x_prev[[10, 20]] = 5.0;
             //v[[20, 50]] += 20.0;
-            x0[[50, 50]] += 1.0;
-            v0[[50, 50]] = -5.0;
+            dens_prev[[50, 50]] += 1.0;
+            force_y_prev[[50, 50]] = -5.0;
         }
 
-        vel_step(n, &mut u, &mut v, &mut u0, &mut v0, visc, dt);
-        dens_step(n, &mut x, &mut x0, &mut u, &mut v, diff, dt);
+        vel_step(n, &mut force_x, &mut force_y, &mut force_x_prev, &mut force_y_prev, visc, dt);
+        dens_step(n, &mut dens, &mut dens_prev, &mut force_x, &mut force_y, diff, dt);
     }
 }
