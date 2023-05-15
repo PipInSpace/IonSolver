@@ -176,7 +176,7 @@ pub fn draw_spectrum(n: usize, array: &Array<f64, 2>, step: i32, name: &'static 
     img.save(format!(r"out/{name}{step}.png")).unwrap();
 }
 
-pub fn draw_spectrum_relative(n: usize, array: &mut Array<f64, 2>, step: i32, name: &'static str) {
+pub fn draw_spectrum_relative(n: usize, array: &Array<f64, 2>, step: i32, name: &'static str) {
     // exports png image of a 2D float array with dynamic range in blue-green-red spectrum.
     // Highest value is red, 0 is blue.
     //TODO: Implement
@@ -248,17 +248,19 @@ fn main() {
         //);
         println!("Step {}", i);
         if i % 1 == 0 {
-            draw_spectrum(n, &x, i, "dens");
+            //draw_spectrum(n, &x, i, "dens");
             draw_spectrum_relative(n, &mut x, i, "densRel")
             //draw_multichannel(n, &x, &x, &x, i, "densGrey");
             //draw_multichannel(n, &x, &u, &v, i, "combined");
         }
 
-        x0[[10, 20]] += 1.0;
-        u0[[10, 20]] = 5.0;
-        //v[[20, 50]] += 20.0;
-        x0[[50, 50]] += 1.0;
-        v0[[50, 50]] = -5.0;
+        if i < 200 {
+            x0[[10, 20]] += 1.0;
+            u0[[10, 20]] = 5.0;
+            //v[[20, 50]] += 20.0;
+            x0[[50, 50]] += 1.0;
+            v0[[50, 50]] = -5.0;
+        }
 
         vel_step(n, &mut u, &mut v, &mut u0, &mut v0, visc, dt);
         dens_step(n, &mut x, &mut x0, &mut u, &mut v, diff, dt);
