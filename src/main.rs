@@ -10,10 +10,10 @@ use eframe::*;
 mod solver;
 use solver::*;
 
+use std::{cmp::Ordering, time::Duration};
+
 mod vector2;
 use vector2::*;
-
-use std::time::Duration;
 
 // Visualisation functions and debug info
 
@@ -48,6 +48,7 @@ pub fn draw_spectrum_relative(
     step: i32,
     name: &'static str,
     save: bool,
+    fix: &mut bool,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     // exports png image of a 2D float array with dynamic range in blue-green-red spectrum.
     // Highest value is red, 0 is blue.
@@ -55,7 +56,13 @@ pub fn draw_spectrum_relative(
         / array
             .iter()
             .map(|x| *x.1)
-            .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
+            .max_by(|a, b| match f64::partial_cmp(a, b) {
+                Some(x) => x,
+                None => {
+                    *fix = true;
+                    Ordering::Equal
+                }
+            })
             .expect("empty array should not be possible");
 
     let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(s.x as u32, s.y as u32);
@@ -114,6 +121,8 @@ struct SimState {
     force_x_prev: Array<f64, 2>,
     force_y_prev: Array<f64, 2>,
 
+    working_dens: Array<f64, 2>,
+    working_dens_prev: Array<f64, 2>,
     dens: Array<f64, 2>,
     dens_prev: Array<f64, 2>,
     visc: f64,
@@ -129,6 +138,8 @@ impl SimState {
             force_y: Array::new([s.x + 2, s.y + 2]),
             force_x_prev: Array::new([s.x + 2, s.y + 2]),
             force_y_prev: Array::new([s.x + 2, s.y + 2]),
+            working_dens: Array::new([s.x + 2, s.y + 2]),
+            working_dens_prev: Array::new([s.x + 2, s.y + 2]),
             dens: Array::new([s.x + 2, s.y + 2]),
             dens_prev: Array::new([s.x + 2, s.y + 2]),
 
@@ -144,11 +155,33 @@ impl SimState {
 impl App for SimState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         println!("Step {}", self.step);
-        //draw_spectrum(n, &x, i, "dens");
-        let spectrum_relative_img =
-            draw_spectrum_relative(&self.s, &mut self.dens, self.step, "densRel", false);
-        //draw_multichannel(n, &x, &x, &x, i, "densGrey");
-        //draw_multichannel(n, &x, &u, &v, i, "combined");
+        let mut fix_dens = false;
+        //draw_spectrum(n, &x, i, "dens", false);
+        let spectrum_relative_img = draw_spectrum_relative(
+            &self.s,
+            &mut self.dens,
+            self.step,
+            "densRel",
+            false,
+            &mut fix_dens,
+        );
+        //draw_multichannel(n, &x, &x, &x, i, "densGrey", false);
+        //draw_multichannel(n, &x, &u, &v, i, "combined", false);
+        // fix INFINITY values
+        if fix_dens {
+            println!("Fixing...");
+            for (c, item) in self.dens_prev.iter_mut() {
+                *item = self.working_dens_prev[c];
+                *item /= 1.0E32;
+            }
+            for (c, item) in self.dens.iter_mut() {
+                *item = self.working_dens[c];
+                *item /= 1.0E32;
+            }
+            println!("All items have been divided by 1E10 and one step was skipped.");
+        }
+        self.working_dens = self.dens.clone();
+        self.working_dens_prev = self.dens_prev.clone();
 
         if self.step < 200 {
             self.dens_prev[[10, 20]] += 1.0;
