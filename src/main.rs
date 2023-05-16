@@ -1,5 +1,6 @@
 extern crate image;
 
+use egui::{ColorImage, Vec2};
 use image::{ImageBuffer, Rgb};
 
 use micro_ndarray::Array;
@@ -8,6 +9,8 @@ use eframe::*;
 
 mod solver;
 use solver::*;
+
+use std::time::Duration;
 
 // Visualisation functions and debug info
 
@@ -27,7 +30,13 @@ pub fn draw_spectrum(s: &SimSize, array: &Array<f64, 2>, step: i32, name: &'stat
     img.save(format!(r"out/{name}{step}.png")).unwrap();
 }
 
-pub fn draw_spectrum_relative(s: &SimSize, array: &Array<f64, 2>, step: i32, name: &'static str) {
+pub fn draw_spectrum_relative(
+    s: &SimSize,
+    array: &Array<f64, 2>,
+    step: i32,
+    name: &'static str,
+    save: bool,
+) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     // exports png image of a 2D float array with dynamic range in blue-green-red spectrum.
     // Highest value is red, 0 is blue.
     let f = 1.0
@@ -37,7 +46,7 @@ pub fn draw_spectrum_relative(s: &SimSize, array: &Array<f64, 2>, step: i32, nam
             .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
             .expect("empty array should not be possible");
 
-    let mut img = ImageBuffer::new(s.x as u32, s.y as u32);
+    let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(s.x as u32, s.y as u32);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
         let r = ((4.0 * (array[[x as usize + 1, y as usize + 1]] * f) - 2.0).clamp(0.0, 1.0)
             * 255.0) as u8;
@@ -48,7 +57,10 @@ pub fn draw_spectrum_relative(s: &SimSize, array: &Array<f64, 2>, step: i32, nam
             * 255.0) as u8;
         *pixel = Rgb([r, g, b]);
     }
-    img.save(format!(r"out/{name}{step}.png")).unwrap();
+    if save {
+        img.save(format!(r"out/{name}{step}.png")).unwrap();
+    }
+    img
 }
 
 pub fn draw_multichannel(
@@ -116,12 +128,11 @@ impl SimState {
 impl App for SimState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         println!("Step {}", self.step);
-        if self.step % 1 == 0 {
-            //draw_spectrum(n, &x, i, "dens");
-            draw_spectrum_relative(&self.s, &mut self.dens, self.step, "densRel")
-            //draw_multichannel(n, &x, &x, &x, i, "densGrey");
-            //draw_multichannel(n, &x, &u, &v, i, "combined");
-        }
+        //draw_spectrum(n, &x, i, "dens");
+        let spectrum_relative_img =
+            draw_spectrum_relative(&self.s, &mut self.dens, self.step, "densRel", false);
+        //draw_multichannel(n, &x, &x, &x, i, "densGrey");
+        //draw_multichannel(n, &x, &u, &v, i, "combined");
 
         if self.step < 200 {
             self.dens_prev[[10, 20]] += 1.0;
@@ -150,13 +161,28 @@ impl App for SimState {
             self.dt,
         );
 
+        let size = spectrum_relative_img.dimensions();
+        let size = [size.0 as usize, size.1 as usize];
+
         //Update gui
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("IonSolver Simulation");
             ui.label(format!("Step '{}'", self.step));
+            ui.image(
+                ui.ctx()
+                    .load_texture(
+                        "sim",
+                        ColorImage::from_rgb(size, spectrum_relative_img.into_raw().as_slice()),
+                        Default::default(),
+                    )
+                    .id(),
+                ui.available_size(),
+            );
         });
 
         self.step += 1;
+
+        ctx.request_repaint_after(Duration::from_millis(0));
     }
 }
 
