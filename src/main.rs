@@ -116,10 +116,8 @@ pub fn print_maxval(x: &Array<f64, 2>, name: &'static str) {
 
 struct SimState {
     s: SimSize,
-    force_x: Array<f64, 2>,
-    force_y: Array<f64, 2>,
-    force_x_prev: Array<f64, 2>,
-    force_y_prev: Array<f64, 2>,
+    force: Array<Vec2, 2>,
+    force_prev: Array<Vec2, 2>,
 
     working_dens: Array<f64, 2>,
     working_dens_prev: Array<f64, 2>,
@@ -134,10 +132,8 @@ struct SimState {
 impl SimState {
     pub fn new(s: SimSize, visc: f64, diff: f64, dt: f64) -> SimState {
         Self {
-            force_x: Array::new([s.x + 2, s.y + 2]),
-            force_y: Array::new([s.x + 2, s.y + 2]),
-            force_x_prev: Array::new([s.x + 2, s.y + 2]),
-            force_y_prev: Array::new([s.x + 2, s.y + 2]),
+            force: Array::new([s.x + 2, s.y + 2]),
+            force_prev: Array::new([s.x + 2, s.y + 2]),
             working_dens: Array::new([s.x + 2, s.y + 2]),
             working_dens_prev: Array::new([s.x + 2, s.y + 2]),
             dens: Array::new([s.x + 2, s.y + 2]),
@@ -185,18 +181,16 @@ impl App for SimState {
 
         if self.step < 200 {
             self.dens_prev[[10, 20]] += 1.0;
-            self.force_x_prev[[10, 20]] = 5.0;
+            self.force_prev[[10, 20]] = Vec2{x: 5.0, y: 0.0};
             //v[[20, 50]] += 20.0;
             self.dens_prev[[50, 50]] += 1.0;
-            self.force_y_prev[[50, 50]] = -5.0;
+            self.force_prev[[50, 50]] = Vec2{x: 0.0, y: -5.0};
         }
 
         vel_step(
             &self.s,
-            &mut self.force_x,
-            &mut self.force_y,
-            &mut self.force_x_prev,
-            &mut self.force_y_prev,
+            &mut self.force,
+            &mut self.force_prev,
             self.visc,
             self.dt,
         );
@@ -204,8 +198,7 @@ impl App for SimState {
             &self.s,
             &mut self.dens,
             &mut self.dens_prev,
-            &mut self.force_x,
-            &mut self.force_y,
+            &mut self.force,
             self.diff,
             self.dt,
         );

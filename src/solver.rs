@@ -2,6 +2,8 @@ use micro_ndarray::Array;
 
 use std::mem::swap;
 
+use crate::vector2::*;
+
 /// Struct that saves simulation size as x and y.
 /// This type is used in all methods instead of the original "n", enabling arbitrary aspect ratios
 pub struct SimSize {
@@ -35,10 +37,8 @@ pub fn diffuse(
 
 pub fn project(
     s: &SimSize,
-    force_x: &mut Array<f64, 2>,
-    force_y: &mut Array<f64, 2>,
-    force_x_prev: &mut Array<f64, 2>,
-    force_y_prev: &mut Array<f64, 2>,
+    force: &mut Array<Vec2, 2>,
+    force_prev: &mut Array<Vec2, 2>,
 ) {
     // HERE is a potential problem with the dynamic sizes: prev: / n, now: / (s.x * s.y).sqrt() represented by f
     // This seems to work for now, and produces the same results for the same resolutions, but further testing is needed
@@ -46,14 +46,15 @@ pub fn project(
 
     for i in 1..=s.x {
         for j in 1..=s.y {
-            force_y_prev[[i, j]] = -0.5
-                * (force_x[[i + 1, j]] - force_x[[i - 1, j]] + force_y[[i, j + 1]]
-                    - force_y[[i, j - 1]])
+            force_prev[[i, j]].y = -0.5
+                * (force[[i + 1, j]].x - force[[i - 1, j]].x + force[[i, j + 1]].y
+                    - force[[i, j - 1]].y)
                 / f;
             //HERE is a potential problem with the dynamic sizes: prev: / n, now: / (s.x * s.y).sqrt() represented by f
-            force_x_prev[[i, j]] = 0.0;
+            force_prev[[i, j]].x = 0.0;
         }
     }
+    // Combine
     set_bnd(&s, 0, force_y_prev);
     set_bnd(&s, 0, force_x_prev);
 
@@ -61,12 +62,14 @@ pub fn project(
 
     for xi in 1..=s.x {
         for yi in 1..=s.y {
-            force_x[[xi, yi]] -=
-                0.5 * f * (force_x_prev[[xi + 1, yi]] - force_x_prev[[xi - 1, yi]]);
-            force_y[[xi, yi]] -=
-                0.5 * f * (force_x_prev[[xi, yi + 1]] - force_x_prev[[xi, yi - 1]]);
+            force[[xi, yi]].x -=
+                0.5 * f * (force_prev[[xi + 1, yi]].x - force_prev[[xi - 1, yi]].x);
+            force[[xi, yi]].y -=
+                0.5 * f * (force_prev[[xi, yi + 1]].x - force_prev[[xi, yi - 1]].x);
         }
     }
+
+    // Combine
     set_bnd(&s, 1, force_x);
     set_bnd(&s, 2, force_y);
 }
@@ -146,6 +149,11 @@ pub fn set_bnd(s: &SimSize, b: i32, x: &mut Array<f64, 2>) {
     x[[s.x + 1, s.y + 1]] = 0.5 * (x[[s.x, s.y + 1]] + x[[s.x + 1, s.y]]);
 }
 
+pub fn set_bnd_vec2(s: &SimSize, mode_x: i32, mode_y: i32, x: &mut Array<Vec2, 2>){
+    
+    set_bnd(s, mode_x, x);
+}
+
 pub fn dens_step(
     s: &SimSize,
     dens: &mut Array<f64, 2>,
@@ -164,22 +172,28 @@ pub fn dens_step(
 
 pub fn vel_step(
     s: &SimSize,
-    force_x: &mut Array<f64, 2>,
-    force_y: &mut Array<f64, 2>,
-    force_x_prev: &mut Array<f64, 2>,
-    force_y_prev: &mut Array<f64, 2>,
+    force: &mut Array<Vec2, 2>,
+    force_prev: &mut Array<Vec2, 2>,
     visc: f64,
     dt: f64,
 ) {
+    // combine
     add_source(force_x, force_x_prev, dt);
     add_source(force_y, force_y_prev, dt);
-    swap(force_x_prev, force_x);
+
+    // Combined
+    swap(force_prev, force);
+
+    // Combine, but be careful because of b
     diffuse(&s, 1, force_x, force_x_prev, visc, dt);
-    swap(force_y_prev, force_y);
     diffuse(&s, 2, force_y, force_y_prev, visc, dt);
-    project(&s, force_x, force_y, force_x_prev, force_y_prev);
-    swap(force_x_prev, force_x);
-    swap(force_y_prev, force_y);
+
+    project(&s, force, force_prev);
+
+    // Combined
+    swap(force_prev, force);
+
+    // Combine. but be extra careful
     advect(
         &s,
         1,
@@ -198,5 +212,6 @@ pub fn vel_step(
         &mut force_y_prev.clone(),
         dt,
     );
-    project(&s, force_x, force_y, force_x_prev, force_y_prev);
+
+    project(&s, force, force_prev);
 }
