@@ -1,6 +1,6 @@
 use micro_ndarray::Array;
 
-use std::{mem::swap};
+use std::mem::swap;
 
 struct Vec2 {
     //TODO: Implement
@@ -48,9 +48,11 @@ pub fn project(
 
     for i in 1..=s.x {
         for j in 1..=s.y {
-            force_y_prev[[i, j]] =
-                -0.5 * (force_x[[i + 1, j]] - force_x[[i - 1, j]] + force_y[[i, j + 1]] - force_y[[i, j - 1]]) / f ;
-                //HERE is a potential problem with the dynamic sizes: prev: / n, now: / (s.x * s.y).sqrt() represented by f
+            force_y_prev[[i, j]] = -0.5
+                * (force_x[[i + 1, j]] - force_x[[i - 1, j]] + force_y[[i, j + 1]]
+                    - force_y[[i, j - 1]])
+                / f;
+            //HERE is a potential problem with the dynamic sizes: prev: / n, now: / (s.x * s.y).sqrt() represented by f
             force_x_prev[[i, j]] = 0.0;
         }
     }
@@ -61,8 +63,10 @@ pub fn project(
 
     for xi in 1..=s.x {
         for yi in 1..=s.y {
-            force_x[[xi, yi]] -= 0.5 * f * (force_x_prev[[xi + 1, yi]] - force_x_prev[[xi - 1, yi]]);
-            force_y[[xi, yi]] -= 0.5 * f * (force_x_prev[[xi, yi + 1]] - force_x_prev[[xi, yi - 1]]);
+            force_x[[xi, yi]] -=
+                0.5 * f * (force_x_prev[[xi + 1, yi]] - force_x_prev[[xi - 1, yi]]);
+            force_y[[xi, yi]] -=
+                0.5 * f * (force_x_prev[[xi, yi + 1]] - force_x_prev[[xi, yi - 1]]);
         }
     }
     set_bnd(&s, 1, force_x);
@@ -177,7 +181,23 @@ pub fn vel_step(
     project(&s, force_x, force_y, force_x_prev, force_y_prev);
     swap(force_x_prev, force_x);
     swap(force_y_prev, force_y);
-    advect(&s, 1, force_x, force_x_prev, &mut force_x_prev.clone(), force_y_prev, dt);
-    advect(&s, 2, force_y, force_y_prev, force_x_prev, &mut force_y_prev.clone(), dt);
+    advect(
+        &s,
+        1,
+        force_x,
+        force_x_prev,
+        &mut force_x_prev.clone(),
+        force_y_prev,
+        dt,
+    );
+    advect(
+        &s,
+        2,
+        force_y,
+        force_y_prev,
+        force_x_prev,
+        &mut force_y_prev.clone(),
+        dt,
+    );
     project(&s, force_x, force_y, force_x_prev, force_y_prev);
 }
