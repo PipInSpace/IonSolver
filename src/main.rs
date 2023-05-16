@@ -1,6 +1,6 @@
 extern crate image;
 
-use egui::{ColorImage, Vec2};
+use egui::ColorImage;
 use image::{ImageBuffer, Rgb};
 
 use micro_ndarray::Array;
