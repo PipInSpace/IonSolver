@@ -97,12 +97,12 @@ pub fn advect(
 ) {
     //HERE is a potential problem with the dynamic sizes: prev: dt * n, now: dt * s.x, dt * s.y
 
-    let dt0x = dt * s.x as f64;
-    let dt0y = dt * s.y as f64;
+    let f = (s.x as f64 * s.y as f64).sqrt();
+    let dt0 = dt * f;
     for i in 1..=s.x {
         for j in 1..=s.y {
-            let mut x = i as f64 - dt0x * u[[i, j]];
-            let mut y = j as f64 - dt0y * v[[i, j]];
+            let mut x = i as f64 - dt0 * u[[i, j]];
+            let mut y = j as f64 - dt0 * v[[i, j]];
             if x < 0.5 {
                 x = 0.5;
             }
