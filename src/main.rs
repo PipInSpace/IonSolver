@@ -14,7 +14,13 @@ use std::time::Duration;
 
 // Visualisation functions and debug info
 
-pub fn draw_spectrum(s: &SimSize, array: &Array<f64, 2>, step: i32, name: &'static str, save: bool,) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+pub fn draw_spectrum(
+    s: &SimSize,
+    array: &Array<f64, 2>,
+    step: i32,
+    name: &'static str,
+    save: bool,
+) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     // exports png image of a 2D float array with range 0-1 in blue-green-red spectrum
     let mut img = ImageBuffer::new(s.x as u32, s.y as u32);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
@@ -217,5 +223,6 @@ fn main() {
         "IonSolver",
         options,
         Box::new(|_cc| Box::<SimState>::new(sim)),
-    ).expect("unable to open window");
+    )
+    .expect("unable to open window");
 }
