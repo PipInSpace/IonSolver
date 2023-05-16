@@ -14,7 +14,7 @@ use std::time::Duration;
 
 // Visualisation functions and debug info
 
-pub fn draw_spectrum(s: &SimSize, array: &Array<f64, 2>, step: i32, name: &'static str) {
+pub fn draw_spectrum(s: &SimSize, array: &Array<f64, 2>, step: i32, name: &'static str, save: bool,) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     // exports png image of a 2D float array with range 0-1 in blue-green-red spectrum
     let mut img = ImageBuffer::new(s.x as u32, s.y as u32);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
@@ -27,7 +27,10 @@ pub fn draw_spectrum(s: &SimSize, array: &Array<f64, 2>, step: i32, name: &'stat
             ((4.0 * -array[[x as usize + 1, y as usize + 1]] + 2.0).clamp(0.0, 1.0) * 255.0) as u8;
         *pixel = Rgb([r, g, b]);
     }
-    img.save(format!(r"out/{name}{step}.png")).unwrap();
+    if save {
+        img.save(format!(r"out/{name}{step}.png")).unwrap();
+    }
+    img
 }
 
 pub fn draw_spectrum_relative(
@@ -70,7 +73,8 @@ pub fn draw_multichannel(
     b_channel: &Array<f64, 2>,
     step: i32,
     name: &'static str,
-) {
+    save: bool,
+) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     // exports png image of 3 2D float arrays with range 0-1 in the three RGB channels
     let mut img = ImageBuffer::new(s.x as u32, s.y as u32);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
@@ -79,7 +83,10 @@ pub fn draw_multichannel(
         let b = (b_channel[[x as usize + 1, y as usize + 1]].clamp(0.0, 1.0) * 255.0) as u8;
         *pixel = Rgb([r, g, b]);
     }
-    img.save(format!(r"out/{name}{step}.png")).unwrap();
+    if save {
+        img.save(format!(r"out/{name}{step}.png")).unwrap();
+    }
+    img
 }
 
 pub fn print_maxval(x: &Array<f64, 2>, name: &'static str) {
@@ -167,7 +174,7 @@ impl App for SimState {
         //Update gui
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("IonSolver Simulation");
-            ui.label(format!("Step '{}'", self.step));
+            ui.label(format!("Step {}", self.step));
             ui.image(
                 ui.ctx()
                     .load_texture(
@@ -207,7 +214,7 @@ fn main() {
         ..Default::default()
     };
     eframe::run_native(
-        "My egui App",
+        "IonSolver",
         options,
         Box::new(|_cc| Box::<SimState>::new(sim)),
     ).expect("unable to open window");
