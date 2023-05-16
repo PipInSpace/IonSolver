@@ -2,6 +2,7 @@ use micro_ndarray::Array;
 
 use std::mem::swap;
 
+#[allow(unused)]
 struct Vec2 {
     //TODO: Implement
     x: f64,
