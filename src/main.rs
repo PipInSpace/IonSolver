@@ -210,5 +210,5 @@ fn main() {
         "My egui App",
         options,
         Box::new(|_cc| Box::<SimState>::new(sim)),
-    );
+    ).expect("unable to open window");
 }
