@@ -1,5 +1,7 @@
 extern crate image;
 
+use std::time::Duration;
+
 use image::{ImageBuffer, Rgb};
 
 use micro_ndarray::Array;
@@ -118,7 +120,7 @@ impl App for SimState {
         println!("Step {}", self.step);
         if self.step % 1 == 0 {
             //draw_spectrum(n, &x, i, "dens");
-            draw_spectrum_relative(&self.s, &mut self.dens, self.step, "densRel")
+            //draw_spectrum_relative(&self.s, &mut self.dens, self.step, "densRel")
             //draw_multichannel(n, &x, &x, &x, i, "densGrey");
             //draw_multichannel(n, &x, &u, &v, i, "combined");
         }
@@ -157,6 +159,8 @@ impl App for SimState {
         });
 
         self.step += 1;
+
+        ctx.request_repaint_after(Duration::from_millis(100));
     }
 }
 
@@ -181,7 +185,7 @@ fn main() {
         ..Default::default()
     };
     eframe::run_native(
-        "My egui App",
+        "IonSolver",
         options,
         Box::new(|_cc| Box::<SimState>::new(sim)),
     );
