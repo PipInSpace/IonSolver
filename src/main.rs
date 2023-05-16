@@ -155,12 +155,12 @@ impl App for SimState {
         //Update gui
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("IonSolver Simulation");
-            ui.label(format!("Step '{}'", self.step));
+            ui.label(format!("Step {}", self.step));
         });
 
         self.step += 1;
 
-        ctx.request_repaint_after(Duration::from_millis(100));
+        ctx.request_repaint_after(Duration::from_millis(0));
     }
 }
 
@@ -181,8 +181,9 @@ fn main() {
 
     //UI code
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(320.0, 240.0)),
+        initial_window_size: Some(egui::vec2(1080.0, 1080.0)),
         ..Default::default()
+        
     };
     eframe::run_native(
         "IonSolver",
