@@ -2,20 +2,16 @@ use micro_ndarray::Array;
 
 use std::mem::swap;
 
-#[allow(unused)]
-struct Vec2 {
-    //TODO: Implement
-    x: f64,
-    y: f64,
-}
-
+/// Struct that saves simulation size as x and y.
+/// This type is used in all methods instead of the original "n", enabling arbitrary aspect ratios
 pub struct SimSize {
-    // Struct that saves simulation sizes.
-    // This type is used in all methods instead of the original "n", enabling arbitrary aspect ratios
+    /// width of the simulation
     pub x: usize,
+    /// height of the simulation
     pub y: usize,
 }
 
+/// Adds sources, used in the density and velocity steps. aka does things
 pub fn add_source(x: &mut Array<f64, 2>, s: &mut Array<f64, 2>, dt: f64) {
     // Adds sources, used in the density and velocity steps
     // Can also be called independently of those
@@ -24,6 +20,7 @@ pub fn add_source(x: &mut Array<f64, 2>, s: &mut Array<f64, 2>, dt: f64) {
     }
 }
 
+/// Primes the lin_solve() function for diffusing grid cells
 pub fn diffuse(
     s: &SimSize,
     b: i32,
@@ -74,6 +71,7 @@ pub fn project(
     set_bnd(&s, 2, force_y);
 }
 
+/// Uses Gauss-Seidel relaxation to solve a system of linear equations.
 fn lin_solve(s: &SimSize, b: i32, x: &mut Array<f64, 2>, x0: &mut Array<f64, 2>, a: f64, c: f64) {
     // Gauss-Seidel relaxation
     for _k in 0..20 {
@@ -97,10 +95,10 @@ pub fn advect(
     v: &mut Array<f64, 2>,
     dt: f64,
 ) {
-    //HERE is a potential problem with the dynamic sizes: prev: / n, now: / (s.x * s.y).sqrt() represented by f
+    //HERE is a potential problem with the dynamic sizes: prev: dt * n, now: dt * s.x, dt * s.y
 
     let dt0x = dt * s.x as f64;
-    let dt0y = dt * s.x as f64;
+    let dt0y = dt * s.y as f64;
     for i in 1..=s.x {
         for j in 1..=s.y {
             let mut x = i as f64 - dt0x * u[[i, j]];

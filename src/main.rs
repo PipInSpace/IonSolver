@@ -10,6 +10,9 @@ use eframe::*;
 mod solver;
 use solver::*;
 
+mod vector2;
+use vector2::*;
+
 use std::time::Duration;
 
 // Visualisation functions and debug info
@@ -199,13 +202,13 @@ impl App for SimState {
     }
 }
 
-// main method
-
+/// main method
 fn main() {
     // s is the size of the simulation. Size: s.x * s.y
     // visc: viscosity, default 0.0
     // diff: diffusion rate, default 0.0
-    // dt: multiplier in add_source function, default 0.1
+    // dt: delta-time, controls time step, default 0.1
+    let _ = Vec2 { x: 0.0, y: 0.0 }.normalize();
     let s = SimSize { x: 114, y: 64 };
     // Arrays need to be 1px wider on each side, therefor s is used + 2
     let visc = 0.0;
