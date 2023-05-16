@@ -46,23 +46,18 @@ pub fn diffuse(
 }
 
 /// Primes the lin_solve() function for diffusing grid cells
-pub fn diffuse(
+pub fn diffuse_vec2(
     s: &SimSize,
-    b: i32,
-    x: &mut Array<f64, 2>,
-    x0: &mut Array<f64, 2>,
+    x: &mut Array<Vec2, 2>,
+    x0: &mut Array<Vec2, 2>,
     diff: f64,
     dt: f64,
 ) {
     let a = dt * diff * s.x as f64 * s.y as f64;
-    lin_solve(&s, b, x, x0, a, 1.0 + 4.0 * a)
+    lin_solve_vec2(&s, x, x0, a, 1.0 + 4.0 * a)
 }
 
-pub fn project(
-    s: &SimSize,
-    force: &mut Array<Vec2, 2>,
-    force_prev: &mut Array<Vec2, 2>,
-) {
+pub fn project(s: &SimSize, force: &mut Array<Vec2, 2>, force_prev: &mut Array<Vec2, 2>) {
     // HERE is a potential problem with the dynamic sizes: prev: / n, now: / (s.x * s.y).sqrt() represented by f
     // This seems to work for now, and produces the same results for the same resolutions, but further testing is needed
     let f = (s.x as f64 * s.y as f64).sqrt();
@@ -80,7 +75,7 @@ pub fn project(
     // Combined
     //set_bnd(&s, 0, force_y_prev);
     //set_bnd(&s, 0, force_x_prev);
-    set_bnd_vec2(s, 0, 0, force);
+    set_bnd_vec2(s, force);
 
     lin_solve(&s, 0, force_x_prev, force_y_prev, 1.0, 4.0);
 
@@ -96,7 +91,7 @@ pub fn project(
     // Combinen
     //set_bnd(&s, 1, force_x);
     //set_bnd(&s, 2, force_y);
-    set_bnd_vec2(s, 1, 2, force);
+    set_bnd_vec2(s, force);
 }
 
 /// Uses Gauss-Seidel relaxation to solve a system of linear equations.
@@ -111,6 +106,19 @@ fn lin_solve(s: &SimSize, b: i32, x: &mut Array<f64, 2>, x0: &mut Array<f64, 2>,
             }
         }
         set_bnd(&s, b, x)
+    }
+}
+
+fn lin_solve_vec2(s: &SimSize, x: &mut Array<Vec2, 2>, x0: &mut Array<Vec2, 2>, a: f64, c: f64) {
+    // Gauss-Seidel relaxation
+    for _k in 0..20 {
+        for xi in 1..=s.x {
+            for yi in 1..=s.y {
+                x[[xi, yi]].x = (x0[[xi, yi]].x + a * (x[[xi - 1, yi]].x + x[[xi + 1, yi]].x + x[[xi, yi - 1]].x + x[[xi, yi + 1]].x)) / c;
+                x[[xi, yi]].y = (x0[[xi, yi]].y + a * (x[[xi - 1, yi]].y + x[[xi + 1, yi]].y + x[[xi, yi - 1]].y + x[[xi, yi + 1]].y)) / c;
+            }
+        }
+        set_bnd_vec2(&s, x)
     }
 }
 
@@ -175,20 +183,20 @@ pub fn set_bnd(s: &SimSize, b: i32, x: &mut Array<f64, 2>) {
     x[[s.x + 1, s.y + 1]] = 0.5 * (x[[s.x, s.y + 1]] + x[[s.x + 1, s.y]]);
 }
 
-pub fn set_bnd_vec2(s: &SimSize, mode_x: i32, mode_y: i32, x: &mut Array<Vec2, 2>){
+pub fn set_bnd_vec2(s: &SimSize, x: &mut Array<Vec2, 2>) {
     // mode is unneeded, x is always 1, y is always 2
 
     for i in 1..=s.x {
-        x[[i, 0]].x = if mode_x == 2 { -x[[i, 1]].x } else { x[[i, 1]].x };
-        x[[i, 0]].y = if mode_y == 2 { -x[[i, 1]].y } else { x[[i, 1]].y };
-        x[[i, s.y + 1]].x = if mode_x == 2 { -x[[i, s.y]].x } else { x[[i, s.y]].x };
-        x[[i, s.y + 1]].y = if mode_y == 2 { -x[[i, s.y]].y } else { x[[i, s.y]].y };
+        x[[i, 0]].x = x[[i, 1]].x;
+        x[[i, 0]].y = -x[[i, 1]].y;
+        x[[i, s.y + 1]].x = x[[i, s.y]].x;
+        x[[i, s.y + 1]].y = -x[[i, s.y]].y;
     }
     for i in 1..=s.y {
-        x[[0, i]].x = if mode_x == 1 { -x[[1, i]].x } else { x[[1, i]].x };
-        x[[0, i]].y = if mode_y == 1 { -x[[1, i]].y } else { x[[1, i]].y };
-        x[[s.x + 1, i]].x = if mode_x == 1 { -x[[s.x, i]].x } else { x[[s.x, i]].x };
-        x[[s.x + 1, i]].y = if mode_y == 1 { -x[[s.x, i]].y } else { x[[s.x, i]].y };
+        x[[0, i]].x = -x[[1, i]].x;
+        x[[0, i]].y = x[[1, i]].y;
+        x[[s.x + 1, i]].x = -x[[s.x, i]].x;
+        x[[s.x + 1, i]].y = x[[s.x, i]].y;
     }
 
     x[[0, 0]].x = 0.5 * (x[[1, 0]].x + x[[0, 1]].x);
@@ -201,6 +209,7 @@ pub fn set_bnd_vec2(s: &SimSize, mode_x: i32, mode_y: i32, x: &mut Array<Vec2, 2
     x[[s.x + 1, s.y + 1]].y = 0.5 * (x[[s.x, s.y + 1]].y + x[[s.x + 1, s.y]].y);
 }
 
+/// The density step of the simulation
 pub fn dens_step(
     s: &SimSize,
     dens: &mut Array<f64, 2>,
@@ -217,6 +226,7 @@ pub fn dens_step(
     advect(&s, 0, dens, dens_prev, force_x, force_y, dt);
 }
 
+/// The velocity step of the simulation
 pub fn vel_step(
     s: &SimSize,
     force: &mut Array<Vec2, 2>,
@@ -235,6 +245,7 @@ pub fn vel_step(
     // Combine, but be careful because of b
     diffuse(&s, 1, force_x, force_x_prev, visc, dt);
     diffuse(&s, 2, force_y, force_y_prev, visc, dt);
+    diffuse_vec2(&s, force, force_prev, visc, dt);
 
     project(&s, force, force_prev);
 

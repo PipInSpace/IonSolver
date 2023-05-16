@@ -181,10 +181,10 @@ impl App for SimState {
 
         if self.step < 200 {
             self.dens_prev[[10, 20]] += 1.0;
-            self.force_prev[[10, 20]] = Vec2{x: 5.0, y: 0.0};
+            self.force_prev[[10, 20]] = Vec2 { x: 5.0, y: 0.0 };
             //v[[20, 50]] += 20.0;
             self.dens_prev[[50, 50]] += 1.0;
-            self.force_prev[[50, 50]] = Vec2{x: 0.0, y: -5.0};
+            self.force_prev[[50, 50]] = Vec2 { x: 0.0, y: -5.0 };
         }
 
         vel_step(
