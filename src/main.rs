@@ -1,6 +1,6 @@
 extern crate image;
 
-use egui::ColorImage;
+use egui::{ColorImage, Id};
 use image::{ImageBuffer, Rgb};
 
 use micro_ndarray::Array;
@@ -10,7 +10,7 @@ use eframe::*;
 mod solver;
 use solver::*;
 
-use std::{time::Duration};
+use std::time::Duration;
 
 mod vector2;
 use vector2::*;
@@ -30,8 +30,8 @@ pub fn draw_spectrum(
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     // exports png image of a 2D float array with dynamic range in blue-green-red spectrum.
     // Highest value is red, 0 is blue.
-    let f = 0.5;
-    
+    let f = 5.0;
+
     let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(s.x as u32, s.y as u32);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
         let r = ((4.0 * (array[[x as usize + 1, y as usize + 1]] * f) - 2.0).clamp(0.0, 1.0)
@@ -62,7 +62,7 @@ pub fn draw_spectrum_relative(
         / array
             .iter()
             .map(|x| *x.1)
-            .max_by(|a, b| f64::partial_cmp(a, b).unwrap() )
+            .max_by(|a, b| f64::partial_cmp(a, b).unwrap())
             .expect("empty array should not be possible");
 
     let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(s.x as u32, s.y as u32);
@@ -116,6 +116,9 @@ struct SimState {
     diff: f64,
     dt: f64,
     step: i32,
+
+    //Control:
+    paused: bool,
 }
 
 impl SimState {
@@ -131,56 +134,64 @@ impl SimState {
             dt,
             step: 0,
             s,
+            paused: false,
         }
     }
 }
 
 impl App for SimState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        println!("Step {}", self.step);
+        
         //draw_spectrum(n, &x, i, "dens", false);
-        let spectrum_img = draw_spectrum(
-            &self.s,
-            &self.dens,
-            self.step,
-            "densRel",
-            false,
-        );
+        let spectrum_img = draw_spectrum(&self.s, &self.dens, self.step, "densRel", false);
         //draw_multichannel(n, &x, &x, &x, i, "densGrey", false);
         //draw_multichannel(n, &x, &u, &v, i, "combined", false);
 
-        if self.step < 200 {
-            self.dens[[10, 20]] += 1.0;
-            self.force_prev[[10, 20]] = Vec2 { x: 5.0, y: 0.0 };
-            //v[[20, 50]] += 20.0;
-            self.dens[[50, 50]] += 1.0;
-            self.force_prev[[50, 50]] = Vec2 { x: 0.0, y: -5.0 };
+        if !self.paused {
+            println!("Step {}", self.step);
+            if self.step < 200 {
+                self.dens[[10, 20]] += 1.0;
+                self.force_prev[[10, 20]] = Vec2 { x: 5.0, y: 0.0 };
+                //v[[20, 50]] += 20.0;
+                self.dens[[50, 50]] += 1.0;
+                self.force_prev[[50, 50]] = Vec2 { x: 0.0, y: -5.0 };
+            }
+            vel_step(
+                &self.s,
+                &mut self.force,
+                &mut self.force_prev,
+                self.visc,
+                self.dt,
+            );
+            dens_step(
+                &self.s,
+                &mut self.dens,
+                &mut self.dens_prev,
+                &mut self.force,
+                self.diff,
+                self.dt,
+            );
+            print_sum(&self.dens, "dens");
+            self.step += 1;
         }
-        vel_step(
-            &self.s,
-            &mut self.force,
-            &mut self.force_prev,
-            self.visc,
-            self.dt,
-        );
-        dens_step(
-            &self.s,
-            &mut self.dens,
-            &mut self.dens_prev,
-            &mut self.force,
-            self.diff,
-            self.dt,
-        );
-        print_sum(&self.dens, "dens");
 
         // Prepare images
         let size = spectrum_img.dimensions();
         let size = [size.0 as usize, size.1 as usize];
 
+        
         //Update gui
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::TopBottomPanel::top("top_controls").show(ctx, |ui| {
             ui.heading("IonSolver Simulation");
-            ui.label(format!("Step {}", self.step));
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.button("Pause").clicked() {
+                    self.paused = !self.paused;
+                }
+                ui.label(format!("Step {}", self.step));
+            })
+        });
+        egui::CentralPanel::default().show(ctx, |ui| {
             ui.image(
                 ui.ctx()
                     .load_texture(
@@ -193,20 +204,18 @@ impl App for SimState {
             );
         });
 
-        self.step += 1;
-
-        ctx.request_repaint_after(Duration::from_millis(0));
+        if !self.paused {ctx.request_repaint_after(Duration::from_millis(0))}
     }
 }
 
-/// main method
+/// main method, starts ui/sim loop
 fn main() {
     // s is the size of the simulation. Size: s.x * s.y
     // visc: viscosity, default 0.0
     // diff: diffusion rate, default 0.0
     // dt: delta-time, controls time step, default 0.1
     let _ = Vec2 { x: 0.0, y: 0.0 }.normalize();
-    let s = SimSize { x: 64, y: 64 };
+    let s = SimSize { x: 114, y: 64 };
     let visc = 0.0;
     let diff = 0.0;
     let dt = 0.1;

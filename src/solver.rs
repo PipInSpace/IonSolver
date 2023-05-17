@@ -82,7 +82,7 @@ pub fn project(s: &SimSize, force: &mut Array<Vec2, 2>, force_prev: &mut Array<V
         }
         for i in 1..=s.x {
             force_prev[[i, 0]].x = force_prev[[i, 1]].x;
-            force_prev[[i, s.y + 1]].x =force_prev[[i, s.y]].x;
+            force_prev[[i, s.y + 1]].x = force_prev[[i, s.y]].x;
         }
         for i in 1..=s.y {
             force_prev[[0, i]].x = force_prev[[1, i]].x;
@@ -231,7 +231,7 @@ pub fn advect_vec2(
 }
 
 pub fn set_bnd(s: &SimSize, b: i32, x: &mut Array<f64, 2>) {
-    // b: 1 means x is being processed, 2 means y 
+    // b: 1 means x is being processed, 2 means y
     // WARNING: 0 is also possible, special case
     for i in 1..=s.x {
         x[[i, 0]] = if b == 2 { -x[[i, 1]] } else { x[[i, 1]] };
