@@ -180,13 +180,13 @@ impl App for SimState {
         self.working_dens_prev = self.dens_prev.clone();
 
         if self.step < 200 {
-            self.dens_prev[[10, 20]] += 1.0;
+            self.dens[[10, 20]] += 1.0;
             self.force_prev[[10, 20]] = Vec2 { x: 5.0, y: 0.0 };
             //v[[20, 50]] += 20.0;
-            self.dens_prev[[50, 50]] += 1.0;
+            self.dens[[50, 50]] += 1.0;
             self.force_prev[[50, 50]] = Vec2 { x: 0.0, y: -5.0 };
         }
-
+        print_maxval(&self.dens, "densBef");
         vel_step(
             &self.s,
             &mut self.force,
@@ -194,6 +194,7 @@ impl App for SimState {
             self.visc,
             self.dt,
         );
+        print_maxval(&self.dens, "densAft");
         dens_step(
             &self.s,
             &mut self.dens,
@@ -202,6 +203,7 @@ impl App for SimState {
             self.diff,
             self.dt,
         );
+        print_maxval(&self.dens, "densAft");
 
         let size = spectrum_relative_img.dimensions();
         let size = [size.0 as usize, size.1 as usize];
@@ -224,7 +226,7 @@ impl App for SimState {
 
         self.step += 1;
 
-        ctx.request_repaint_after(Duration::from_millis(0));
+        ctx.request_repaint_after(Duration::from_millis(1000));
     }
 }
 
@@ -235,7 +237,7 @@ fn main() {
     // diff: diffusion rate, default 0.0
     // dt: delta-time, controls time step, default 0.1
     let _ = Vec2 { x: 0.0, y: 0.0 }.normalize();
-    let s = SimSize { x: 114, y: 64 };
+    let s = SimSize { x: 64, y: 64 };
     // Arrays need to be 1px wider on each side, therefor s is used + 2
     let visc = 0.0;
     let diff = 0.0;
