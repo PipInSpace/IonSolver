@@ -45,6 +45,14 @@ impl Vec2 {
         to.add(&self.negate()).normalize()
     }
 
+    pub fn flip_x(&self) -> Vec2 {
+        Vec2::new(-self.x, self.y)
+    }
+
+    pub fn flip_y(&self) -> Vec2 {
+        Vec2::new(self.x, -self.y)
+    }
+
     /// Returns a String with the format "(x,y)".
     pub fn to_string(&self) -> String {
         format!("({},{})", self.x, self.y)
