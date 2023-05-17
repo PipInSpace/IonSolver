@@ -45,10 +45,12 @@ impl Vec2 {
         to.add(&self.negate()).normalize()
     }
 
+    /// Returns a new Vector with inverted x component
     pub fn flip_x(&self) -> Vec2 {
         Vec2::new(-self.x, self.y)
     }
 
+    /// Returns a new Vector with inverted y component
     pub fn flip_y(&self) -> Vec2 {
         Vec2::new(self.x, -self.y)
     }

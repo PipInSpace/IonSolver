@@ -91,6 +91,15 @@ pub fn project(s: &SimSize, force: &mut Array<Vec2, 2>, force_prev: &mut Array<V
             }
         }
         //set_bnd(&s, 0, x)
+        for i in 1..=s.x {
+            force_prev[[i, 0]].x = force_prev[[i, 1]].x;
+            force_prev[[i, s.y + 1]].x =force_prev[[i, s.y]].x;
+        }
+        for i in 1..=s.y {
+            force_prev[[0, i]].x = force_prev[[1, i]].x;
+            force_prev[[s.x + 1, i]].x = force_prev[[s.x, i]].x;
+        }
+
         force_prev[[0, 0]].x = 0.5 * (force_prev[[1, 0]].x + force_prev[[0, 1]].x);
         force_prev[[0, s.y + 1]].x = 0.5 * (force_prev[[1, s.y + 1]].x + force_prev[[0, s.y]].x);
         force_prev[[s.x + 1, 0]].x = 0.5 * (force_prev[[s.x, 0]].x + force_prev[[s.x + 1, 1]].x);

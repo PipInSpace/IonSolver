@@ -237,7 +237,7 @@ fn main() {
     // diff: diffusion rate, default 0.0
     // dt: delta-time, controls time step, default 0.1
     let _ = Vec2 { x: 0.0, y: 0.0 }.normalize();
-    let s = SimSize { x: 64, y: 64 };
+    let s = SimSize { x: 114, y: 64 };
     // Arrays need to be 1px wider on each side, therefor s is used + 2
     let visc = 0.0;
     let diff = 0.0;
