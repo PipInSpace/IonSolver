@@ -1,8 +1,8 @@
 use micro_ndarray::Array;
 
-use std::mem::{self, swap};
+use std::mem::{swap};
 
-use crate::debug::*;
+#[allow(unused_imports)]
 use crate::{print_maxval, vector2::*};
 
 /// Struct that saves simulation size as x and y.
@@ -15,6 +15,7 @@ pub struct SimSize {
 }
 
 /// Adds sources, used in the density step. aka does things
+#[allow(dead_code)]
 pub fn add_source(x: &mut Array<f64, 2>, s: &mut Array<f64, 2>, dt: f64) {
     for (c, item) in x.iter_mut() {
         *item += dt * s[c];

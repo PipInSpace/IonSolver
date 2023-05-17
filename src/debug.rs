@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use micro_ndarray::Array;
 
+#[allow(dead_code)]
 pub fn print_maxval(x: &Array<f64, 2>, name: &'static str) {
     println!(
         "Max {name}: {:?}",

@@ -1,6 +1,6 @@
 extern crate image;
 
-use egui::{ColorImage, Id};
+use egui::{ColorImage};
 use image::{ImageBuffer, Rgb};
 
 use micro_ndarray::Array;
@@ -30,7 +30,7 @@ pub fn draw_spectrum(
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     // exports png image of a 2D float array with dynamic range in blue-green-red spectrum.
     // Highest value is red, 0 is blue.
-    let f = 5.0;
+    let f = 3.0;
 
     let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(s.x as u32, s.y as u32);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
@@ -134,8 +134,17 @@ impl SimState {
             dt,
             step: 0,
             s,
-            paused: false,
+            paused: true,
         }
+    }
+
+    pub fn reset_sim(&mut self) {
+        self.force = Array::new([self.s.x + 2, self.s.y + 2]);
+        self.force_prev = Array::new([self.s.x + 2, self.s.y + 2]);
+        self.dens = Array::new([self.s.x + 2, self.s.y + 2]);
+        self.dens_prev = Array::new([self.s.x + 2, self.s.y + 2]);
+        self.step = 0;
+        self.paused = true;
     }
 }
 
@@ -185,8 +194,11 @@ impl App for SimState {
             ui.heading("IonSolver Simulation");
             ui.separator();
             ui.horizontal(|ui| {
-                if ui.button("Pause").clicked() {
+                if ui.button(if self.paused {"Play"} else {"Pause"}).clicked() {
                     self.paused = !self.paused;
+                }
+                if ui.button("Reset").clicked() {
+                    self.reset_sim();
                 }
                 ui.label(format!("Step {}", self.step));
             })
@@ -208,6 +220,20 @@ impl App for SimState {
     }
 }
 
+pub fn load_icon(icon_bytes: &Vec<u8>) -> Option<eframe::IconData> {
+    if let Ok(image) = image::load_from_memory(icon_bytes) {
+        let image = image.to_rgba8();
+        let (width, height) = image.dimensions();
+        Some(eframe::IconData {
+            width,
+            height,
+            rgba: image.as_raw().to_vec(),
+        })
+    } else {
+        None
+    }
+}
+
 /// main method, starts ui/sim loop
 fn main() {
     // s is the size of the simulation. Size: s.x * s.y
@@ -215,7 +241,7 @@ fn main() {
     // diff: diffusion rate, default 0.0
     // dt: delta-time, controls time step, default 0.1
     let _ = Vec2 { x: 0.0, y: 0.0 }.normalize();
-    let s = SimSize { x: 114, y: 64 };
+    let s = SimSize { x: 228, y: 128 };
     let visc = 0.0;
     let diff = 0.0;
     let dt = 0.1;
@@ -223,10 +249,15 @@ fn main() {
     let sim = SimState::new(s, visc, diff, dt);
 
     //UI code
+    
+    let icon_bytes = include_bytes!("../icons/IonSolver.png");
+
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(320.0, 240.0)),
+        icon_data: load_icon(&icon_bytes.to_vec()),
         ..Default::default()
     };
+
     eframe::run_native(
         "IonSolver",
         options,

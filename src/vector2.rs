@@ -4,6 +4,7 @@ pub struct Vec2 {
     pub y: f64,
 }
 
+#[allow(dead_code)]
 impl Vec2 {
     /// Returns a new Vector with the coordinates specified.
     pub fn new(x: f64, y: f64) -> Vec2 {
