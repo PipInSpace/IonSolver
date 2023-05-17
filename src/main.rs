@@ -120,6 +120,7 @@ struct SimState {
 impl SimState {
     pub fn new(s: SimSize, visc: f64, diff: f64, dt: f64) -> SimState {
         Self {
+            // Arrays need to be 1px wider on each side, therefor s is used + 2
             force_x: Array::new([s.x + 2, s.y + 2]),
             force_y: Array::new([s.x + 2, s.y + 2]),
             force_x_prev: Array::new([s.x + 2, s.y + 2]),
@@ -140,9 +141,11 @@ impl App for SimState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         println!("Step {}", self.step);
         //draw_spectrum(n, &x, i, "dens", false);
-        let spectrum_relative_img = draw_spectrum_relative(
+        let spectrum_relative_img = draw_multichannel(
             &self.s,
-            &mut self.dens,
+            &self.dens,
+            &self.dens,
+            &self.dens,
             self.step,
             "densRel",
             false,
@@ -213,7 +216,6 @@ fn main() {
     // dt: delta-time, controls time step, default 0.1
     let _ = Vec2 { x: 0.0, y: 0.0 }.normalize();
     let s = SimSize { x: 64, y: 64 };
-    // Arrays need to be 1px wider on each side, therefor s is used + 2
     let visc = 0.0;
     let diff = 0.0;
     let dt = 0.1;
