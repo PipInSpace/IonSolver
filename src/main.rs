@@ -15,6 +15,8 @@ use std::{cmp::Ordering, time::Duration};
 mod vector2;
 use vector2::*;
 
+use crate::debug::{print_maxval, print_sum};
+
 mod debug;
 
 // Visualisation functions and debug info
@@ -114,8 +116,6 @@ struct SimState {
     force_x_prev: Array<f64, 2>,
     force_y_prev: Array<f64, 2>,
 
-    working_dens: Array<f64, 2>,
-    working_dens_prev: Array<f64, 2>,
     dens: Array<f64, 2>,
     dens_prev: Array<f64, 2>,
     visc: f64,
@@ -131,8 +131,6 @@ impl SimState {
             force_y: Array::new([s.x + 2, s.y + 2]),
             force_x_prev: Array::new([s.x + 2, s.y + 2]),
             force_y_prev: Array::new([s.x + 2, s.y + 2]),
-            working_dens: Array::new([s.x + 2, s.y + 2]),
-            working_dens_prev: Array::new([s.x + 2, s.y + 2]),
             dens: Array::new([s.x + 2, s.y + 2]),
             dens_prev: Array::new([s.x + 2, s.y + 2]),
 
@@ -148,40 +146,25 @@ impl SimState {
 impl App for SimState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         println!("Step {}", self.step);
-        let mut fix_dens = false;
         //draw_spectrum(n, &x, i, "dens", false);
-        let spectrum_relative_img = draw_spectrum_relative(
+        let spectrum_relative_img = draw_spectrum(
             &self.s,
             &mut self.dens,
             self.step,
             "densRel",
             false,
-            &mut fix_dens,
         );
         //draw_multichannel(n, &x, &x, &x, i, "densGrey", false);
         //draw_multichannel(n, &x, &u, &v, i, "combined", false);
-        // fix INFINITY values
-        if fix_dens {
-            println!("Fixing...");
-            for (c, item) in self.dens_prev.iter_mut() {
-                *item = self.working_dens_prev[c];
-                *item /= 1.0E32;
-            }
-            for (c, item) in self.dens.iter_mut() {
-                *item = self.working_dens[c];
-                *item /= 1.0E32;
-            }
-            println!("All items have been divided by 1E10 and one step was skipped.");
-        }
-        self.working_dens = self.dens.clone();
-        self.working_dens_prev = self.dens_prev.clone();
 
         if self.step < 200 {
-            self.dens_prev[[10, 20]] += 1.0;
+            self.dens[[10, 20]] += 2.0;
             self.force_x_prev[[10, 20]] = 5.0;
+            //self.force_x[[10, 20]] = 5.0;
             //v[[20, 50]] += 20.0;
-            self.dens_prev[[50, 50]] += 1.0;
+            self.dens[[50, 50]] += 1.0;
             self.force_y_prev[[50, 50]] = -5.0;
+            //self.force_y[[50, 50]] = -5.0;
         }
 
         vel_step(
@@ -205,6 +188,8 @@ impl App for SimState {
 
         let size = spectrum_relative_img.dimensions();
         let size = [size.0 as usize, size.1 as usize];
+
+        print_maxval(&self.force_x, "force_x");
 
         //Update gui
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -235,7 +220,7 @@ fn main() {
     // diff: diffusion rate, default 0.0
     // dt: delta-time, controls time step, default 0.1
     let _ = Vec2 { x: 0.0, y: 0.0 }.normalize();
-    let s = SimSize { x: 114, y: 64 };
+    let s = SimSize { x: 64, y: 64 };
     // Arrays need to be 1px wider on each side, therefor s is used + 2
     let visc = 0.0;
     let diff = 0.0;

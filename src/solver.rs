@@ -1,6 +1,6 @@
 use micro_ndarray::Array;
 
-use std::mem::swap;
+use std::mem::{self, swap};
 
 use crate::debug::*;
 
@@ -79,7 +79,9 @@ fn lin_solve(s: &SimSize, b: i32, x: &mut Array<f64, 2>, x0: &mut Array<f64, 2>,
     for _k in 0..20 {
         for xi in 1..=s.x {
             for yi in 1..=s.y {
-                x[[xi, yi]] = (x0[[xi, yi]] + a * (x[[xi - 1, yi]] + x[[xi + 1, yi]] + x[[xi, yi - 1]] + x[[xi, yi + 1]])) / c;
+                x[[xi, yi]] = (x0[[xi, yi]]
+                    + a * (x[[xi - 1, yi]] + x[[xi + 1, yi]] + x[[xi, yi - 1]] + x[[xi, yi + 1]]))
+                    / c;
             }
         }
         set_bnd(&s, b, x)
@@ -155,16 +157,19 @@ pub fn dens_step(
     diff: f64,
     dt: f64,
 ) {
-    print_maxval(dens, "dens1");
-    add_source(dens, dens_prev, dt);
-    print_maxval(dens, "dens2");
+    
+    print_sum(dens, "dens1");
+    //add_source(dens, dens_prev, dt);
     swap(dens_prev, dens);
     diffuse(&s, 0, dens, dens_prev, diff, dt);
-    print_maxval(dens, "dens4");
+    print_sum(dens, "dens4");
     swap(dens_prev, dens);
-    print_maxval(dens, "dens5");
+    print_sum(dens, "dens5");
+    let mass = get_mass(dens);
     advect(&s, 0, dens, dens_prev, force_x, force_y, dt);
-    print_maxval(dens, "dens6");
+    print_sum(dens, "dens6");
+    fix_mass(dens, mass);
+    print_sum(dens, "dens7");
 }
 
 pub fn vel_step(
@@ -189,8 +194,8 @@ pub fn vel_step(
         &s,
         1,
         force_x,
-        force_x_prev,
         &mut force_x_prev.clone(),
+        force_x_prev,
         force_y_prev,
         dt,
     );
@@ -198,10 +203,23 @@ pub fn vel_step(
         &s,
         2,
         force_y,
-        force_y_prev,
-        force_x_prev,
         &mut force_y_prev.clone(),
+        force_x_prev,
+        force_y_prev,
         dt,
     );
     project(&s, force_x, force_y, force_x_prev, force_y_prev);
+}
+
+// Mass conservation: The advection of the density field looses or adds mass uncontrollably.
+// Correction is needed
+#[inline]
+pub fn get_mass(dens: &Array<f64, 2>) -> f64 {
+    dens.iter().map(|x| *x.1).sum::<f64>()
+}
+pub fn fix_mass(dens: &mut Array<f64, 2>, prev_mass: f64) {
+    let factor = prev_mass / get_mass(dens);
+    for (_, item) in dens.iter_mut() {
+        *item *= factor;
+    }
 }
