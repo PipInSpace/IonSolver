@@ -28,16 +28,19 @@ pub fn draw_spectrum(
     name: &'static str,
     save: bool,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
-    // exports png image of a 2D float array with range 0-1 in blue-green-red spectrum
-    let mut img = ImageBuffer::new(s.x as u32, s.y as u32);
+    // exports png image of a 2D float array with dynamic range in blue-green-red spectrum.
+    // Highest value is red, 0 is blue.
+    let f = 0.5;
+    
+    let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(s.x as u32, s.y as u32);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
-        let r =
-            ((4.0 * array[[x as usize + 1, y as usize + 1]] - 2.0).clamp(0.0, 1.0) * 255.0) as u8;
-        let g = ((-(4.0 * array[[x as usize + 1, y as usize + 1]] - 2.0).abs() + 2.0)
+        let r = ((4.0 * (array[[x as usize + 1, y as usize + 1]] * f) - 2.0).clamp(0.0, 1.0)
+            * 255.0) as u8;
+        let g = ((-(4.0 * (array[[x as usize + 1, y as usize + 1]] * f) - 2.0).abs() + 2.0)
             .clamp(0.0, 1.0)
             * 255.0) as u8;
-        let b =
-            ((4.0 * -array[[x as usize + 1, y as usize + 1]] + 2.0).clamp(0.0, 1.0) * 255.0) as u8;
+        let b = ((4.0 * -(array[[x as usize + 1, y as usize + 1]] * f) + 2.0).clamp(0.0, 1.0)
+            * 255.0) as u8;
         *pixel = Rgb([r, g, b]);
     }
     if save {
@@ -141,10 +144,8 @@ impl App for SimState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         println!("Step {}", self.step);
         //draw_spectrum(n, &x, i, "dens", false);
-        let spectrum_relative_img = draw_multichannel(
+        let spectrum_img = draw_spectrum(
             &self.s,
-            &self.dens,
-            &self.dens,
             &self.dens,
             self.step,
             "densRel",
@@ -183,7 +184,7 @@ impl App for SimState {
         );
 
         // Prepare images
-        let size = spectrum_relative_img.dimensions();
+        let size = spectrum_img.dimensions();
         let size = [size.0 as usize, size.1 as usize];
 
         //Update gui
@@ -194,7 +195,7 @@ impl App for SimState {
                 ui.ctx()
                     .load_texture(
                         "sim",
-                        ColorImage::from_rgb(size, spectrum_relative_img.into_raw().as_slice()),
+                        ColorImage::from_rgb(size, spectrum_img.into_raw().as_slice()),
                         Default::default(),
                     )
                     .id(),
