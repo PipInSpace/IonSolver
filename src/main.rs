@@ -10,7 +10,7 @@ use eframe::*;
 mod solver;
 use solver::*;
 
-use std::{cmp::Ordering, time::Duration};
+use std::{time::Duration};
 
 mod vector2;
 use vector2::*;
@@ -52,7 +52,6 @@ pub fn draw_spectrum_relative(
     step: i32,
     name: &'static str,
     save: bool,
-    fix: &mut bool,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     // exports png image of a 2D float array with dynamic range in blue-green-red spectrum.
     // Highest value is red, 0 is blue.
@@ -60,13 +59,7 @@ pub fn draw_spectrum_relative(
         / array
             .iter()
             .map(|x| *x.1)
-            .max_by(|a, b| match f64::partial_cmp(a, b) {
-                Some(x) => x,
-                None => {
-                    *fix = true;
-                    Ordering::Equal
-                }
-            })
+            .max_by(|a, b| f64::partial_cmp(a, b).unwrap() )
             .expect("empty array should not be possible");
 
     let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(s.x as u32, s.y as u32);
@@ -147,7 +140,7 @@ impl App for SimState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         println!("Step {}", self.step);
         //draw_spectrum(n, &x, i, "dens", false);
-        let spectrum_relative_img = draw_spectrum(
+        let spectrum_relative_img = draw_spectrum_relative(
             &self.s,
             &mut self.dens,
             self.step,
@@ -186,10 +179,9 @@ impl App for SimState {
             self.dt,
         );
 
+        // Prepare images
         let size = spectrum_relative_img.dimensions();
         let size = [size.0 as usize, size.1 as usize];
-
-        print_maxval(&self.force_x, "force_x");
 
         //Update gui
         egui::CentralPanel::default().show(ctx, |ui| {

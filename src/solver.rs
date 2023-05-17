@@ -157,19 +157,12 @@ pub fn dens_step(
     diff: f64,
     dt: f64,
 ) {
-    
-    print_sum(dens, "dens1");
-    //add_source(dens, dens_prev, dt);
     swap(dens_prev, dens);
     diffuse(&s, 0, dens, dens_prev, diff, dt);
-    print_sum(dens, "dens4");
     swap(dens_prev, dens);
-    print_sum(dens, "dens5");
     let mass = get_mass(dens);
     advect(&s, 0, dens, dens_prev, force_x, force_y, dt);
-    print_sum(dens, "dens6");
     fix_mass(dens, mass);
-    print_sum(dens, "dens7");
 }
 
 pub fn vel_step(
