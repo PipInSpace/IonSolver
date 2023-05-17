@@ -143,7 +143,7 @@ impl App for SimState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         println!("Step {}", self.step);
         //draw_spectrum(n, &x, i, "dens", false);
-        let spectrum_relative_img = draw_spectrum_relative(
+        let spectrum_img = draw_spectrum(
             &self.s,
             &mut self.dens,
             self.step,
@@ -183,7 +183,7 @@ impl App for SimState {
         );
 
         // Prepare images
-        let size = spectrum_relative_img.dimensions();
+        let size = spectrum_img.dimensions();
         let size = [size.0 as usize, size.1 as usize];
 
         //Update gui
@@ -194,7 +194,7 @@ impl App for SimState {
                 ui.ctx()
                     .load_texture(
                         "sim",
-                        ColorImage::from_rgb(size, spectrum_relative_img.into_raw().as_slice()),
+                        ColorImage::from_rgb(size, spectrum_img.into_raw().as_slice()),
                         Default::default(),
                     )
                     .id(),
