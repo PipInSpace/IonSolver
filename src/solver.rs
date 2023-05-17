@@ -2,6 +2,8 @@ use micro_ndarray::Array;
 
 use std::mem::swap;
 
+use crate::debug::*;
+
 /// Struct that saves simulation size as x and y.
 /// This type is used in all methods instead of the original "n", enabling arbitrary aspect ratios
 pub struct SimSize {
@@ -77,9 +79,7 @@ fn lin_solve(s: &SimSize, b: i32, x: &mut Array<f64, 2>, x0: &mut Array<f64, 2>,
     for _k in 0..20 {
         for xi in 1..=s.x {
             for yi in 1..=s.y {
-                x[[xi, yi]] = (x0[[xi, yi]]
-                    + a * (x[[xi - 1, yi]] + x[[xi + 1, yi]] + x[[xi, yi - 1]] + x[[xi, yi + 1]]))
-                    / c;
+                x[[xi, yi]] = (x0[[xi, yi]] + a * (x[[xi - 1, yi]] + x[[xi + 1, yi]] + x[[xi, yi - 1]] + x[[xi, yi + 1]])) / c;
             }
         }
         set_bnd(&s, b, x)
@@ -155,11 +155,16 @@ pub fn dens_step(
     diff: f64,
     dt: f64,
 ) {
+    print_maxval(dens, "dens1");
     add_source(dens, dens_prev, dt);
+    print_maxval(dens, "dens2");
     swap(dens_prev, dens);
     diffuse(&s, 0, dens, dens_prev, diff, dt);
+    print_maxval(dens, "dens4");
     swap(dens_prev, dens);
+    print_maxval(dens, "dens5");
     advect(&s, 0, dens, dens_prev, force_x, force_y, dt);
+    print_maxval(dens, "dens6");
 }
 
 pub fn vel_step(

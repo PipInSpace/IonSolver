@@ -15,6 +15,8 @@ use std::{cmp::Ordering, time::Duration};
 mod vector2;
 use vector2::*;
 
+mod debug;
+
 // Visualisation functions and debug info
 
 pub fn draw_spectrum(
@@ -103,15 +105,6 @@ pub fn draw_multichannel(
         img.save(format!(r"out/{name}{step}.png")).unwrap();
     }
     img
-}
-
-pub fn print_maxval(x: &Array<f64, 2>, name: &'static str) {
-    println!(
-        "Max {name}: {:?}",
-        x.iter()
-            .map(|x| *x.1)
-            .max_by(|a, b| f64::partial_cmp(a, b).expect("boom"))
-    );
 }
 
 struct SimState {
