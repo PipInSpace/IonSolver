@@ -107,10 +107,8 @@ pub fn draw_multichannel(
 
 struct SimState {
     s: SimSize,
-    force_x: Array<f64, 2>,
-    force_y: Array<f64, 2>,
-    force_x_prev: Array<f64, 2>,
-    force_y_prev: Array<f64, 2>,
+    force: Array<Vec2, 2>,
+    force_prev: Array<Vec2, 2>,
 
     dens: Array<f64, 2>,
     dens_prev: Array<f64, 2>,
@@ -123,11 +121,8 @@ struct SimState {
 impl SimState {
     pub fn new(s: SimSize, visc: f64, diff: f64, dt: f64) -> SimState {
         Self {
-            // Arrays need to be 1px wider on each side, therefor s is used + 2
-            force_x: Array::new([s.x + 2, s.y + 2]),
-            force_y: Array::new([s.x + 2, s.y + 2]),
-            force_x_prev: Array::new([s.x + 2, s.y + 2]),
-            force_y_prev: Array::new([s.x + 2, s.y + 2]),
+            force: Array::new([s.x + 2, s.y + 2]),
+            force_prev: Array::new([s.x + 2, s.y + 2]),
             dens: Array::new([s.x + 2, s.y + 2]),
             dens_prev: Array::new([s.x + 2, s.y + 2]),
 
@@ -155,21 +150,16 @@ impl App for SimState {
         //draw_multichannel(n, &x, &u, &v, i, "combined", false);
 
         if self.step < 200 {
-            self.dens[[10, 20]] += 2.0;
-            self.force_x_prev[[10, 20]] = 5.0;
-            //self.force_x[[10, 20]] = 5.0;
+            self.dens[[10, 20]] += 1.0;
+            self.force_prev[[10, 20]] = Vec2 { x: 5.0, y: 0.0 };
             //v[[20, 50]] += 20.0;
             self.dens[[50, 50]] += 1.0;
-            self.force_y_prev[[50, 50]] = -5.0;
-            //self.force_y[[50, 50]] = -5.0;
+            self.force_prev[[50, 50]] = Vec2 { x: 0.0, y: -5.0 };
         }
-
         vel_step(
             &self.s,
-            &mut self.force_x,
-            &mut self.force_y,
-            &mut self.force_x_prev,
-            &mut self.force_y_prev,
+            &mut self.force,
+            &mut self.force_prev,
             self.visc,
             self.dt,
         );
@@ -177,11 +167,11 @@ impl App for SimState {
             &self.s,
             &mut self.dens,
             &mut self.dens_prev,
-            &mut self.force_x,
-            &mut self.force_y,
+            &mut self.force,
             self.diff,
             self.dt,
         );
+        print_sum(&self.dens, "dens");
 
         // Prepare images
         let size = spectrum_img.dimensions();

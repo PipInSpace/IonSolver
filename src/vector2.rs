@@ -1,3 +1,4 @@
+#[derive(Default, Clone)]
 pub struct Vec2 {
     pub x: f64,
     pub y: f64,
@@ -42,6 +43,16 @@ impl Vec2 {
     /// Returns a new normalized Vector pointing from the one on which the function is called to the Vector specified.
     pub fn direction(&self, to: &Vec2) -> Vec2 {
         to.add(&self.negate()).normalize()
+    }
+
+    /// Returns a new Vector with inverted x component
+    pub fn flip_x(&self) -> Vec2 {
+        Vec2::new(-self.x, self.y)
+    }
+
+    /// Returns a new Vector with inverted y component
+    pub fn flip_y(&self) -> Vec2 {
+        Vec2::new(self.x, -self.y)
     }
 
     /// Returns a String with the format "(x,y)".
