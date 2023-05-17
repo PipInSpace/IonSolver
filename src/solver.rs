@@ -27,8 +27,9 @@ pub fn add_source_vec2(x: &mut Array<Vec2, 2>, s: &mut Array<Vec2, 2>, dt: f64) 
     // Adds sources, used in the density and velocity steps
     // Can also be called independently of those
     for (c, item) in x.iter_mut() {
-        x[c].x += dt * s[c].x;
-        x[c].y += dt * s[c].y;
+        x[c] = x[c].add(&s[c].scale(dt));
+        //x[c].x += dt * s[c].x;
+        //x[c].y += dt * s[c].y;
     }
 }
 
@@ -114,8 +115,17 @@ fn lin_solve_vec2(s: &SimSize, x: &mut Array<Vec2, 2>, x0: &mut Array<Vec2, 2>, 
     for _k in 0..20 {
         for xi in 1..=s.x {
             for yi in 1..=s.y {
-                x[[xi, yi]].x = (x0[[xi, yi]].x + a * (x[[xi - 1, yi]].x + x[[xi + 1, yi]].x + x[[xi, yi - 1]].x + x[[xi, yi + 1]].x)) / c;
-                x[[xi, yi]].y = (x0[[xi, yi]].y + a * (x[[xi - 1, yi]].y + x[[xi + 1, yi]].y + x[[xi, yi - 1]].y + x[[xi, yi + 1]].y)) / c;
+                x[[xi, yi]] = x0[[xi, yi]] // Center
+                    .add(
+                        &x[[xi - 1, yi]] // Left
+                            .add(&x[[xi + 1, yi]]) // Right
+                            .add(&x[[xi, yi - 1]]) // Up
+                            .add(&x[[xi, yi + 1]]) // Down
+                            .scale(a),
+                    )
+                    .scale(1.0 / c);
+                //x[[xi, yi]].x = (x0[[xi, yi]].x + a * (x[[xi - 1, yi]].x + x[[xi + 1, yi]].x + x[[xi, yi - 1]].x + x[[xi, yi + 1]].x)) / c;
+                //x[[xi, yi]].y = (x0[[xi, yi]].y + a * (x[[xi - 1, yi]].y + x[[xi + 1, yi]].y + x[[xi, yi - 1]].y + x[[xi, yi + 1]].y)) / c;
             }
         }
         set_bnd_vec2(&s, x)
@@ -186,27 +196,40 @@ pub fn set_bnd(s: &SimSize, b: i32, x: &mut Array<f64, 2>) {
 pub fn set_bnd_vec2(s: &SimSize, x: &mut Array<Vec2, 2>) {
     // mode is unneeded, x is always 1, y is always 2
 
+    // Top and bottom row
     for i in 1..=s.x {
-        x[[i, 0]].x = x[[i, 1]].x;
-        x[[i, 0]].y = -x[[i, 1]].y;
-        x[[i, s.y + 1]].x = x[[i, s.y]].x;
-        x[[i, s.y + 1]].y = -x[[i, s.y]].y;
-    }
-    for i in 1..=s.y {
-        x[[0, i]].x = -x[[1, i]].x;
-        x[[0, i]].y = x[[1, i]].y;
-        x[[s.x + 1, i]].x = -x[[s.x, i]].x;
-        x[[s.x + 1, i]].y = x[[s.x, i]].y;
+        x[[i, 0]] = x[[i, 1]].flip_y();
+        //field[[i, 0]].x = field[[i, 1]].x;
+        //field[[i, 0]].y = -field[[i, 1]].y;
+        x[[i, s.y + 1]] = x[[i, s.y]].flip_y();
+        //field[[i, s.y + 1]].x = field[[i, s.y]].x;
+        //field[[i, s.y + 1]].y = -field[[i, s.y]].y;
     }
 
-    x[[0, 0]].x = 0.5 * (x[[1, 0]].x + x[[0, 1]].x);
-    x[[0, 0]].y = 0.5 * (x[[1, 0]].y + x[[0, 1]].y);
-    x[[0, s.y + 1]].x = 0.5 * (x[[1, s.y + 1]].x + x[[0, s.y]].x);
-    x[[0, s.y + 1]].y = 0.5 * (x[[1, s.y + 1]].y + x[[0, s.y]].y);
-    x[[s.x + 1, 0]].x = 0.5 * (x[[s.x, 0]].x + x[[s.x + 1, 1]].x);
-    x[[s.x + 1, 0]].y = 0.5 * (x[[s.x, 0]].y + x[[s.x + 1, 1]].y);
-    x[[s.x + 1, s.y + 1]].x = 0.5 * (x[[s.x, s.y + 1]].x + x[[s.x + 1, s.y]].x);
-    x[[s.x + 1, s.y + 1]].y = 0.5 * (x[[s.x, s.y + 1]].y + x[[s.x + 1, s.y]].y);
+    // Left and right column
+    for i in 1..=s.y {
+        x[[0, i]] = x[[1, i]].flip_x();
+        //field[[0, i]].x = -field[[1, i]].x;
+        //field[[0, i]].y = field[[1, i]].y;
+        x[[s.x + 1, i]] = x[[s.x, i]].flip_x();
+        //field[[s.x + 1, i]].x = -field[[s.x, i]].x;
+        //field[[s.x + 1, i]].y = field[[s.x, i]].y;
+    }
+
+    //field[[0, 0]].x = 0.5 * (field[[1, 0]].x + field[[0, 1]].x);
+    //field[[0, 0]].y = 0.5 * (field[[1, 0]].y + field[[0, 1]].y);
+    /*
+    field[[0, s.y + 1]].x = 0.5 * (field[[1, s.y + 1]].x + field[[0, s.y]].x);
+    field[[0, s.y + 1]].y = 0.5 * (field[[1, s.y + 1]].y + field[[0, s.y]].y);
+    field[[s.x + 1, 0]].x = 0.5 * (field[[s.x, 0]].x + field[[s.x + 1, 1]].x);
+    field[[s.x + 1, 0]].y = 0.5 * (field[[s.x, 0]].y + field[[s.x + 1, 1]].y);
+    field[[s.x + 1, s.y + 1]].x = 0.5 * (field[[s.x, s.y + 1]].x + field[[s.x + 1, s.y]].x);
+    field[[s.x + 1, s.y + 1]].y = 0.5 * (field[[s.x, s.y + 1]].y + field[[s.x + 1, s.y]].y);
+    */
+    x[[0, 0]] = x[[1, 0]].add(&x[[0, 1]]).scale(0.5);
+    x[[0, s.y + 1]] = x[[1, s.y + 1]].add(&x[[0, s.y]]).scale(0.5);
+    x[[s.x + 1, 0]] = x[[s.x, 0]].add(&x[[s.x + 1, 1]]).scale(0.5);
+    x[[s.x + 1, s.y + 1]] = x[[s.x, s.y + 1]].add(&x[[s.x + 1, s.y]]).scale(0.5);
 }
 
 /// The density step of the simulation
@@ -243,8 +266,9 @@ pub fn vel_step(
     swap(force_prev, force);
 
     // Combine, but be careful because of b
-    diffuse(&s, 1, force_x, force_x_prev, visc, dt);
-    diffuse(&s, 2, force_y, force_y_prev, visc, dt);
+    //diffuse(&s, 1, force_x, force_x_prev, visc, dt);
+    //diffuse(&s, 2, force_y, force_y_prev, visc, dt);
+
     diffuse_vec2(&s, force, force_prev, visc, dt);
 
     project(&s, force, force_prev);
