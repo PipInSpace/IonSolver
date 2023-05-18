@@ -268,7 +268,7 @@ fn main() {
     let s = SimSize { x: 150, y: 100 };
     let visc = 0.000004;
     let diff = 0.00001;
-    let dt = 0.1;
+    let dt = 0.05;
 
     let sim = SimState::new(s, visc, diff, dt);
 
