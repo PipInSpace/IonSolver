@@ -97,7 +97,7 @@ fn lin_solve(
     c: f64,
 ) {
     // Gauss-Seidel relaxation
-    for _k in 0..20 {
+    for _k in 0..10 {
         for xi in 1..=s.x {
             for yi in 1..=s.y {
                 x[[xi, yi]] = (x0[[xi, yi]]

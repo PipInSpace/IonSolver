@@ -30,7 +30,7 @@ pub fn draw_spectrum(
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     // exports png image of a 2D float array with dynamic range in blue-green-red spectrum.
     // Highest value is red, 0 is blue.
-    let f = 3.0;
+    let f = 0.5;
 
     let mut img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(s.x as u32, s.y as u32);
     for (x, y, pixel) in img.enumerate_pixels_mut() {
@@ -115,6 +115,7 @@ struct SimState {
     visc: f64,
     diff: f64,
     dt: f64,
+    dt_text: String,
     step: i32,
 
     //Control:
@@ -132,6 +133,7 @@ impl SimState {
             visc,
             diff,
             dt,
+            dt_text: "0.1".to_owned(),
             step: 0,
             s,
             paused: true,
@@ -157,12 +159,15 @@ impl App for SimState {
 
         if !self.paused {
             println!("Step {}", self.step);
-            if self.step < 200 {
-                self.dens[[10, 20]] += 1.0;
-                self.force_prev[[10, 20]].x = 5.0;
-                //v[[20, 50]] += 20.0;
-                self.dens[[50, 50]] += 1.0;
-                self.force_prev[[50, 50]].y = -5.0;
+            if self.step < 400 {
+                self.dens[[20, 20]] += 4.0;
+                self.force_prev[[20, 20]].x += 5.0;
+                self.dens[[20, 50]] += 4.0;
+                self.force_prev[[20, 50]].y -= 5.0;
+                self.dens[[50, 20]] += 4.0;
+                self.force_prev[[50, 20]].y += 5.0;
+                self.dens[[50, 50]] += 4.0;
+                self.force_prev[[50, 50]].x -= 5.0;
             }
             vel_step(
                 &self.s,
@@ -200,6 +205,19 @@ impl App for SimState {
                 }
                 if ui.button("Reset").clicked() {
                     self.reset_sim();
+                }
+                if ui.text_edit_singleline(&mut self.dt_text).changed() {
+                    match self.dt_text.parse() {
+                        Ok(dt) => self.dt = dt,
+                        Err(_) => {
+                            if self
+                                .dt_text
+                                .contains(|c| !((c >= '0' && c <= '9') || c == '.'))
+                            {
+                                self.dt_text = self.dt.to_string();
+                            }
+                        }
+                    }
                 }
                 ui.label(format!("Step {}", self.step));
             })
@@ -245,8 +263,8 @@ fn main() {
     // dt: delta-time, controls time step, default 0.1
     let _ = Vec2 { x: 0.0, y: 0.0 }.normalize();
     let s = SimSize { x: 228, y: 128 };
-    let visc = 0.0;
-    let diff = 0.0;
+    let visc = 0.000004;
+    let diff = 0.00001;
     let dt = 0.1;
 
     let sim = SimState::new(s, visc, diff, dt);
@@ -264,7 +282,7 @@ fn main() {
     eframe::run_native(
         "IonSolver",
         options,
-        Box::new(|_cc| Box::<SimState>::new(sim)),
+        Box::new(|_| Box::<SimState>::new(sim)),
     )
     .expect("unable to open window");
 }
