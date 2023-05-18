@@ -1338,9 +1338,9 @@ dependencies = [
 
 [[package]]
 name = "micro_ndarray"
-version = "0.3.0"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c82b77d7a6ccbcd3e7062f5e4f0810819d257d1c8c99c9a4f069908c51f5d9d4"
+checksum = "c91116d29ec37033859dcaa807e9841e84d6077c0781db5377cb8559d8de3b69"
 dependencies = [
  "vec_split",
 ]
@@ -2306,9 +2306,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vec_split"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38f588f8e835dc3e5aba99d7420fb986fce2056e2dbc776efd01ed0c226e5f2d"
+checksum = "fd63fa7ea5a7aa0dc8fb3f1893a1816d53d5b9311188edbd0d3984190bb8d77c"
 
 [[package]]
 name = "version_check"
