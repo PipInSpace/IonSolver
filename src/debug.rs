@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use micro_ndarray::Array;
 
 #[allow(dead_code)]
+/// Prints the maximum value of the provided f64 array
 pub fn print_maxval(x: &Array<f64, 2>, name: &'static str) {
     println!(
         "Max {name}: {:?}",
@@ -12,6 +13,7 @@ pub fn print_maxval(x: &Array<f64, 2>, name: &'static str) {
     );
 }
 
+#[allow(dead_code)]
 /// Sums all elements of the provided f64 array
 pub fn print_sum(x: &Array<f64, 2>, name: &'static str) {
     println!("Sum {name}: {:?}", x.iter().map(|x| *x.1).sum::<f64>());

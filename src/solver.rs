@@ -1,6 +1,6 @@
 use micro_ndarray::{
     vec_split::{
-        accessors::{Accessor, AccessorMut, IterateAccessorMut},
+        accessors::{Accessor, AccessorMut},
         SizedVectorArray,
     },
     Array,

@@ -15,8 +15,6 @@ use std::time::Duration;
 mod vector2;
 use vector2::*;
 
-use crate::debug::{print_maxval, print_sum};
-
 mod debug;
 
 // Visualisation functions and debug info
