@@ -150,44 +150,46 @@ impl SimState {
         self.step = 0;
         self.paused = true;
     }
+
+    pub fn update_sim(&mut self) {
+        println!("Step {}", self.step);
+        // Adds sources for the first 400 steps
+        if self.step < 400 {
+            self.dens[[20, 20]] += 4.0;
+            self.force_prev[[20, 20]].x += 5.0;
+            self.dens[[20, 50]] += 4.0;
+            self.force_prev[[20, 50]].y -= 5.0;
+            self.dens[[50, 20]] += 4.0;
+            self.force_prev[[50, 20]].y += 5.0;
+            self.dens[[50, 50]] += 4.0;
+            self.force_prev[[50, 50]].x -= 5.0;
+        }
+        vel_step(
+            &self.s,
+            &mut self.force,
+            &mut self.force_prev,
+            self.visc,
+            self.dt,
+        );
+        dens_step(
+            &self.s,
+            &mut self.dens,
+            &mut self.dens_prev,
+            &mut self.force,
+            self.diff,
+            self.dt,
+        );
+        self.step += 1;
+    }
 }
 
 impl App for SimState {
+    /// UI update loop, called repeatedly if sim is not paused
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        //draw_spectrum(n, &x, i, "dens", false);
         let spectrum_img = draw_spectrum(&self.s, &self.dens, self.step, "densRel", self.save);
-        //draw_multichannel(n, &x, &x, &x, i, "densGrey", false);
-        //draw_multichannel(n, &x, &u, &v, i, "combined", false);
 
         if !self.paused {
-            println!("Step {}", self.step);
-            if self.step < 400 {
-                self.dens[[20, 20]] += 4.0;
-                self.force_prev[[20, 20]].x += 5.0;
-                self.dens[[20, 50]] += 4.0;
-                self.force_prev[[20, 50]].y -= 5.0;
-                self.dens[[50, 20]] += 4.0;
-                self.force_prev[[50, 20]].y += 5.0;
-                self.dens[[50, 50]] += 4.0;
-                self.force_prev[[50, 50]].x -= 5.0;
-            }
-            vel_step(
-                &self.s,
-                &mut self.force,
-                &mut self.force_prev,
-                self.visc,
-                self.dt,
-            );
-            dens_step(
-                &self.s,
-                &mut self.dens,
-                &mut self.dens_prev,
-                &mut self.force,
-                self.diff,
-                self.dt,
-            );
-            print_sum(&self.dens, "dens");
-            self.step += 1;
+            self.update_sim();
         }
 
         // Prepare images
@@ -244,6 +246,7 @@ impl App for SimState {
     }
 }
 
+/// Converts included icon bytes into IconData struc
 pub fn load_icon(icon_bytes: &Vec<u8>) -> Option<eframe::IconData> {
     if let Ok(image) = image::load_from_memory(icon_bytes) {
         let image = image.to_rgba8();
@@ -263,8 +266,7 @@ fn main() {
     // s is the size of the simulation. Size: s.x * s.y
     // visc: viscosity, default 0.0
     // diff: diffusion rate, default 0.0
-    // dt: delta-time, controls time step, default 0.1
-    let _ = Vec2 { x: 0.0, y: 0.0 }.normalize();
+    // dt: delta-time, controls time step, default 0.05
     let s = SimSize { x: 150, y: 100 };
     let visc = 0.000004;
     let diff = 0.00001;
@@ -272,16 +274,17 @@ fn main() {
 
     let sim = SimState::new(s, visc, diff, dt);
 
-    //UI code
-
+    // UI code
     let icon_bytes = include_bytes!("../icons/IonSolver.png");
 
+    // Set window options
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(320.0, 240.0)),
         icon_data: load_icon(&icon_bytes.to_vec()),
         ..Default::default()
     };
 
+    // Start window loop
     eframe::run_native(
         "IonSolver",
         options,
