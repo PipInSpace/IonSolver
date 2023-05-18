@@ -1,6 +1,6 @@
 extern crate image;
 
-use egui::{ColorImage};
+use egui::ColorImage;
 use image::{ImageBuffer, Rgb};
 
 use micro_ndarray::Array;
@@ -150,7 +150,6 @@ impl SimState {
 
 impl App for SimState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        
         //draw_spectrum(n, &x, i, "dens", false);
         let spectrum_img = draw_spectrum(&self.s, &self.dens, self.step, "densRel", false);
         //draw_multichannel(n, &x, &x, &x, i, "densGrey", false);
@@ -160,10 +159,10 @@ impl App for SimState {
             println!("Step {}", self.step);
             if self.step < 200 {
                 self.dens[[10, 20]] += 1.0;
-                self.force_prev[[10, 20]] = Vec2 { x: 5.0, y: 0.0 };
+                self.force_prev[[10, 20]].x = 5.0;
                 //v[[20, 50]] += 20.0;
                 self.dens[[50, 50]] += 1.0;
-                self.force_prev[[50, 50]] = Vec2 { x: 0.0, y: -5.0 };
+                self.force_prev[[50, 50]].y = -5.0;
             }
             vel_step(
                 &self.s,
@@ -188,13 +187,15 @@ impl App for SimState {
         let size = spectrum_img.dimensions();
         let size = [size.0 as usize, size.1 as usize];
 
-        
         //Update gui
         egui::TopBottomPanel::top("top_controls").show(ctx, |ui| {
             ui.heading("IonSolver Simulation");
             ui.separator();
             ui.horizontal(|ui| {
-                if ui.button(if self.paused {"Play"} else {"Pause"}).clicked() {
+                if ui
+                    .button(if self.paused { "Play" } else { "Pause" })
+                    .clicked()
+                {
                     self.paused = !self.paused;
                 }
                 if ui.button("Reset").clicked() {
@@ -216,7 +217,9 @@ impl App for SimState {
             );
         });
 
-        if !self.paused {ctx.request_repaint_after(Duration::from_millis(0))}
+        if !self.paused {
+            ctx.request_repaint_after(Duration::from_millis(0))
+        }
     }
 }
 
@@ -249,7 +252,7 @@ fn main() {
     let sim = SimState::new(s, visc, diff, dt);
 
     //UI code
-    
+
     let icon_bytes = include_bytes!("../icons/IonSolver.png");
 
     let options = eframe::NativeOptions {

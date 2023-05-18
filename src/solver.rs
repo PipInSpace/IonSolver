@@ -1,6 +1,6 @@
 use micro_ndarray::Array;
 
-use std::mem::{swap};
+use std::mem::swap;
 
 #[allow(unused_imports)]
 use crate::{print_maxval, vector2::*};

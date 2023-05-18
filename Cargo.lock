@@ -1338,9 +1338,12 @@ dependencies = [
 
 [[package]]
 name = "micro_ndarray"
-version = "0.2.8"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24487d06c5ae197499ec07ceebb6a9b6e030ea91fe67c5724896d7debe1176e0"
+checksum = "c82b77d7a6ccbcd3e7062f5e4f0810819d257d1c8c99c9a4f069908c51f5d9d4"
+dependencies = [
+ "vec_split",
+]
 
 [[package]]
 name = "minimal-lexical"
@@ -1741,9 +1744,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.57"
+version = "1.0.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4ec6d5fe0b140acb27c9a0444118cf55bfbb4e0b259739429abb4521dd67c16"
+checksum = "fa1fb82fc0c281dd9671101b66b771ebbe1eaf967b96ac8740dcba4b70005ca8"
 dependencies = [
  "unicode-ident",
 ]
@@ -2300,6 +2303,12 @@ name = "vec_map"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
+
+[[package]]
+name = "vec_split"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38f588f8e835dc3e5aba99d7420fb986fce2056e2dbc776efd01ed0c226e5f2d"
 
 [[package]]
 name = "version_check"
