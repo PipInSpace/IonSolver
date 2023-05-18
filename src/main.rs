@@ -120,6 +120,7 @@ struct SimState {
 
     //Control:
     paused: bool,
+    save: bool,
 }
 
 impl SimState {
@@ -137,6 +138,7 @@ impl SimState {
             step: 0,
             s,
             paused: true,
+            save: false,
         }
     }
 
@@ -153,7 +155,7 @@ impl SimState {
 impl App for SimState {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         //draw_spectrum(n, &x, i, "dens", false);
-        let spectrum_img = draw_spectrum(&self.s, &self.dens, self.step, "densRel", false);
+        let spectrum_img = draw_spectrum(&self.s, &self.dens, self.step, "densRel", self.save);
         //draw_multichannel(n, &x, &x, &x, i, "densGrey", false);
         //draw_multichannel(n, &x, &u, &v, i, "combined", false);
 
@@ -219,6 +221,7 @@ impl App for SimState {
                         }
                     }
                 }
+                ui.checkbox(&mut self.save, "Save");
                 ui.label(format!("Step {}", self.step));
             })
         });
