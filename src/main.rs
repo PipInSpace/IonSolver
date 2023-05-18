@@ -265,7 +265,7 @@ fn main() {
     // diff: diffusion rate, default 0.0
     // dt: delta-time, controls time step, default 0.1
     let _ = Vec2 { x: 0.0, y: 0.0 }.normalize();
-    let s = SimSize { x: 228, y: 128 };
+    let s = SimSize { x: 150, y: 100 };
     let visc = 0.000004;
     let diff = 0.00001;
     let dt = 0.1;
