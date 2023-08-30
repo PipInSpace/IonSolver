@@ -1,5 +1,5 @@
 
-use std::thread;
+use std::{thread, sync::mpsc};
 use std::time::Duration;
 
 use image::{ImageBuffer, Rgb};
@@ -9,9 +9,9 @@ use eframe::*;
 
 // Simulation
 struct SimSize {
-    /// width of the simulation
+    /// Width of the simulation
     pub x: usize,
-    /// height of the simulation
+    /// Height of the simulation
     pub y: usize,
 }
 
@@ -96,24 +96,31 @@ impl SimState {
 
 
 // UI+Control
+struct SimControlTx {
+    //SimControlTx is used to send information to the simulation thread
+    paused: bool,
+    save: bool,
+    active: bool,
+}
+
 struct SimControl {
     //SimControl handles control/displaying of the Simulation over the UI
     paused: bool,
     save: bool,
+    ctrl_tx: mpsc::Sender<SimControlTx>,
+    sim_rx: mpsc::Receiver<SimState>
 }
 
 impl SimControl {
-
+    pub fn reset_sim(&mut self) {
+        self.paused = true;
+    }
 }
 
 impl App for SimControl {
     /// UI update loop, called repeatedly if sim is not paused
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // let spectrum_img = draw_spectrum(&self.s, &self.dens, self.step, "densRel", self.save);
-
-        if !self.paused {
-            //TODO: self.update_sim();
-        }
 
         // Prepare images
         // let size = spectrum_img.dimensions();
@@ -129,9 +136,11 @@ impl App for SimControl {
                     .clicked()
                 {
                     self.paused = !self.paused;
+                    self.ctrl_tx.send(SimControlTx { paused: self.paused, save: self.save, active: true }).expect("GUI cannot communicate with sim thread");
+                    let z = self.paused;
                 }
                 if ui.button("Reset").clicked() {
-                    //TODO: self.reset_sim();
+                    self.reset_sim();
                 }
             })
         });
@@ -185,14 +194,18 @@ fn main() {
     };
 
 
-    // Start sim loop
+    let (sim_tx, sim_rx) = mpsc::channel();
+    let (ctrl_tx, ctrl_rx) = mpsc::channel();
+    let exit_ctrl_tx = ctrl_tx.clone();
+    // Start Simulation loop
     let handle = thread::spawn(move ||{
         //TODO: Setup mpsc messaging for data transmission
         let sim = SimState::new(s, visc, diff, dt);
-        simloop(sim);
+        simloop(sim, sim_tx, ctrl_rx);
     });
 
-    let simcontrol = SimControl { paused: false, save: false };
+    // setup simcontrol struc to pass params and channels to GUI
+    let simcontrol = SimControl { paused: false, save: false , ctrl_tx: ctrl_tx, sim_rx: sim_rx};
 
     // Start window loop
     eframe::run_native(
@@ -202,11 +215,32 @@ fn main() {
     )
     .expect("unable to open window");
 
+    exit_ctrl_tx.send(SimControlTx { paused: true, save: false, active: false }).expect("Exit Channel cannot reach Simulation thread");
+
     handle.join().unwrap();    
 
+    return;
 }
 
-fn simloop(SimState { s, visc, diff, dt, dt_text, step, paused, save }: SimState) {
+fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>) {
     //TODO: Simulation here
+    //sim_tx.send(sim) sends data to the main window loop 
+    let mut state = SimControlTx{paused: false, save: false, active: true};
+    loop {
+        //This is the master loop, cannot be paused 
+        if !state.paused { loop {
+            //This is the loop of the simulation. Can be paused
+            let recieve_result = ctrl_rx.try_recv();
+            if let Ok(recieve) = recieve_result {state = recieve;}
+            
+            if state.paused || !state.active {break;}
 
+            //Simulation commences here
+            print!("Running")
+
+        }}
+        if !state.active {break;}
+        let recieve_result = ctrl_rx.recv();
+        if let Ok(recieve) = recieve_result {state = recieve;}
+    }
 }
