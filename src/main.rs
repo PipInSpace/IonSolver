@@ -226,6 +226,7 @@ fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receive
     //TODO: Simulation here
     //sim_tx.send(sim) sends data to the main window loop 
     let mut state = SimControlTx{paused: false, save: false, active: true};
+    let mut i = 0;
     loop {
         //This is the master loop, cannot be paused 
         if !state.paused { loop {
@@ -236,8 +237,8 @@ fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receive
             if state.paused || !state.active {break;}
 
             //Simulation commences here
-            print!("Running")
-
+            println!("Running {}", i);
+            i+=1;
         }}
         if !state.active {break;}
         let recieve_result = ctrl_rx.recv();
