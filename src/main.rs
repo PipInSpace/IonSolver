@@ -1,13 +1,14 @@
-
-use std::{thread, sync::mpsc};
+extern crate ocl;
+use ocl::ProQue;
 use std::time::Duration;
+use std::{sync::mpsc, thread};
 
-use image::{ImageBuffer, Rgb};
-use egui::ColorImage;
+//use image::{ImageBuffer, Rgb};
+//use egui::ColorImage;
 use eframe::*;
 
-
 // Simulation
+#[allow(unused)]
 struct SimSize {
     /// Width of the simulation
     pub x: usize,
@@ -15,6 +16,7 @@ struct SimSize {
     pub y: usize,
 }
 
+#[allow(unused)]
 struct SimState {
     s: SimSize,
     //force: Array<Vec2, 2>,
@@ -33,6 +35,7 @@ struct SimState {
     save: bool,
 }
 
+#[allow(unused)]
 impl SimState {
     pub fn new(s: SimSize, visc: f64, diff: f64, dt: f64) -> SimState {
         Self {
@@ -40,7 +43,6 @@ impl SimState {
             //force_prev: Array::new([s.x + 2, s.y + 2]),
             //dens: Array::new([s.x + 2, s.y + 2]),
             //dens_prev: Array::new([s.x + 2, s.y + 2]),
-
             visc,
             diff,
             dt,
@@ -94,8 +96,8 @@ impl SimState {
     }
 }
 
-
 // UI+Control
+#[allow(unused)]
 struct SimControlTx {
     //SimControlTx is used to send information to the simulation thread
     paused: bool,
@@ -103,12 +105,14 @@ struct SimControlTx {
     active: bool,
 }
 
+#[allow(unused)]
+
 struct SimControl {
     //SimControl handles control/displaying of the Simulation over the UI
     paused: bool,
     save: bool,
     ctrl_tx: mpsc::Sender<SimControlTx>,
-    sim_rx: mpsc::Receiver<SimState>
+    sim_rx: mpsc::Receiver<SimState>,
 }
 
 impl SimControl {
@@ -136,8 +140,14 @@ impl App for SimControl {
                     .clicked()
                 {
                     self.paused = !self.paused;
-                    self.ctrl_tx.send(SimControlTx { paused: self.paused, save: self.save, active: true }).expect("GUI cannot communicate with sim thread");
-                    let z = self.paused;
+                    self.ctrl_tx
+                        .send(SimControlTx {
+                            paused: self.paused,
+                            save: self.save,
+                            active: true,
+                        })
+                        .expect("GUI cannot communicate with sim thread");
+                    let _z = self.paused;
                 }
                 if ui.button("Reset").clicked() {
                     self.reset_sim();
@@ -158,7 +168,6 @@ impl App for SimControl {
         //     );
         // });
 
-        
         ctx.request_repaint_after(Duration::from_millis(100))
     }
 }
@@ -177,7 +186,6 @@ pub fn load_icon(icon_bytes: &Vec<u8>) -> Option<eframe::IconData> {
     }
 }
 
-
 fn main() {
     // Simulation params
     let s = SimSize { x: 150, y: 100 };
@@ -193,19 +201,23 @@ fn main() {
         ..Default::default()
     };
 
-
     let (sim_tx, sim_rx) = mpsc::channel();
     let (ctrl_tx, ctrl_rx) = mpsc::channel();
     let exit_ctrl_tx = ctrl_tx.clone();
     // Start Simulation loop
-    let handle = thread::spawn(move ||{
+    let handle = thread::spawn(move || {
         //TODO: Setup mpsc messaging for data transmission
         let sim = SimState::new(s, visc, diff, dt);
         simloop(sim, sim_tx, ctrl_rx);
     });
 
     // setup simcontrol struc to pass params and channels to GUI
-    let simcontrol = SimControl { paused: false, save: false , ctrl_tx: ctrl_tx, sim_rx: sim_rx};
+    let simcontrol = SimControl {
+        paused: false,
+        save: false,
+        ctrl_tx: ctrl_tx,
+        sim_rx: sim_rx,
+    };
 
     // Start window loop
     eframe::run_native(
@@ -215,33 +227,112 @@ fn main() {
     )
     .expect("unable to open window");
 
-    exit_ctrl_tx.send(SimControlTx { paused: true, save: false, active: false }).expect("Exit Channel cannot reach Simulation thread");
+    exit_ctrl_tx
+        .send(SimControlTx {
+            paused: true,
+            save: false,
+            active: false,
+        })
+        .expect("Exit Channel cannot reach Simulation thread");
 
-    handle.join().unwrap();    
+    handle.join().unwrap();
 
     return;
 }
 
+#[allow(unused)]
 fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>) {
     //TODO: Simulation here
-    //sim_tx.send(sim) sends data to the main window loop 
-    let mut state = SimControlTx{paused: false, save: false, active: true};
+    //sim_tx.send(sim) sends data to the main window loop
+    let mut state = SimControlTx {
+        paused: false,
+        save: false,
+        active: true,
+    };
     let mut i = 0;
-    loop {
-        //This is the master loop, cannot be paused 
-        if !state.paused { loop {
-            //This is the loop of the simulation. Can be paused
-            let recieve_result = ctrl_rx.try_recv();
-            if let Ok(recieve) = recieve_result {state = recieve;}
-            
-            if state.paused || !state.active {break;}
 
-            //Simulation commences here
-            println!("Running {}", i);
-            i+=1;
-        }}
-        if !state.active {break;}
+    trivial().unwrap();
+
+    let src = r#"
+        __kernel void add(__global float* buffer, float scalar) {
+            buffer[get_global_id(0)] += scalar;
+        }
+    "#;
+
+    let pro_que = ProQue::builder().src(src).dims(1 << 20).build().unwrap();
+
+    let buffer = pro_que.create_buffer::<f32>().unwrap();
+
+    let kernel = pro_que
+        .kernel_builder("add")
+        .arg(&buffer)
+        .arg(1.0f32)
+        .build()
+        .unwrap();
+
+    loop {
+        //This is the master loop, cannot be paused
+        if !state.paused {
+            loop {
+                //This is the loop of the simulation. Can be paused
+                let recieve_result = ctrl_rx.try_recv();
+                if let Ok(recieve) = recieve_result {
+                    state = recieve;
+                }
+
+                if state.paused || !state.active {
+                    break;
+                }
+
+                //Simulation commences here
+                unsafe {
+                    kernel.enq().unwrap();
+                }
+
+                if i % 200 == 0 {
+                    let mut vec = vec![0.0f32; buffer.len()];
+                    buffer.read(&mut vec).enq().unwrap();
+                    println!("The value at index [{}] is now '{}'!", 200007, vec[200007]);
+                }
+
+                //println!("Running {}", i);
+                i += 1;
+            }
+        }
+        if !state.active {
+            break;
+        }
         let recieve_result = ctrl_rx.recv();
-        if let Ok(recieve) = recieve_result {state = recieve;}
+        if let Ok(recieve) = recieve_result {
+            state = recieve;
+        }
     }
+}
+
+fn trivial() -> ocl::Result<()> {
+    let src = r#"
+        __kernel void add(__global float* buffer, float scalar) {
+            buffer[get_global_id(0)] += scalar;
+        }
+    "#;
+
+    let pro_que = ProQue::builder().src(src).dims(1 << 20).build()?;
+
+    let buffer = pro_que.create_buffer::<f32>()?;
+
+    let kernel = pro_que
+        .kernel_builder("add")
+        .arg(&buffer)
+        .arg(10.0f32)
+        .build()?;
+
+    unsafe {
+        kernel.enq()?;
+    }
+
+    let mut vec = vec![0.0f32; buffer.len()];
+    buffer.read(&mut vec).enq()?;
+
+    println!("The value at index [{}] is now '{}'!", 200007, vec[200007]);
+    Ok(())
 }
