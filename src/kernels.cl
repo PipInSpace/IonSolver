@@ -1,9 +1,11 @@
 __kernel void add(__global float* buffer, float scalar) {
-    buffer[get_global_id(0)] += scalar;
+    uint index = get_global_id(0) + (get_global_id(1) * get_global_size(1));
+    buffer[index] += scalar;
 }
 
 __kernel void addtwo(__global float* buffer, float scalar) {
-    buffer[get_global_id(0)] += scalar;
+    uint index = get_global_id(0) + (get_global_id(1) * get_global_size(1));
+    buffer[index] += scalar;
 }
 
 __kernel void gauss_seidel_step(__global float* buffer_new, __global float* buffer_old, float factor_a, float factor_c) {
@@ -13,9 +15,9 @@ __kernel void gauss_seidel_step(__global float* buffer_new, __global float* buff
     uint n_y = get_global_size(1);
 
     // Linear solving is impossible on buffer edges
-    if (x != 0 && y != 0 && x != n_x && y != n_y) {
-        buffer_new[x, y] = (buffer_old[x, y] + 
-        factor_a * (buffer_new[x-1, y] + buffer_new[x+1, y] + buffer_new[x, y-1] + buffer_new[x, y+1])) 
+    if (x != 0 && y != 0 && x != n_x-1 && y != n_y-1) {
+        buffer_new[x + y*n_y] = (buffer_old[x + y*n_y] + 
+        factor_a * (buffer_new[x - 1 + y*n_y] + buffer_new[x + 1 + y*n_y] + buffer_new[x + (y-1)*n_y] + buffer_new[x + (y+1)*n_y])) 
         / factor_c;
     }
 }

@@ -255,23 +255,28 @@ fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receive
 
     let src = include_str!("kernels.cl");
 
-    let pro_que = ProQue::builder().src(src).dims(1 << 20).build().unwrap();
+    let pro_que = ProQue::builder().src(src).dims([1 << 6, 1 << 6]).build().unwrap();
 
-    let buffer = pro_que.create_buffer::<f32>().unwrap();
+    let buffer_a = pro_que.create_buffer::<f32>().unwrap();
+    let buffer_b = pro_que.create_buffer::<f32>().unwrap();
 
-    let kernel = pro_que
+    let setup_kernel = pro_que
         .kernel_builder("add")
-        .arg(&buffer)
+        .arg(&buffer_a)
         .arg(1.0f32)
-        .build()
-        .unwrap();
+        .build().unwrap();
 
-    let kernel_add_two = pro_que
-        .kernel_builder("addtwo")
-        .arg(&buffer)
-        .arg(1.0f32)
-        .build()
-        .unwrap();
+    let gauss_seidel_step_kernel = pro_que
+        .kernel_builder("gauss_seidel_step")
+        .arg(&buffer_a)
+        .arg(&buffer_b)
+        .arg(4.096f32)
+        .arg(17.384f32)
+        .build().unwrap();
+
+    unsafe {
+        setup_kernel.enq().unwrap();
+    }
 
     loop {
         //This is the master loop, cannot be paused
@@ -289,15 +294,16 @@ fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receive
 
                 //Simulation commences here
                 unsafe {
-                    kernel.enq().unwrap();
-                    kernel_add_two.enq().unwrap();
+                    for _i in 1..20 {
+                        gauss_seidel_step_kernel.enq().unwrap();
+                    }
                 }
 
-                if i % 200 == 0 {
-                    let mut vec = vec![0.0f32; buffer.len()];
-                    buffer.read(&mut vec).enq().unwrap();
+                if i % 1000 == 0 {
+                    let mut vec = vec![0.0f32; buffer_a.len()];
+                    buffer_a.read(&mut vec).enq().unwrap();
                     
-                    println!("The value at index [{}] is now '{}'!", 200007, vec[200007]);
+                    println!("Step {}: The value at index [{}] is now '{}'!", i, 130, vec[130]);
                 }
 
                 //println!("Running {}", i);
@@ -317,23 +323,35 @@ fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receive
 fn trivial() -> ocl::Result<()> {
     let src = include_str!("kernels.cl");
 
-    let pro_que = ProQue::builder().src(src).dims([1 << 20, 1 << 4]).build()?;
+    let pro_que = ProQue::builder().src(src).dims([1 << 6, 1 << 6]).build()?;
 
-    let buffer = pro_que.create_buffer::<f32>()?;
+    let buffer_a = pro_que.create_buffer::<f32>()?;
+    let buffer_b = pro_que.create_buffer::<f32>()?;
 
-    let kernel = pro_que
+    let setup_kernel = pro_que
         .kernel_builder("add")
-        .arg(&buffer)
+        .arg(&buffer_a)
         .arg(1.0f32)
         .build()?;
 
+    let gauss_seidel_step_kernel = pro_que
+        .kernel_builder("gauss_seidel_step")
+        .arg(&buffer_a)
+        .arg(&buffer_b)
+        .arg(4.096f32)
+        .arg(17.384f32)
+        .build()?;
+
     unsafe {
-        kernel.enq()?;
+        setup_kernel.enq()?;
+        for _i in 1..20 {
+            gauss_seidel_step_kernel.enq()?;
+        }
     }
 
-    let mut vec = vec![0.0f32; buffer.len()];
-    buffer.read(&mut vec).enq()?;
+    let mut vec = vec![0.0f32; buffer_a.len()];
+    buffer_a.read(&mut vec).enq()?;
 
-    println!("The value at index [{}] is now '{}'!", 200007, vec[200007]);
+    println!("Gauss: The value at index [{}] is now '{}'!", 131, vec[131]);
     Ok(())
 }
