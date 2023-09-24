@@ -253,11 +253,7 @@ fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receive
 
     trivial().unwrap();
 
-    let src = r#"
-        __kernel void add(__global float* buffer, float scalar) {
-            buffer[get_global_id(0)] += scalar;
-        }
-    "#;
+    let src = include_str!("kernels.cl");
 
     let pro_que = ProQue::builder().src(src).dims(1 << 20).build().unwrap();
 
@@ -270,11 +266,18 @@ fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receive
         .build()
         .unwrap();
 
+    let kernel_add_two = pro_que
+        .kernel_builder("addtwo")
+        .arg(&buffer)
+        .arg(1.0f32)
+        .build()
+        .unwrap();
+
     loop {
         //This is the master loop, cannot be paused
         if !state.paused {
             loop {
-                //This is the loop of the simulation. Can be paused
+                //This is the loop of the simulation. Can be paused by receiving a control message
                 let recieve_result = ctrl_rx.try_recv();
                 if let Ok(recieve) = recieve_result {
                     state = recieve;
@@ -287,11 +290,13 @@ fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receive
                 //Simulation commences here
                 unsafe {
                     kernel.enq().unwrap();
+                    kernel_add_two.enq().unwrap();
                 }
 
                 if i % 200 == 0 {
                     let mut vec = vec![0.0f32; buffer.len()];
                     buffer.read(&mut vec).enq().unwrap();
+                    
                     println!("The value at index [{}] is now '{}'!", 200007, vec[200007]);
                 }
 
@@ -310,20 +315,16 @@ fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receive
 }
 
 fn trivial() -> ocl::Result<()> {
-    let src = r#"
-        __kernel void add(__global float* buffer, float scalar) {
-            buffer[get_global_id(0)] += scalar;
-        }
-    "#;
+    let src = include_str!("kernels.cl");
 
-    let pro_que = ProQue::builder().src(src).dims(1 << 20).build()?;
+    let pro_que = ProQue::builder().src(src).dims([1 << 20, 1 << 4]).build()?;
 
     let buffer = pro_que.create_buffer::<f32>()?;
 
     let kernel = pro_que
         .kernel_builder("add")
         .arg(&buffer)
-        .arg(10.0f32)
+        .arg(1.0f32)
         .build()?;
 
     unsafe {
