@@ -13,7 +13,7 @@ __kernel void gauss_seidel_step(__global float* buffer_new, __global float* buff
     uint n_y = get_global_size(1);
 
     // Linear solving is impossible on buffer edges
-    if (x != 0 && y != 0 && x != n_x+1 && y != n_y+1) {
+    if (x != 0 && y != 0 && x != n_x && y != n_y) {
         buffer_new[x, y] = (buffer_old[x, y] + 
         factor_a * (buffer_new[x-1, y] + buffer_new[x+1, y] + buffer_new[x, y-1] + buffer_new[x, y+1])) 
         / factor_c;
