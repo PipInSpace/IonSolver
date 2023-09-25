@@ -1,5 +1,4 @@
 extern crate ocl;
-use ocl::ProQue;
 use std::time::Duration;
 use std::{sync::mpsc, thread};
 
@@ -211,7 +210,7 @@ fn main() {
     let handle = thread::spawn(move || {
         //TODO: Setup mpsc messaging for data transmission
         let sim = SimState::new(s, visc, diff, dt);
-        solver::simloop(sim, sim_tx, ctrl_rx);
+        simloop(sim, sim_tx, ctrl_rx);
     });
 
     // setup simcontrol struc to pass params and channels to GUI
