@@ -1,10 +1,15 @@
 extern crate ocl;
-use ocl::ProQue;
-use std::{sync::mpsc, thread};
+use crate::lbm::*;
 use crate::*;
+use ocl::ProQue;
+use std::sync::mpsc;
 
 #[allow(unused)]
-pub fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>) {
+pub fn simloop(
+    sim: SimState,
+    sim_tx: mpsc::Sender<SimState>,
+    ctrl_rx: mpsc::Receiver<SimControlTx>,
+) {
     //TODO: Simulation here
     //sim_tx.send(sim) sends data to the main window loop
     let mut state = SimControlTx {
@@ -19,8 +24,14 @@ pub fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Rec
 
     //OpenCL setup
     let src = include_str!("kernels.cl");
+    let test_lbm = Lbm::new(lbm::VelocitySet::D3Q19);
+    let lbmsrc = test_lbm.get_opencl_code();
 
-    let pro_que = ProQue::builder().src(src).dims([1 << 6, 1 << 6]).build().unwrap();
+    let pro_que = ProQue::builder()
+        .src(src)
+        .dims([1 << 6, 1 << 6])
+        .build()
+        .unwrap();
 
     let buffer_a = pro_que.create_buffer::<f32>().unwrap();
     let buffer_b = pro_que.create_buffer::<f32>().unwrap();
@@ -29,7 +40,8 @@ pub fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Rec
         .kernel_builder("add")
         .arg(&buffer_a)
         .arg(1.0f32)
-        .build().unwrap();
+        .build()
+        .unwrap();
 
     let gauss_seidel_step_kernel = pro_que
         .kernel_builder("gauss_seidel_step")
@@ -37,7 +49,8 @@ pub fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Rec
         .arg(&buffer_b)
         .arg(4.096f32)
         .arg(17.384f32)
-        .build().unwrap();
+        .build()
+        .unwrap();
 
     //Execute setup kernels
     unsafe {
@@ -70,10 +83,13 @@ pub fn simloop(sim: SimState, sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Rec
                 if i % 1000 == 0 {
                     let mut vec = vec![0.0f32; buffer_a.len()];
                     buffer_a.read(&mut vec).enq().unwrap();
-                    
-                    println!("Step {}: The value at index [{}] is now '{}'!", i, 130, vec[130]);
+
+                    println!(
+                        "Step {}: The value at index [{}] is now '{}'!",
+                        i, 130, vec[130]
+                    );
                 }
-                
+
                 i += 1;
             }
         }

@@ -2,6 +2,7 @@ extern crate ocl;
 use std::time::Duration;
 use std::{sync::mpsc, thread};
 
+mod lbm;
 mod solver;
 use solver::*;
 
