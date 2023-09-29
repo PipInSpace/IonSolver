@@ -10,37 +10,45 @@ pub enum VelocitySet {
 }
 
 #[allow(dead_code)]
-pub enum Extensions {
-
+#[derive(Clone, Copy)]
+pub enum RelaxationTime {
+    SRT,
+    TRT,
+    MRT,
 }
 
-#[derive(Clone)]
+#[allow(dead_code)]
+pub enum Extensions {}
+
+#[derive(Clone, Copy)]
 pub struct LbmConfig {
-    pub velocity_set: VelocitySet,
-    pub n_x: u32, //Size
-    pub n_y: u32,
-    pub n_z: u32,
+    velocity_set: VelocitySet,
+    relaxation_time: RelaxationTime,
+    n_x: u32, //Size
+    n_y: u32,
+    n_z: u32,
 
-    pub d_x: u32, //Domains
-    pub d_y: u32,
-    pub d_z: u32,
+    d_x: u32, //Domains
+    d_y: u32,
+    d_z: u32,
 
-    pub nu: f32,
-    pub fx: f32,
-    pub fy: f32,
-    pub fz: f32,
-    pub sigma: f32,
-    pub alpha: f32,
-    pub beta: f32,
+    nu: f32,
+    fx: f32,
+    fy: f32,
+    fz: f32,
+    sigma: f32,
+    alpha: f32,
+    beta: f32,
 
-    pub particles_n: u32,
-    pub particles_rho: f32,
+    particles_n: u32,
+    particles_rho: f32,
 }
 
 impl LbmConfig {
     pub fn new() -> LbmConfig {
         LbmConfig {
             velocity_set: VelocitySet::D2Q9,
+            relaxation_time: RelaxationTime::SRT,
             n_x: 1,
             n_y: 1,
             n_z: 1,
@@ -64,75 +72,168 @@ impl LbmConfig {
 #[derive(Clone)]
 pub struct Lbm {
     domains: Vec<LbmDomain>,
-    pub config: LbmConfig
+    pub config: LbmConfig,
+    initialized: bool,
 }
 
 impl Lbm {
     pub fn init(mut lbm_config: LbmConfig) -> Lbm {
+        //Returns new Lbm from config struct. Domain setup handled automatically.
         //Configures Domains
-        let n_d_x: u32 = (lbm_config.n_x/lbm_config.d_x)*lbm_config.d_x;
-        let n_d_y: u32 = (lbm_config.n_y/lbm_config.d_y)*lbm_config.d_y;
-        let n_d_z: u32 = (lbm_config.n_z/lbm_config.d_z)*lbm_config.d_z;
-        if n_d_x!=lbm_config.n_x||n_d_y!=lbm_config.n_y||n_d_z!=lbm_config.n_z {
-            println!("Warning: Resolution {}, {}, {} not divisible by Domains: Overiding resolution.", lbm_config.n_x, lbm_config.n_y, lbm_config.n_z)
+        let n_d_x: u32 = (lbm_config.n_x / lbm_config.d_x) * lbm_config.d_x;
+        let n_d_y: u32 = (lbm_config.n_y / lbm_config.d_y) * lbm_config.d_y;
+        let n_d_z: u32 = (lbm_config.n_z / lbm_config.d_z) * lbm_config.d_z;
+        if n_d_x != lbm_config.n_x || n_d_y != lbm_config.n_y || n_d_z != lbm_config.n_z {
+            println!(
+                "Warning: Resolution {}, {}, {} not divisible by Domains: Overiding resolution.",
+                lbm_config.n_x, lbm_config.n_y, lbm_config.n_z
+            )
         }
 
         lbm_config.n_x = n_d_x;
+        lbm_config.n_y = n_d_y;
+        lbm_config.n_z = n_d_z;
 
         let domain_numbers: u32 = lbm_config.d_x * lbm_config.d_y * lbm_config.d_z;
-        
-        let h_x = (lbm_config.d_x as u8>1u8) as u8;
-        let h_y = (lbm_config.d_y as u8>1u8) as u8;
-        let h_z = (lbm_config.d_z as u8>1u8) as u8;
+
+        let h_x = (lbm_config.d_x > 1u32) as u32;
+        let h_y = (lbm_config.d_y > 1u32) as u32;
+        let h_z = (lbm_config.d_z > 1u32) as u32;
 
         //TODO: Get openCL devices and pass to domains
+        //TODO: sanity check
+
+        let lbm_domain_velocity_set = LbmDomain::from_velocity_set(lbm_config.velocity_set);
 
         let mut lbm_domains: Vec<LbmDomain> = Vec::new();
         for d in 0..domain_numbers {
-            let x = (d%(lbm_config.d_x*lbm_config.d_y))%lbm_config.d_x;
-            let y = (d%(lbm_config.d_x*lbm_config.d_y))/lbm_config.d_x;
-            let z = d/(lbm_config.d_x*lbm_config.d_y);
+            let x = (d % (lbm_config.d_x * lbm_config.d_y)) % lbm_config.d_x;
+            let y = (d % (lbm_config.d_x * lbm_config.d_y)) / lbm_config.d_x;
+            let z = d / (lbm_config.d_x * lbm_config.d_y);
+            lbm_domains.push(LbmDomain::init(lbm_config, h_x, h_y, h_z, x, y, z))
             //lbm_domains.push(LbmDomain {
             //    device_info: 1,
-            //    n_x
+            //    n_x: lbm_config.n_x / lbm_config.d_x + 2u32 * h_x,
+            //    n_y: lbm_config.n_y / lbm_config.d_y + 2u32 * h_y,
+            //    n_z: lbm_config.n_z / lbm_config.d_z + 2u32 * h_z,
+            //    d_x: lbm_config.d_x,
+            //    d_y: lbm_config.d_y,
+            //    d_z: lbm_config.d_z,
+            //    o_x: (x * lbm_config.n_x / lbm_config.d_x) as i32 - h_x as i32,
+            //    o_y: (y * lbm_config.n_y / lbm_config.d_y) as i32 - h_y as i32,
+            //    o_z: (z * lbm_config.n_z / lbm_config.d_z) as i32 - h_z as i32,
+            //    nu: lbm_config.nu,
+            //    fx: lbm_config.fx,
+            //    fy: lbm_config.fy,
+            //    fz: lbm_config.fz,
+            //    sigma: lbm_config.sigma,
+            //    alpha: lbm_config.alpha,
+            //    beta: lbm_config.beta,
+            //    particles_n: lbm_config.particles_n,
+            //    particles_rho: lbm_config.particles_rho,
+            //    ..lbm_domain_velocity_set //Completes velocity set values
             //});
         }
 
         let lbm = Lbm {
-            domains: vec![LbmDomain::new(lbm_config.velocity_set)],
+            domains: vec![LbmDomain::from_velocity_set(lbm_config.velocity_set)],
             config: lbm_config,
+            initialized: false,
         };
         lbm
     }
+
+    fn initialize(self) {
+        //for d in 0..self.get_domain_numbers() {self.domains[d]}
+    }
+
+    pub fn run(self, steps: u64) {
+        //Run simulation for steps
+        //TODO: Display info in command line
+        if !self.initialized {
+            //Run initialization Kernel
+            self.initialize();
+            //TODO: Display initialization info in comman line
+        }
+    }
+
+    //Helper functions:
+    fn get_domain_numbers(self) -> usize {
+        (self.config.d_x * self.config.d_y * self.config.d_z) as usize
+    }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct LbmDomain {
-    pub device_info: u32, //TODO: Compiles OpenCL C code
+    device_info: u32, //TODO: Compiles OpenCL C code
+    ocl_code: String,
 
-    pub n_x: u32, //Size
-    pub n_y: u32,
-    pub n_z: u32,
+    n_x: u32, //Size
+    n_y: u32,
+    n_z: u32,
 
-    pub d_x: u32, //Domain
-    pub d_y: u32,
-    pub d_z: u32,
+    d_x: u32, //Domain
+    d_y: u32,
+    d_z: u32,
 
-    pub o_x: u32, //Offset
-    pub o_y: u32,
-    pub o_z: u32,
+    o_x: i32, //Offset
+    o_y: i32,
+    o_z: i32,
 
-    pub nu: f32,
+    nu: f32,
+    fx: f32,
+    fy: f32,
+    fz: f32,
+    sigma: f32,
+    alpha: f32,
+    beta: f32,
 
-    pub dimensions: u8,
-    pub velocity_set: u8,
-    pub transfers: u8,
+    particles_n: u32,
+    particles_rho: f32,
+
+    velocity_set_enum: VelocitySet,
+    dimensions: u8,
+    velocity_set: u8,
+    transfers: u8,
 }
 
 impl LbmDomain {
-    pub fn new(vel_set_cfg: VelocitySet) -> LbmDomain {
-        let default_domain = LbmDomain {
+    pub fn init(lbm_config: LbmConfig, h_x: u32, h_y: u32, h_z: u32, x: u32, y: u32, z: u32) -> LbmDomain {
+        let lbm_domain_velocity_set = LbmDomain::from_velocity_set(lbm_config.velocity_set);
+        
+        let mut domain = LbmDomain {
             device_info: 1,
+            ocl_code: String::new(),
+            n_x: lbm_config.n_x / lbm_config.d_x + 2u32 * h_x,
+            n_y: lbm_config.n_y / lbm_config.d_y + 2u32 * h_y,
+            n_z: lbm_config.n_z / lbm_config.d_z + 2u32 * h_z,
+            d_x: lbm_config.d_x,
+            d_y: lbm_config.d_y,
+            d_z: lbm_config.d_z,
+            o_x: (x * lbm_config.n_x / lbm_config.d_x) as i32 - h_x as i32,
+            o_y: (y * lbm_config.n_y / lbm_config.d_y) as i32 - h_y as i32,
+            o_z: (z * lbm_config.n_z / lbm_config.d_z) as i32 - h_z as i32,
+            nu: lbm_config.nu,
+            fx: lbm_config.fx,
+            fy: lbm_config.fy,
+            fz: lbm_config.fz,
+            sigma: lbm_config.sigma,
+            alpha: lbm_config.alpha,
+            beta: lbm_config.beta,
+            particles_n: lbm_config.particles_n,
+            particles_rho: lbm_config.particles_rho,
+            velocity_set_enum: lbm_config.velocity_set,
+            ..lbm_domain_velocity_set //Completes velocity set values
+        };
+        let ocl_code = domain.clone().get_opencl_code();
+        domain.ocl_code = ocl_code;
+        domain
+    }
+
+    fn get_default_domain() -> LbmDomain {
+        LbmDomain {
+            device_info: 1,
+            ocl_code: String::new(),
             n_x: 1,
             n_y: 1,
             n_z: 1,
@@ -142,12 +243,27 @@ impl LbmDomain {
             o_x: 0,
             o_y: 0,
             o_z: 0,
-            nu: 1.0f32 / 6.0f32,
-            dimensions: 2,
-            velocity_set: 9,
-            transfers: 3,
-        };
-        
+            fx: 0.0f32,
+            fy: 0.0f32,
+            fz: 0.0f32,
+            nu: 0.0f32,
+            sigma: 0.0f32,
+            alpha: 0.0f32,
+            beta: 0.0f32,
+
+            particles_n: 0,
+            particles_rho: 0.0f32,
+
+            velocity_set_enum: VelocitySet::D2Q9,
+            dimensions: 0,
+            velocity_set: 0,
+            transfers: 0,
+        }
+    }
+
+    fn from_velocity_set(vel_set_cfg: VelocitySet) -> LbmDomain {
+        let default_domain = LbmDomain::get_default_domain();
+
         match vel_set_cfg {
             VelocitySet::D2Q9 => LbmDomain {
                 dimensions: 2,
@@ -176,16 +292,31 @@ impl LbmDomain {
         }
     }
 
-    pub fn get_opencl_code(self) -> String {
-        return self.get_device_defines() + &include_str!("kernels.cl");
+    fn get_opencl_code(self) -> String {
+        return self.get_device_defines() + &include_str!("kernels.cl"); //TODO Kernel needs to be preproccessed first
     }
 
     fn get_device_defines(self) -> String {
+        //Conditional Defines:
+        let d2q9 = "\n	#define def_w0 (1.0f/2.25f)".to_owned() // center (0)
+        +"\n	#define def_ws (1.0f/9.0f)" // straight (1-4)
+        +"\n	#define def_we (1.0f/36.0f)";
+        let d3q15 = "\n	#define def_w0 (1.0f/4.5f)".to_owned() // center (0)
+        +"\n	#define def_ws (1.0f/9.0f)" // straight (1-6)
+        +"\n	#define def_wc (1.0f/72.0f)";
+        let d3q19 = "\n	#define def_w0 (1.0f/3.0f)".to_owned() // center (0)
+        +"\n	#define def_ws (1.0f/18.0f)" // straight (1-6)
+        +"\n	#define def_we (1.0f/36.0f)";
+        let d3q27 = "\n	#define def_w0 (1.0f/3.0f)".to_owned() // center (0)
+        +"\n	#define def_ws (1.0f/18.0f)" // straight (1-6)
+        +"\n	#define def_we (1.0f/36.0f)";
+
+
         return
          "\n    #define def_Nx ".to_owned() + &self.n_x.to_string()+"u"
         +"\n	#define def_Ny "+ &self.n_y.to_string()+"u"
         +"\n	#define def_Nz "+ &self.n_z.to_string()+"u"
-        +"\n	#define def_N  "+ &self.get_n().to_string()+"ul"
+        +"\n	#define def_N  "+ &self.clone().get_n().to_string()+"ul"
     
         +"\n	#define def_Dx "+ &self.d_x.to_string()+"u"
         +"\n	#define def_Dy "+ &self.d_y.to_string()+"u"
@@ -205,7 +336,13 @@ impl LbmDomain {
         +"\n	#define def_transfers "+ &self.transfers.to_string()+"u" // number of DDFs that are transferred between multiple domains
     
         +"\n	#define def_c 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
-        +"\n	#define def_w " + &self.nu.to_string()+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+        +"\n	#define def_w " + &(1.0f32/(3.0f32*self.nu+0.5f32)).to_string()+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+        + match self.velocity_set_enum {
+            VelocitySet::D2Q9 => &d2q9, // edge (5-8)
+            VelocitySet::D3Q15 => &d3q15, // corner (7-14)
+            VelocitySet::D3Q19 => &d3q19, // edge (7-18)
+            VelocitySet::D3Q27 => &d3q27 // edge (7-18)
+        }
     ;
     }
 

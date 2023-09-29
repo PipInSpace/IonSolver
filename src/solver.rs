@@ -1,9 +1,9 @@
 extern crate ocl;
 use crate::lbm::*;
 use crate::*;
+use lbm::VelocitySet;
 use ocl::ProQue;
 use std::sync::mpsc;
-use lbm::VelocitySet;
 
 #[allow(unused)]
 pub fn simloop(
@@ -23,10 +23,8 @@ pub fn simloop(
     //OpenCL Test function
     test_function().unwrap();
 
-
     let lbm_config = LbmConfig::new();
     let test_lbm = Lbm::init(lbm_config);
-
 
     //OpenCL setup
     let src = include_str!("kernels.cl");
