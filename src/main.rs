@@ -1,3 +1,4 @@
+//#![allow(non_snake_case)]
 extern crate ocl;
 use std::time::Duration;
 use std::{sync::mpsc, thread};
