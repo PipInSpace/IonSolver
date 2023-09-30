@@ -1,4 +1,5 @@
-//Defines
+use crate::*;
+use ocl::Device;
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -29,8 +30,8 @@ pub enum FloatType {
 // The init() function takes in another struct, the LbmConfig, which contains all necessary arguments.
 // LbmConfig needs to be configured beforehand, then the init() function takes care of Lbm initialisation.
 // The Lbm struct contains one or multiple LbmDomain structs.
-// The Simulation is actually run on these LbmDomain structs, each Domain corresponding to an OpenCL device. 
-// The simulation can be split up into multiple domains. This enables multi-device parallelization. 
+// The Simulation is actually run on these LbmDomain structs, each Domain corresponding to an OpenCL device.
+// The simulation can be split up into multiple domains. This enables multi-device parallelization.
 // LbmDomain initialisation is handled automatically in Lbm::init() using LbmDomain::init()
 
 #[derive(Clone, Copy)]
@@ -115,11 +116,11 @@ impl Lbm {
 
         let domain_numbers: u32 = lbm_config.d_x * lbm_config.d_y * lbm_config.d_z;
 
-        let h_x = (lbm_config.d_x > 1u32) as u32;
+        let h_x = (lbm_config.d_x > 1u32) as u32; // Halo offsets
         let h_y = (lbm_config.d_y > 1u32) as u32;
         let h_z = (lbm_config.d_z > 1u32) as u32;
 
-        //TODO: Get openCL devices and pass to domains
+        let device_infos = opencl::device_selection(domain_numbers);
         //TODO: sanity check
 
         let mut lbm_domains: Vec<LbmDomain> = Vec::new();
@@ -128,7 +129,7 @@ impl Lbm {
             let y = (d % (lbm_config.d_x * lbm_config.d_y)) / lbm_config.d_x;
             let z = d / (lbm_config.d_x * lbm_config.d_y);
             //Get devices
-            lbm_domains.push(LbmDomain::init(lbm_config, h_x, h_y, h_z, x, y, z))
+            lbm_domains.push(LbmDomain::init(lbm_config, device_infos[d as usize], h_x, h_y, h_z, x, y, z))
         }
 
         let lbm = Lbm {
@@ -154,14 +155,11 @@ impl Lbm {
     }
 
     //Helper functions:
-    fn get_domain_numbers(self) -> usize {
-        (self.config.d_x * self.config.d_y * self.config.d_z) as usize
-    }
 }
 
 #[derive(Clone)]
 pub struct LbmDomain {
-    device_info: u32, //TODO: Compiles OpenCL C code
+    device_info: Device, //TODO: Compiles OpenCL C code
     lbm_config: LbmConfig,
     ocl_code: String,
 
@@ -197,6 +195,7 @@ pub struct LbmDomain {
 impl LbmDomain {
     pub fn init(
         lbm_config: LbmConfig,
+        device: Device,
         h_x: u32,
         h_y: u32,
         h_z: u32,
@@ -207,10 +206,10 @@ impl LbmDomain {
         let lbm_domain_velocity_set = LbmDomain::from_velocity_set(lbm_config.velocity_set);
 
         let mut domain = LbmDomain {
-            device_info: 1,
+            device_info: device,
             ocl_code: String::new(),
             lbm_config,
-            
+
             n_x: lbm_config.n_x / lbm_config.d_x + 2u32 * h_x,
             n_y: lbm_config.n_y / lbm_config.d_y + 2u32 * h_y,
             n_z: lbm_config.n_z / lbm_config.d_z + 2u32 * h_z,
@@ -239,14 +238,14 @@ impl LbmDomain {
             velocity_set: lbm_domain_velocity_set.velocity_set,
             transfers: lbm_domain_velocity_set.transfers, //Completes ONLY velocity set values, check for other completions
         };
-        let ocl_code = domain.clone().get_device_defines()+&LbmDomain::get_opencl_code();
+        let ocl_code = domain.clone().get_device_defines() + &LbmDomain::get_opencl_code();
         domain.ocl_code = ocl_code;
         domain //Returns initialised domain
     }
 
     fn get_default_domain() -> LbmDomain {
         LbmDomain {
-            device_info: 1,
+            device_info: opencl::get_devices()[0],
             ocl_code: String::new(),
             lbm_config: LbmConfig::new(),
             n_x: 1,
@@ -382,7 +381,8 @@ impl LbmDomain {
             FloatType::FP16C => &fp16c,
             FloatType::FP32 => &fp32
         }
-        + if self.lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""} //Extensions
+        + if self.lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""};
+        //Extensions
     }
 
     fn get_n(self) -> u64 {

@@ -4,6 +4,7 @@ use std::time::Duration;
 use std::{sync::mpsc, thread};
 
 mod lbm;
+mod opencl;
 mod solver;
 use solver::*;
 
