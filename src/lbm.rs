@@ -149,7 +149,7 @@ impl Lbm {
         }
 
         let lbm = Lbm {
-            domains: vec![LbmDomain::from_velocity_set(lbm_config.velocity_set)],
+            domains: lbm_domains,
             config: lbm_config,
             initialized: false,
         };
@@ -205,7 +205,6 @@ pub struct LbmDomain {
     particles_n: u32,
     particles_rho: f32,
 
-    velocity_set_enum: VelocitySet,
     dimensions: u8,
     velocity_set: u8,
     transfers: u8,
@@ -227,7 +226,6 @@ impl LbmDomain {
         y: u32,
         z: u32,
     ) -> LbmDomain {
-        let lbm_domain_velocity_set = LbmDomain::from_velocity_set(lbm_config.velocity_set);
         // OCL variables are directly exposed, due to no other device struct.
         let platform = Platform::default();
         let context = Context::builder().devices(device.clone()).build().unwrap();
@@ -265,6 +263,62 @@ impl LbmDomain {
             ),
         };
 
+        let n_x = lbm_config.n_x / lbm_config.d_x + 2u32 * h_x;
+        let n_y = lbm_config.n_y / lbm_config.d_y + 2u32 * h_y;
+        let n_z = lbm_config.n_z / lbm_config.d_z + 2u32 * h_z;
+
+        let d_x = lbm_config.d_x;
+        let d_y = lbm_config.d_y;
+        let d_z = lbm_config.d_z;
+
+        let o_x = (x * lbm_config.n_x / lbm_config.d_x) as i32 - h_x as i32;
+        let o_y = (y * lbm_config.n_y / lbm_config.d_y) as i32 - h_y as i32;
+        let o_z = (z * lbm_config.n_z / lbm_config.d_z) as i32 - h_z as i32;
+
+        let dimensions;
+        let velocity_set;
+        let transfers;
+
+        match lbm_config.velocity_set { //Set dimensions/velocitys/transfers from Enum
+            VelocitySet::D2Q9 => {
+                dimensions = 2;
+                velocity_set = 9;
+                transfers = 3;
+            }
+            VelocitySet::D3Q15 => {
+                dimensions = 3;
+                velocity_set = 15;
+                transfers = 5;
+            }
+            VelocitySet::D3Q19 => {
+                dimensions = 3;
+                velocity_set = 19;
+                transfers = 5;
+            }
+            VelocitySet::D3Q27 => {
+                dimensions = 3;
+                velocity_set = 27;
+                transfers = 9;
+            }
+        }
+
+        let ocl_code = Self::get_device_defines(
+            n_x,
+            n_y,
+            n_z,
+            d_x,
+            d_y,
+            d_z,
+            o_x,
+            o_y,
+            o_z,
+            dimensions,
+            velocity_set,
+            transfers,
+            lbm_config.nu,
+            lbm_config,
+        ) + &LbmDomain::get_opencl_code();
+
         let mut domain = LbmDomain {
             device,
             context,
@@ -296,25 +350,23 @@ impl LbmDomain {
             particles_n: lbm_config.particles_n,
             particles_rho: lbm_config.particles_rho,
 
-            velocity_set_enum: lbm_config.velocity_set,
-            dimensions: lbm_domain_velocity_set.dimensions,
-            velocity_set: lbm_domain_velocity_set.velocity_set,
-            transfers: lbm_domain_velocity_set.transfers, //Completes ONLY velocity set values, check for other completions
+            dimensions,
+            velocity_set,
+            transfers, //Completes ONLY velocity set values, check for other completions
 
             fi,
             rho: todo!(),
             u: todo!(),
             flags: todo!(),
         };
-        let ocl_code = domain.clone().get_device_defines() + &LbmDomain::get_opencl_code();
-        domain.ocl_code = ocl_code;
+
         domain.allocate(domain.device);
         domain //Returns initialised domain
     }
 
     fn allocate(mut self, device: Device) {
-        let n = self.clone().get_n();
-        //TODO: n is too big for buffer allocation.
+        let n = 1; //self.clone().get_n();
+                   //TODO: n is too big for buffer allocation.
         let fi = match self.lbm_config.float_type {
             FloatType::FP16S => VariableFloatBuffer::U16(
                 Buffer::<u16>::builder()
@@ -375,7 +427,7 @@ impl LbmDomain {
             .build(&self.context)
             .unwrap();
         self.program = program;
-        
+
         let kernel_initialize = Kernel::builder()
             .program(&self.program)
             .name("initialize")
@@ -385,100 +437,26 @@ impl LbmDomain {
             .unwrap(); //TODO set arguments
     }
 
-    fn get_default_domain() -> LbmDomain {
-        let device = opencl::get_devices()[0];
-        let platform = Platform::default();
-        let context = Context::builder().devices(device.clone()).build().unwrap();
-        let queue = Queue::new(&context, device, None).unwrap();
-        let program = Program::builder()
-            .devices(device)
-            .src("")
-            .build(&context)
-            .unwrap();
-        let fi = VariableFloatBuffer::U16(
-            Buffer::<u16>::builder()
-                .queue(queue.clone())
-                .len(1)
-                .fill_val(0u16)
-                .build()
-                .unwrap(),
-        );
-
-        LbmDomain {
-            device: opencl::get_devices()[0],
-            context,
-            queue,
-            program,
-            ocl_code: String::new(),
-            lbm_config: LbmConfig::new(),
-            n_x: 1,
-            n_y: 1,
-            n_z: 1,
-            d_x: 1,
-            d_y: 1,
-            d_z: 1,
-            o_x: 0,
-            o_y: 0,
-            o_z: 0,
-            fx: 0.0f32,
-            fy: 0.0f32,
-            fz: 0.0f32,
-            nu: 0.0f32,
-            sigma: 0.0f32,
-            alpha: 0.0f32,
-            beta: 0.0f32,
-
-            particles_n: 0,
-            particles_rho: 0.0f32,
-
-            velocity_set_enum: VelocitySet::D2Q9,
-            dimensions: 0,
-            velocity_set: 0,
-            transfers: 0,
-
-            fi,
-            rho: todo!(),
-            u: todo!(),
-            flags: todo!(),
-        }
-    }
-
-    fn from_velocity_set(vel_set_cfg: VelocitySet) -> LbmDomain {
-        let default_domain = LbmDomain::get_default_domain();
-
-        match vel_set_cfg {
-            VelocitySet::D2Q9 => LbmDomain {
-                dimensions: 2,
-                velocity_set: 9,
-                transfers: 3,
-                ..default_domain
-            },
-            VelocitySet::D3Q15 => LbmDomain {
-                dimensions: 3,
-                velocity_set: 15,
-                transfers: 5,
-                ..default_domain
-            },
-            VelocitySet::D3Q19 => LbmDomain {
-                dimensions: 3,
-                velocity_set: 19,
-                transfers: 5,
-                ..default_domain
-            },
-            VelocitySet::D3Q27 => LbmDomain {
-                dimensions: 3,
-                velocity_set: 27,
-                transfers: 9,
-                ..default_domain
-            },
-        }
-    }
-
     fn get_opencl_code() -> String {
         return include_str!("kernels.cl").to_string(); //TODO Kernel needs to be preproccessed first
     }
 
-    fn get_device_defines(self) -> String {
+    fn get_device_defines(
+        n_x: u32,
+        n_y: u32,
+        n_z: u32,
+        d_x: u32,
+        d_y: u32,
+        d_z: u32,
+        o_x: i32,
+        o_y: i32,
+        o_z: i32,
+        dimensions: u8,
+        velocity_set: u8,
+        transfers: u8,
+        nu: f32,
+        lbm_config: LbmConfig,
+    ) -> String {
         //Conditional Defines:
         //Velocity set types
         let d2q9 = "\n	#define def_w0 (1.0f/2.25f)".to_owned() // center (0)
@@ -510,53 +488,53 @@ impl LbmDomain {
         +"\n	#define load(p,o) p[o]" // regular float read
         +"\n	#define store(p,o,x) p[o]=x"; // regular float write
 
-        return "\n    #define def_Nx ".to_owned() + &self.n_x.to_string()+"u"
-        +"\n	#define def_Ny "+ &self.n_y.to_string()+"u"
-        +"\n	#define def_Nz "+ &self.n_z.to_string()+"u"
-        +"\n	#define def_N  "+ &self.clone().get_n().to_string()+"ul"
+        return "\n    #define def_Nx ".to_owned() + &n_x.to_string()+"u"
+        +"\n	#define def_Ny "+ &n_y.to_string()+"u"
+        +"\n	#define def_Nz "+ &n_z.to_string()+"u"
+        +"\n	#define def_N  "+ &Self::get_n(n_x, n_y, n_z).to_string()+"ul"
     
-        +"\n	#define def_Dx "+ &self.d_x.to_string()+"u"
-        +"\n	#define def_Dy "+ &self.d_y.to_string()+"u"
-        +"\n	#define def_Dz "+ &self.d_z.to_string()+"u"
+        +"\n	#define def_Dx "+ &d_x.to_string()+"u"
+        +"\n	#define def_Dy "+ &d_y.to_string()+"u"
+        +"\n	#define def_Dz "+ &d_z.to_string()+"u"
     
-        +"\n	#define def_Ox "+ &self.o_x.to_string()+"" // offsets are signed integer!
-        +"\n	#define def_Oy "+ &self.o_y.to_string()+""
-        +"\n	#define def_Oz "+ &self.o_z.to_string()+""
+        +"\n	#define def_Ox "+ &o_x.to_string()+"" // offsets are signed integer!
+        +"\n	#define def_Oy "+ &o_y.to_string()+""
+        +"\n	#define def_Oz "+ &o_z.to_string()+""
     
-        +"\n	#define def_Ax "+ &(self.n_y * self.n_z).to_string()+"u"
-        +"\n	#define def_Ay "+ &(self.n_z * self.n_x).to_string()+"u"
-        +"\n	#define def_Az "+ &(self.n_x * self.n_y).to_string()+"u"
+        +"\n	#define def_Ax "+ &(n_y * n_z).to_string()+"u"
+        +"\n	#define def_Ay "+ &(n_z * n_x).to_string()+"u"
+        +"\n	#define def_Az "+ &(n_x * n_y).to_string()+"u"
     
-        +"\n	#define D"+ &self.dimensions.to_string()+"Q"+ &self.velocity_set.to_string()+"" // D2Q9/D3Q15/D3Q19/D3Q27
-        +"\n	#define def_velocity_set "+ &self.velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
-        +"\n	#define def_dimensions "+ &self.dimensions.to_string()+"u" // number spatial dimensions (2D or 3D)
-        +"\n	#define def_transfers "+ &self.transfers.to_string()+"u" // number of DDFs that are transferred between multiple domains
+        +"\n	#define D"+ &dimensions.to_string()+"Q"+ &velocity_set.to_string()+"" // D2Q9/D3Q15/D3Q19/D3Q27
+        +"\n	#define def_velocity_set "+ &velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
+        +"\n	#define def_dimensions "+ &dimensions.to_string()+"u" // number spatial dimensions (2D or 3D)
+        +"\n	#define def_transfers "+ &transfers.to_string()+"u" // number of DDFs that are transferred between multiple domains
     
         +"\n	#define def_c 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
-        +"\n	#define def_w " + &(1.0f32/(3.0f32*self.nu+0.5f32)).to_string()+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
-        + match self.velocity_set_enum {
+        +"\n	#define def_w " + &(1.0f32/(3.0f32*nu+0.5f32)).to_string()+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+        + match lbm_config.velocity_set {
             VelocitySet::D2Q9 => &d2q9,
             VelocitySet::D3Q15 => &d3q15,
             VelocitySet::D3Q19 => &d3q19,
             VelocitySet::D3Q27 => &d3q27
         }
-        + match self.lbm_config.relaxation_time {
+        + match lbm_config.relaxation_time {
             RelaxationTime::SRT => srt,
             RelaxationTime::TRT => trt
         }
-        + match self.lbm_config.float_type { //Floatingpoint types
+        + match lbm_config.float_type { //Floatingpoint types
             FloatType::FP16S => &fp16s,
             FloatType::FP16C => &fp16c,
             FloatType::FP32 => &fp32
         }
-        + if self.lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""};
+        + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""};
         //Extensions
     }
 
     fn enque_initialize() {}
 
-    fn get_n(self) -> u64 {
-        self.n_x as u64 * self.n_y as u64 * self.n_z as u64
+    fn get_n(n_x: u32, n_y: u32, n_z: u32) -> u64 {
+        n_x as u64 * n_y as u64 * n_z as u64
     }
 }
 
