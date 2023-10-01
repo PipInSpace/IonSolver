@@ -1,5 +1,5 @@
 use crate::*;
-use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue, ProQue};
+use ocl::{flags, Buffer, Context, Device, Kernel, Platform, ProQue, Program, Queue};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -149,11 +149,15 @@ impl Lbm {
 
         let mut lbm_domains: Vec<LbmDomain> = Vec::new();
         for d in 0..domain_numbers {
-            println!("Initializing domain {}/{}", d+1, domain_numbers);
+            println!("Initializing domain {}/{}", d + 1, domain_numbers);
             let x = (d % (lbm_config.d_x * lbm_config.d_y)) % lbm_config.d_x;
             let y = (d % (lbm_config.d_x * lbm_config.d_y)) / lbm_config.d_x;
             let z = d / (lbm_config.d_x * lbm_config.d_y);
-            println!("Using device {} for domain {}", device_infos[d as usize].name().unwrap(), d+1);
+            println!(
+                "Using device {} for domain {}",
+                device_infos[d as usize].name().unwrap(),
+                d + 1
+            );
             lbm_domains.push(LbmDomain::init(
                 lbm_config,
                 device_infos[d as usize],
@@ -175,7 +179,8 @@ impl Lbm {
     }
 
     fn initialize(&mut self) {
-        for d in 0..self.get_domain_numbers() {// the communicate calls at initialization need an odd time step
+        for d in 0..self.get_domain_numbers() {
+            // the communicate calls at initialization need an odd time step
             self.domains[d].increment_timestep(1);
         }
         //communicate_rho_u_flags
@@ -207,11 +212,18 @@ impl Lbm {
         }
     }
 
-    pub fn do_time_step(&mut self) {// call kernel stream_collide to perform one LBM time step
-        for d in 0..self.get_domain_numbers() {self.domains[d].enqueue_stream_collide().unwrap();}
+    pub fn do_time_step(&mut self) {
+        // call kernel stream_collide to perform one LBM time step
+        for d in 0..self.get_domain_numbers() {
+            self.domains[d].enqueue_stream_collide().unwrap();
+        }
         //communicate_fi
-        for d in 0..self.get_domain_numbers() {self.domains[d].queue.finish().unwrap();}
-        for d in 0..self.get_domain_numbers() {self.domains[d].increment_timestep(1);}
+        for d in 0..self.get_domain_numbers() {
+            self.domains[d].queue.finish().unwrap();
+        }
+        for d in 0..self.get_domain_numbers() {
+            self.domains[d].increment_timestep(1);
+        }
     }
 
     fn get_domain_numbers(&self) -> usize {
@@ -291,7 +303,8 @@ impl LbmDomain {
         let velocity_set;
         let transfers;
 
-        match lbm_config.velocity_set { //Set dimensions/velocitys/transfers from Enum
+        match lbm_config.velocity_set {
+            //Set dimensions/velocitys/transfers from Enum
             VelocitySet::D2Q9 => {
                 dimensions = 2;
                 velocity_set = 9;
@@ -335,7 +348,11 @@ impl LbmDomain {
 
         // OCL variables are directly exposed, due to no other device struct.
         let platform = Platform::default();
-        let context = Context::builder().platform(platform).devices(device.clone()).build().unwrap();
+        let context = Context::builder()
+            .platform(platform)
+            .devices(device.clone())
+            .build()
+            .unwrap();
         let queue = Queue::new(&context, device, None).unwrap();
         println!("Compiling Program...");
         let program = Program::builder()
@@ -394,7 +411,8 @@ impl LbmDomain {
 
         // Initialize Kernels
         let kernel_initialize: Kernel;
-        match fi.clone() { //Initialize initialize kernel
+        match fi.clone() {
+            //Initialize initialize kernel
             VariableFloatBuffer::U16(fi_u16) => {
                 kernel_initialize = Kernel::builder()
                     .program(&program)
@@ -407,7 +425,7 @@ impl LbmDomain {
                     .arg_named("flags", flags.clone())
                     .build()
                     .unwrap();
-            },
+            }
             VariableFloatBuffer::F32(fi_f32) => {
                 kernel_initialize = Kernel::builder()
                     .program(&program)
@@ -420,10 +438,11 @@ impl LbmDomain {
                     .arg_named("flags", flags.clone())
                     .build()
                     .unwrap();
-            },
+            }
         }
         let kernel_stream_collide: Kernel;
-        match fi.clone() { //Initialize stream_collide kernel
+        match fi.clone() {
+            //Initialize stream_collide kernel
             VariableFloatBuffer::U16(fi_u16) => {
                 kernel_stream_collide = Kernel::builder()
                     .program(&program)
@@ -440,7 +459,7 @@ impl LbmDomain {
                     .arg_named("fz", lbm_config.fz.clone())
                     .build()
                     .unwrap();
-            },
+            }
             VariableFloatBuffer::F32(fi_f32) => {
                 kernel_stream_collide = Kernel::builder()
                     .program(&program)
@@ -457,10 +476,11 @@ impl LbmDomain {
                     .arg_named("fz", lbm_config.fz.clone())
                     .build()
                     .unwrap();
-            },
+            }
         }
         let kernel_update_fields: Kernel;
-        match fi.clone() { //Initialize update_fields kernel
+        match fi.clone() {
+            //Initialize update_fields kernel
             VariableFloatBuffer::U16(fi_u16) => {
                 kernel_update_fields = Kernel::builder()
                     .program(&program)
@@ -477,7 +497,7 @@ impl LbmDomain {
                     .arg_named("fz", lbm_config.fz.clone())
                     .build()
                     .unwrap();
-            },
+            }
             VariableFloatBuffer::F32(fi_f32) => {
                 kernel_update_fields = Kernel::builder()
                     .program(&program)
@@ -494,7 +514,7 @@ impl LbmDomain {
                     .arg_named("fz", lbm_config.fz.clone())
                     .build()
                     .unwrap();
-            },
+            }
         }
 
         //TODO: allocate transfer buffers
@@ -613,7 +633,7 @@ impl LbmDomain {
         +"\n	#define def_transfers "+ &transfers.to_string()+"u" // number of DDFs that are transferred between multiple domains
     
         +"\n	#define def_c 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
-        +"\n	#define def_w " + &(1.0f32/(3.0f32*nu+0.5f32)).to_string()+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+        +"\n	#define def_w " + &format!("{:.5}", 1.0f32/(3.0f32*nu+0.5f32))+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
         + match lbm_config.velocity_set {
             VelocitySet::D2Q9 => &d2q9,
             VelocitySet::D3Q15 => &d3q15,
@@ -648,19 +668,29 @@ impl LbmDomain {
         //Extensions
     }
 
-    fn enqueue_initialize(&self) -> ocl::Result<()> { //Enqueues Initialization kernel, arguments are already set
-        unsafe { 
-            self.kernel_initialize.cmd().queue(&self.queue).global_work_size(self.n_x * self.n_y * self.n_z).enq()
+    fn enqueue_initialize(&self) -> ocl::Result<()> {
+        //Enqueues Initialization kernel, arguments are already set
+        unsafe {
+            self.kernel_initialize
+                .cmd()
+                .queue(&self.queue)
+                .global_work_size(self.n_x * self.n_y * self.n_z)
+                .enq()
         }
     }
 
-    fn enqueue_stream_collide(&self) -> ocl::Result<()> { //Enqueues Initialization kernel, arguments are already set
-        unsafe { 
+    fn enqueue_stream_collide(&self) -> ocl::Result<()> {
+        //Enqueues Initialization kernel, arguments are already set
+        unsafe {
             self.kernel_stream_collide.set_arg("t", self.t)?;
             self.kernel_stream_collide.set_arg("fx", self.fx)?;
             self.kernel_stream_collide.set_arg("fy", self.fy)?;
             self.kernel_stream_collide.set_arg("fz", self.fz)?;
-            self.kernel_stream_collide.cmd().queue(&self.queue).global_work_size(self.n_x * self.n_y * self.n_z).enq()
+            self.kernel_stream_collide
+                .cmd()
+                .queue(&self.queue)
+                .global_work_size(self.n_x * self.n_y * self.n_z)
+                .enq()
         }
     }
 

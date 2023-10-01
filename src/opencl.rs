@@ -4,7 +4,7 @@ use ocl::{Device, Platform};
 pub fn device_selection(domains: u32) -> Vec<Device> {
     let devices = get_devices();
     let mut device_infos: Vec<Device> = vec![devices[0]; domains as usize]; // Is completely overwritten
-    //Device auto-selection
+                                                                            //Device auto-selection
     let mut device_type_ids: Vec<Vec<Device>> = vec![];
     for i in 0..devices.len() {
         let name_i = devices[i]
@@ -17,9 +17,9 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
                 device_type_ids[j].push(devices[i]);
                 already_exists = true;
             }
-            if !already_exists {
-                device_type_ids.push(vec![devices[i]]);
-            }
+        }
+        if !already_exists {
+            device_type_ids.push(vec![devices[i]]);
         }
     }
 
