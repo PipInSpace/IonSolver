@@ -3,7 +3,7 @@ use ocl::{Device, Platform};
 
 pub fn device_selection(domains: u32) -> Vec<Device> {
     let devices = get_devices();
-    let mut device_infos: Vec<Device> = vec![devices[0]; domains as usize];
+    let mut device_infos: Vec<Device> = vec![devices[0]; domains as usize]; // Is completely overwritten
     //Device auto-selection
     let mut device_type_ids: Vec<Vec<Device>> = vec![];
     for i in 0..devices.len() {

@@ -10,11 +10,23 @@ pub enum VelocitySet {
     D3Q27,
 }
 
+impl Default for VelocitySet {
+    fn default() -> Self {
+        VelocitySet::D2Q9
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum RelaxationTime {
     SRT,
     TRT,
+}
+
+impl Default for RelaxationTime {
+    fn default() -> Self {
+        RelaxationTime::SRT
+    }
 }
 
 #[allow(dead_code)]
@@ -23,6 +35,12 @@ pub enum FloatType {
     FP16S,
     FP16C,
     FP32,
+}
+
+impl Default for FloatType {
+    fn default() -> Self {
+        FloatType::FP16S
+    }
 }
 
 #[allow(dead_code)]
@@ -41,7 +59,7 @@ pub enum VariableFloatBuffer {
 // The simulation can be split up into multiple domains. This enables multi-device parallelization.
 // LbmDomain initialisation is handled automatically in Lbm::init() using LbmDomain::init()
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct LbmConfig {
     velocity_set: VelocitySet,
     relaxation_time: RelaxationTime,
@@ -96,7 +114,6 @@ impl LbmConfig {
     }
 }
 
-#[derive(Clone)]
 pub struct Lbm {
     domains: Vec<LbmDomain>,
     pub config: LbmConfig,
@@ -132,10 +149,11 @@ impl Lbm {
 
         let mut lbm_domains: Vec<LbmDomain> = Vec::new();
         for d in 0..domain_numbers {
+            println!("Initializing domain {}/{}", d, domain_numbers);
             let x = (d % (lbm_config.d_x * lbm_config.d_y)) % lbm_config.d_x;
             let y = (d % (lbm_config.d_x * lbm_config.d_y)) / lbm_config.d_x;
             let z = d / (lbm_config.d_x * lbm_config.d_y);
-            //Get devices
+            println!("Using device {} for domain {}", device_infos[d as usize].name().unwrap(), d);
             lbm_domains.push(LbmDomain::init(
                 lbm_config,
                 device_infos[d as usize],
@@ -173,7 +191,6 @@ impl Lbm {
     //Helper functions:
 }
 
-#[derive(Clone)]
 pub struct LbmDomain {
     device: Device, //FluidX3D creates contexts/queues/programs for each device automatically through another struct
     context: Context,
@@ -181,6 +198,10 @@ pub struct LbmDomain {
     queue: Queue,
     lbm_config: LbmConfig,
     ocl_code: String,
+
+    kernel_initialize: Kernel, // Basic Kernels
+    kernel_stream_collide: Kernel,
+    kernel_update_fields: Kernel,
 
     n_x: u32, //Size
     n_y: u32,
@@ -454,6 +475,10 @@ impl LbmDomain {
             ocl_code,
             lbm_config,
 
+            kernel_initialize,
+            kernel_stream_collide,
+            kernel_update_fields,
+
             n_x,
             n_y,
             n_z,
@@ -482,8 +507,6 @@ impl LbmDomain {
             u,
             flags,
         };
-
-        //domain.allocate(domain.device);
         domain //Returns initialised domain
     }
 
@@ -576,7 +599,7 @@ impl LbmDomain {
         +"\n	#define TYPE_G 0x20" // 0b00100000 // gas
         +"\n	#define TYPE_X 0x40" // 0b01000000 // reserved type X
         +"\n	#define TYPE_Y 0x80" // 0b10000000 // reserved type Y
-         
+
         +"\n	#define TYPE_MS 0x03" // 0b00000011 // cell next to moving solid boundary
         +"\n	#define TYPE_BO 0x03" // 0b00000011 // any flag bit used for boundaries (temperature excluded)
         +"\n	#define TYPE_IF 0x18" // 0b00011000 // change from interface to fluid
