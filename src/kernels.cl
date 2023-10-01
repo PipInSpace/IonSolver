@@ -1,56 +1,58 @@
-//#if defined(FP16S) || defined(FP16C)
-//#define fpxx ushort
-//#else // FP32
-//#define fpxx float
-//#endif // FP32
-//
-////THESE ARE TO BE REMOVED
-//#define def_Nx 2u
-//#define def_Ny 2u
-//#define def_Nz 2u
-//#define def_N 2ul
-//
-//#define def_Dx 1u
-//#define def_Dy 1u
-//#define def_Dz 1u
-//
-//#define def_Ox 1 // offsets are signed integer!
-//#define def_Oy 1
-//#define def_Oz 1
-//
-//#define def_Ax 1u
-//#define def_Ay 1u
-//#define def_Az 1u
-//
-//#define def_domain_offset_x 0.0f
-//#define def_domain_offset_y 0.0f
-//#define def_domain_offset_z 0.0f
-//
-//#define D "D2Q9" // D2Q9/D3Q15/D3Q19/D3Q27
-//#define def_velocity_set 9u // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
-//#define def_dimensions 2u // number spatial dimensions (2D or 3D)
-//#define def_transfers 3u // number of DDFs that are transferred between multiple domains
-//
-//#define def_c 0.57735027f // lattice speed of sound c = 1/sqrt(3)*dt
-//#define def_w 2.0f // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
-//#define def_w0 (1.0f/2.25f)
-//#define def_ws (1.0f/9.0f)
-//#define def_we (1.0f/36.0f)
-//
-//#define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
-//#define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
-//#define TYPE_T 0x04 // 0b00000100 // temperature boundary
-//#define TYPE_F 0x08 // 0b00001000 // fluid
-//#define TYPE_I 0x10 // 0b00010000 // interface
-//#define TYPE_G 0x20 // 0b00100000 // gas
-//#define TYPE_X 0x40 // 0b01000000 // reserved type X
-//#define TYPE_Y 0x80 // 0b10000000 // reserved type Y
-//#define TYPE_MS 0x03 // 0b00000011 // cell next to moving solid boundary
-//#define TYPE_BO 0x03 // 0b00000011 // any flag bit used for boundaries (temperature excluded)
-//#define TYPE_IF 0x18 // 0b00011000 // change from interface to fluid
-//#define TYPE_IG 0x30 // 0b00110000 // change from interface to gas
-//#define TYPE_GI 0x38 // 0b00111000 // change from gas to interface
-//#define TYPE_SU 0x38 // 0b00111000 // any flag bit used for SURFACE
+#if defined(FP16S) || defined(FP16C)
+#define fpxx ushort
+#else // FP32
+#define fpxx float
+#endif // FP32
+
+//THESE ARE TO BE REMOVED
+#define def_Nx 2u
+#define def_Ny 2u
+#define def_Nz 2u
+#define def_N 2ul
+
+#define def_Dx 1u
+#define def_Dy 1u
+#define def_Dz 1u
+
+#define def_Ox 1 // offsets are signed integer!
+#define def_Oy 1
+#define def_Oz 1
+
+#define def_Ax 1u
+#define def_Ay 1u
+#define def_Az 1u
+
+#define def_domain_offset_x 0.0f
+#define def_domain_offset_y 0.0f
+#define def_domain_offset_z 0.0f
+
+#define D "D2Q9" // D2Q9/D3Q15/D3Q19/D3Q27
+#define def_velocity_set 9u // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
+#define def_dimensions 2u // number spatial dimensions (2D or 3D)
+#define def_transfers 3u // number of DDFs that are transferred between multiple domains
+
+#define def_c 0.57735027f // lattice speed of sound c = 1/sqrt(3)*dt
+#define def_w 2.0f // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+#define def_w0 (1.0f/2.25f)
+#define def_ws (1.0f/9.0f)
+#define def_we (1.0f/36.0f)
+
+#define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
+#define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
+#define TYPE_T 0x04 // 0b00000100 // temperature boundary
+#define TYPE_F 0x08 // 0b00001000 // fluid
+#define TYPE_I 0x10 // 0b00010000 // interface
+#define TYPE_G 0x20 // 0b00100000 // gas
+#define TYPE_X 0x40 // 0b01000000 // reserved type X
+#define TYPE_Y 0x80 // 0b10000000 // reserved type Y
+#define TYPE_MS 0x03 // 0b00000011 // cell next to moving solid boundary
+#define TYPE_BO 0x03 // 0b00000011 // any flag bit used for boundaries (temperature excluded)
+#define TYPE_IF 0x18 // 0b00011000 // change from interface to fluid
+#define TYPE_IG 0x30 // 0b00110000 // change from interface to gas
+#define TYPE_GI 0x38 // 0b00111000 // change from gas to interface
+#define TYPE_SU 0x38 // 0b00111000 // any flag bit used for SURFACE
+
+#define EndDefines%
 
 uint3 coordinates(const uint n) { // disassemble 1D index to 3D coordinates (n -> x,y,z)
 	const uint t = n%(def_Nx*def_Ny);
@@ -102,13 +104,52 @@ void calculate_f_eq(const float rho, float ux, float uy, float uz, float* feq) {
     uy *= 3.0f;
     uz *= 3.0f;
     feq[ 0] = def_w0*fma(rho, 0.5f*c3, rhom1); // 000 (identical for all velocity sets)
-    //if defined d2q9
+    #if defined(D2Q9)
     const float u0=ux+uy, u1=ux-uy; // these pre-calculations make manual unrolling require less FLOPs
     const float rhos=def_ws*rho, rhoe=def_we*rho, rhom1s=def_ws*rhom1, rhom1e=def_we*rhom1;
     feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
     feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
     feq[ 5] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), u0), rhom1e); feq[ 6] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), -u0), rhom1e); // ++0 --0
     feq[ 7] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), u1), rhom1e); feq[ 8] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), -u1), rhom1e); // +-0 -+0
+    #elif defined(D3Q15)
+    const float u0=ux+uy+uz, u1=ux+uy-uz, u2=ux-uy+uz, u3=-ux+uy+uz;
+    const float rhos=def_ws*rho, rhoc=def_wc*rho, rhom1s=def_ws*rhom1, rhom1c=def_wc*rhom1;
+    feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
+    feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
+    feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
+    feq[ 7] = fma(rhoc, fma(0.5f, fma(u0, u0, c3), u0), rhom1c); feq[ 8] = fma(rhoc, fma(0.5f, fma(u0, u0, c3), -u0), rhom1c); // +++ ---
+    feq[ 9] = fma(rhoc, fma(0.5f, fma(u1, u1, c3), u1), rhom1c); feq[10] = fma(rhoc, fma(0.5f, fma(u1, u1, c3), -u1), rhom1c); // ++- --+
+    feq[11] = fma(rhoc, fma(0.5f, fma(u2, u2, c3), u2), rhom1c); feq[12] = fma(rhoc, fma(0.5f, fma(u2, u2, c3), -u2), rhom1c); // +-+ -+-
+    feq[13] = fma(rhoc, fma(0.5f, fma(u3, u3, c3), u3), rhom1c); feq[14] = fma(rhoc, fma(0.5f, fma(u3, u3, c3), -u3), rhom1c); // -++ +--
+    #elif defined(D3Q19)
+    const float u0=ux+uy, u1=ux+uz, u2=uy+uz, u3=ux-uy, u4=ux-uz, u5=uy-uz;
+    const float rhos=def_ws*rho, rhoe=def_we*rho, rhom1s=def_ws*rhom1, rhom1e=def_we*rhom1;
+    feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
+    feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
+    feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
+    feq[ 7] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), u0), rhom1e); feq[ 8] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), -u0), rhom1e); // ++0 --0
+    feq[ 9] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), u1), rhom1e); feq[10] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), -u1), rhom1e); // +0+ -0-
+    feq[11] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), u2), rhom1e); feq[12] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), -u2), rhom1e); // 0++ 0--
+    feq[13] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), u3), rhom1e); feq[14] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), -u3), rhom1e); // +-0 -+0
+    feq[15] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), u4), rhom1e); feq[16] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), -u4), rhom1e); // +0- -0+
+    feq[17] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), u5), rhom1e); feq[18] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), -u5), rhom1e); // 0+- 0-+
+    #elif defined(D3Q27)
+    const float u0=ux+uy, u1=ux+uz, u2=uy+uz, u3=ux-uy, u4=ux-uz, u5=uy-uz, u6=ux+uy+uz, u7=ux+uy-uz, u8=ux-uy+uz, u9=-ux+uy+uz;
+    const float rhos=def_ws*rho, rhoe=def_we*rho, rhoc=def_wc*rho, rhom1s=def_ws*rhom1, rhom1e=def_we*rhom1, rhom1c=def_wc*rhom1;
+    feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
+    feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
+    feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
+    feq[ 7] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), u0), rhom1e); feq[ 8] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), -u0), rhom1e); // ++0 --0
+    feq[ 9] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), u1), rhom1e); feq[10] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), -u1), rhom1e); // +0+ -0-
+    feq[11] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), u2), rhom1e); feq[12] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), -u2), rhom1e); // 0++ 0--
+    feq[13] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), u3), rhom1e); feq[14] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), -u3), rhom1e); // +-0 -+0
+    feq[15] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), u4), rhom1e); feq[16] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), -u4), rhom1e); // +0- -0+
+    feq[17] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), u5), rhom1e); feq[18] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), -u5), rhom1e); // 0+- 0-+
+    feq[19] = fma(rhoc, fma(0.5f, fma(u6, u6, c3), u6), rhom1c); feq[20] = fma(rhoc, fma(0.5f, fma(u6, u6, c3), -u6), rhom1c); // +++ ---
+    feq[21] = fma(rhoc, fma(0.5f, fma(u7, u7, c3), u7), rhom1c); feq[22] = fma(rhoc, fma(0.5f, fma(u7, u7, c3), -u7), rhom1c); // ++- --+
+    feq[23] = fma(rhoc, fma(0.5f, fma(u8, u8, c3), u8), rhom1c); feq[24] = fma(rhoc, fma(0.5f, fma(u8, u8, c3), -u8), rhom1c); // +-+ -+-
+    feq[25] = fma(rhoc, fma(0.5f, fma(u9, u9, c3), u9), rhom1c); feq[26] = fma(rhoc, fma(0.5f, fma(u9, u9, c3), -u9), rhom1c); // -++ +--
+    #endif
 }
 
 void calculate_indices(const uint n, uint* x0, uint* xp, uint* xm, uint* y0, uint* yp, uint* ym, uint* z0, uint* zp, uint* zm) {
@@ -128,12 +169,45 @@ void neighbors(const uint n, uint* j) {
     uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
     calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
     j[0] = n;
-    //TODO: if defined d2q9
+    #if defined(D2Q9)
     j[ 1] = xp+y0; j[ 2] = xm+y0; // +00 -00
     j[ 3] = x0+yp; j[ 4] = x0+ym; // 0+0 0-0
     j[ 5] = xp+yp; j[ 6] = xm+ym; // ++0 --0
     j[ 7] = xp+ym; j[ 8] = xm+yp; // +-0 -+0
-}
+    #elif defined(D3Q15)
+    j[ 1] = xp+y0+z0; j[ 2] = xm+y0+z0; // +00 -00
+    j[ 3] = x0+yp+z0; j[ 4] = x0+ym+z0; // 0+0 0-0
+    j[ 5] = x0+y0+zp; j[ 6] = x0+y0+zm; // 00+ 00-
+    j[ 7] = xp+yp+zp; j[ 8] = xm+ym+zm; // +++ ---
+    j[ 9] = xp+yp+zm; j[10] = xm+ym+zp; // ++- --+
+    j[11] = xp+ym+zp; j[12] = xm+yp+zm; // +-+ -+-
+    j[13] = xm+yp+zp; j[14] = xp+ym+zm; // -++ +--
+    #elif defined(D3Q19)
+    j[ 1] = xp+y0+z0; j[ 2] = xm+y0+z0; // +00 -00
+    j[ 3] = x0+yp+z0; j[ 4] = x0+ym+z0; // 0+0 0-0
+    j[ 5] = x0+y0+zp; j[ 6] = x0+y0+zm; // 00+ 00-
+    j[ 7] = xp+yp+z0; j[ 8] = xm+ym+z0; // ++0 --0
+    j[ 9] = xp+y0+zp; j[10] = xm+y0+zm; // +0+ -0-
+    j[11] = x0+yp+zp; j[12] = x0+ym+zm; // 0++ 0--
+    j[13] = xp+ym+z0; j[14] = xm+yp+z0; // +-0 -+0
+    j[15] = xp+y0+zm; j[16] = xm+y0+zp; // +0- -0+
+    j[17] = x0+yp+zm; j[18] = x0+ym+zp; // 0+- 0-+
+    #elif defined(D3Q27)
+    j[ 1] = xp+y0+z0; j[ 2] = xm+y0+z0; // +00 -00
+    j[ 3] = x0+yp+z0; j[ 4] = x0+ym+z0; // 0+0 0-0
+    j[ 5] = x0+y0+zp; j[ 6] = x0+y0+zm; // 00+ 00-
+    j[ 7] = xp+yp+z0; j[ 8] = xm+ym+z0; // ++0 --0
+    j[ 9] = xp+y0+zp; j[10] = xm+y0+zm; // +0+ -0-
+    j[11] = x0+yp+zp; j[12] = x0+ym+zm; // 0++ 0--
+    j[13] = xp+ym+z0; j[14] = xm+yp+z0; // +-0 -+0
+    j[15] = xp+y0+zm; j[16] = xm+y0+zp; // +0- -0+
+    j[17] = x0+yp+zm; j[18] = x0+ym+zp; // 0+- 0-+
+    j[19] = xp+yp+zp; j[20] = xm+ym+zm; // +++ ---
+    j[21] = xp+yp+zm; j[22] = xm+ym+zp; // ++- --+
+    j[23] = xp+ym+zp; j[24] = xm+yp+zm; // +-+ -+-
+    j[25] = xm+yp+zp; j[26] = xp+ym+zm; // -++ +--
+    #endif
+} //neighbors
 
 __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx

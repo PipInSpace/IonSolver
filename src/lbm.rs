@@ -178,7 +178,7 @@ impl Lbm {
         lbm
     }
 
-    fn initialize(&mut self) {
+    pub fn initialize(&mut self) {
         for d in 0..self.get_domain_numbers() {
             // the communicate calls at initialization need an odd time step
             self.domains[d].increment_timestep(1);
@@ -198,7 +198,7 @@ impl Lbm {
         self.initialized = true;
     }
 
-    pub fn run(mut self, steps: u64) {
+    pub fn run(&mut self, steps: u64) {
         //Run simulation for steps
         //TODO: Display info in command line
         if !self.initialized {
@@ -261,7 +261,7 @@ pub struct LbmDomain {
     fx: f32,
     fy: f32,
     fz: f32,
-    sigma: f32,
+    sigma: f32, //surface tension coefficient
     alpha: f32,
     beta: f32,
 

@@ -26,8 +26,8 @@ pub fn simloop(
     lbm_config.n_x = 1024;
     lbm_config.n_y = 1024;
     lbm_config.n_z = 512;
-    let test_lbm = Lbm::init(lbm_config);
-    test_lbm.run(20);
+    let mut test_lbm = Lbm::init(lbm_config);
+    test_lbm.initialize();
 
     loop {
         //This is the master loop, cannot be paused
@@ -44,10 +44,9 @@ pub fn simloop(
                 }
 
                 //Simulation commences here
+                test_lbm.do_time_step();
 
-                if i % 1000 == 0 {
-                    println!("Step {}", i);
-                }
+                if i % 1 == 0 {println!("Step {}", i);}
 
                 i += 1;
             }

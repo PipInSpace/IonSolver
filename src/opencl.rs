@@ -52,7 +52,8 @@ pub fn get_devices() -> Vec<Device> {
 }
 
 pub fn get_opencl_code() -> String {
-    return include_str!("kernels.cl").to_string(); //TODO Kernel needs to be preproccessed first
+    let string: Vec<&str> = include_str!("kernels.cl").split("EndDefines%").collect();
+    return string[1].to_string(); // Removes embedded default defines needed for syntax highlighting etc.
 }
 
 fn get_tflops(device: Device) -> i32 {
