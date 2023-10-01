@@ -1,5 +1,5 @@
 use crate::*;
-use ocl::Device;
+use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -23,6 +23,13 @@ pub enum FloatType {
     FP16S,
     FP16C,
     FP32,
+}
+
+#[allow(dead_code)]
+#[derive(Clone)]
+pub enum VariableFloatBuffer {
+    U16(Buffer<u16>),
+    F32(Buffer<f32>),
 }
 
 // ############################################# Code Structure #############################################
@@ -129,7 +136,16 @@ impl Lbm {
             let y = (d % (lbm_config.d_x * lbm_config.d_y)) / lbm_config.d_x;
             let z = d / (lbm_config.d_x * lbm_config.d_y);
             //Get devices
-            lbm_domains.push(LbmDomain::init(lbm_config, device_infos[d as usize], h_x, h_y, h_z, x, y, z))
+            lbm_domains.push(LbmDomain::init(
+                lbm_config,
+                device_infos[d as usize],
+                h_x,
+                h_y,
+                h_z,
+                x,
+                y,
+                z,
+            ))
         }
 
         let lbm = Lbm {
@@ -159,7 +175,10 @@ impl Lbm {
 
 #[derive(Clone)]
 pub struct LbmDomain {
-    device_info: Device, //TODO: Compiles OpenCL C code
+    device: Device, //FluidX3D creates contexts/queues/programs for each device automatically through another struct
+    context: Context,
+    program: Program,
+    queue: Queue,
     lbm_config: LbmConfig,
     ocl_code: String,
 
@@ -190,6 +209,11 @@ pub struct LbmDomain {
     dimensions: u8,
     velocity_set: u8,
     transfers: u8,
+
+    fi: VariableFloatBuffer,
+    rho: Buffer<f32>,
+    u: Buffer<f32>,
+    flags: Buffer<u8>,
 }
 
 impl LbmDomain {
@@ -204,9 +228,48 @@ impl LbmDomain {
         z: u32,
     ) -> LbmDomain {
         let lbm_domain_velocity_set = LbmDomain::from_velocity_set(lbm_config.velocity_set);
+        // OCL variables are directly exposed, due to no other device struct.
+        let platform = Platform::default();
+        let context = Context::builder().devices(device.clone()).build().unwrap();
+        let queue = Queue::new(&context, device, None).unwrap();
+        let program = Program::builder()
+            .devices(device)
+            .src("")
+            .build(&context)
+            .unwrap();
+
+        let fi = match lbm_config.float_type {
+            FloatType::FP16S => VariableFloatBuffer::U16(
+                Buffer::<u16>::builder()
+                    .queue(queue.clone())
+                    .len(1)
+                    .fill_val(0u16)
+                    .build()
+                    .unwrap(),
+            ),
+            FloatType::FP16C => VariableFloatBuffer::U16(
+                Buffer::<u16>::builder()
+                    .queue(queue.clone())
+                    .len(1)
+                    .fill_val(0u16)
+                    .build()
+                    .unwrap(),
+            ),
+            FloatType::FP32 => VariableFloatBuffer::F32(
+                Buffer::<f32>::builder()
+                    .queue(queue.clone())
+                    .len(1)
+                    .fill_val(0.0f32)
+                    .build()
+                    .unwrap(),
+            ),
+        };
 
         let mut domain = LbmDomain {
-            device_info: device,
+            device,
+            context,
+            queue,
+            program,
             ocl_code: String::new(),
             lbm_config,
 
@@ -237,15 +300,115 @@ impl LbmDomain {
             dimensions: lbm_domain_velocity_set.dimensions,
             velocity_set: lbm_domain_velocity_set.velocity_set,
             transfers: lbm_domain_velocity_set.transfers, //Completes ONLY velocity set values, check for other completions
+
+            fi,
+            rho: todo!(),
+            u: todo!(),
+            flags: todo!(),
         };
         let ocl_code = domain.clone().get_device_defines() + &LbmDomain::get_opencl_code();
         domain.ocl_code = ocl_code;
+        domain.allocate(domain.device);
         domain //Returns initialised domain
     }
 
+    fn allocate(mut self, device: Device) {
+        let n = self.clone().get_n();
+        //TODO: n is too big for buffer allocation.
+        let fi = match self.lbm_config.float_type {
+            FloatType::FP16S => VariableFloatBuffer::U16(
+                Buffer::<u16>::builder()
+                    .queue(self.queue.clone())
+                    .len(n as u32 * self.velocity_set as u32)
+                    .fill_val(0u16)
+                    .flags(flags::MEM_READ_WRITE)
+                    .build()
+                    .unwrap(),
+            ),
+            FloatType::FP16C => VariableFloatBuffer::U16(
+                Buffer::<u16>::builder()
+                    .queue(self.queue.clone())
+                    .len(n as u32 * self.velocity_set as u32)
+                    .fill_val(0u16)
+                    .flags(flags::MEM_READ_WRITE)
+                    .build()
+                    .unwrap(),
+            ),
+            FloatType::FP32 => VariableFloatBuffer::F32(
+                Buffer::<f32>::builder()
+                    .queue(self.queue.clone())
+                    .len(n as u32 * self.velocity_set as u32)
+                    .fill_val(0.0f32)
+                    .flags(flags::MEM_READ_WRITE)
+                    .build()
+                    .unwrap(),
+            ),
+        };
+        let rho = Buffer::<f32>::builder()
+            .queue(self.queue.clone())
+            .len(n as u32)
+            .fill_val(1.0f32)
+            .flags(flags::MEM_READ_WRITE)
+            .build()
+            .unwrap();
+        let u = Buffer::<f32>::builder()
+            .queue(self.queue.clone())
+            .len(n as u32 * 3)
+            .fill_val(0.0f32)
+            .flags(flags::MEM_READ_WRITE)
+            .build()
+            .unwrap();
+        let flags = Buffer::<u8>::builder()
+            .queue(self.queue.clone())
+            .len(n as u32)
+            .flags(flags::MEM_READ_WRITE)
+            .build()
+            .unwrap();
+        self.fi = fi;
+        self.rho = rho;
+        self.u = u;
+        self.flags = flags;
+
+        let program = Program::builder()
+            .devices(self.device)
+            .src(self.ocl_code)
+            .build(&self.context)
+            .unwrap();
+        self.program = program;
+        
+        let kernel_initialize = Kernel::builder()
+            .program(&self.program)
+            .name("initialize")
+            .queue(self.queue.clone())
+            .global_work_size(n as u32)
+            .build()
+            .unwrap(); //TODO set arguments
+    }
+
     fn get_default_domain() -> LbmDomain {
+        let device = opencl::get_devices()[0];
+        let platform = Platform::default();
+        let context = Context::builder().devices(device.clone()).build().unwrap();
+        let queue = Queue::new(&context, device, None).unwrap();
+        let program = Program::builder()
+            .devices(device)
+            .src("")
+            .build(&context)
+            .unwrap();
+        let fi = VariableFloatBuffer::U16(
+            Buffer::<u16>::builder()
+                .queue(queue.clone())
+                .len(1)
+                .fill_val(0u16)
+                .build()
+                .unwrap(),
+        );
+
         LbmDomain {
-            device_info: opencl::get_devices()[0],
+            device: opencl::get_devices()[0],
+            context,
+            queue,
+            program,
             ocl_code: String::new(),
             lbm_config: LbmConfig::new(),
             n_x: 1,
@@ -272,6 +435,11 @@ impl LbmDomain {
             dimensions: 0,
             velocity_set: 0,
             transfers: 0,
+
+            fi,
+            rho: todo!(),
+            u: todo!(),
+            flags: todo!(),
         }
     }
 
@@ -384,6 +552,8 @@ impl LbmDomain {
         + if self.lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""};
         //Extensions
     }
+
+    fn enque_initialize() {}
 
     fn get_n(self) -> u64 {
         self.n_x as u64 * self.n_y as u64 * self.n_z as u64

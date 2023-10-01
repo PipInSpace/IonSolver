@@ -1,7 +1,6 @@
 extern crate ocl;
 use crate::lbm::*;
 use crate::*;
-use lbm::VelocitySet;
 use ocl::ProQue;
 use std::sync::mpsc;
 

@@ -1,5 +1,5 @@
 // OpenCL functions
-use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
+use ocl::{Device, Platform};
 
 pub fn device_selection(domains: u32) -> Vec<Device> {
     let devices = get_devices();
