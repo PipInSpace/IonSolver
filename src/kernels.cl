@@ -52,7 +52,10 @@
 #define TYPE_GI 0x38 // 0b00111000 // change from gas to interface
 #define TYPE_SU 0x38 // 0b00111000 // any flag bit used for SURFACE
 
-#define EndDefines%
+#define EQUILIBRIUM_BOUNDARIES
+
+//These defines are for code completion only and are removed from the code before compilation 
+#define EndTempDefines%
 
 uint3 coordinates(const uint n) { // disassemble 1D index to 3D coordinates (n -> x,y,z)
 	const uint t = n%(def_Nx*def_Ny);
@@ -96,7 +99,28 @@ void calculate_rho_u(const float* f, float* rhon, float* uxn, float* uyn, float*
     float rho=f[0], ux, uy, uz;
     for(uint i=1u; i<def_velocity_set; i++) rho += f[i]; // calculate density from fi
     rho += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fi (perturbation method / DDF-shifting)
-}
+    #if defined(D2Q9)
+    ux = f[1]-f[2]+f[5]-f[6]+f[7]-f[8]; // calculate velocity from fi (alternating + and - for best accuracy)
+    uy = f[3]-f[4]+f[5]-f[6]+f[8]-f[7];
+    uz = 0.0f;
+    #elif defined(D3Q15)
+    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[11]-f[12]+f[14]-f[13]; // calculate velocity from fi (alternating + and - for best accuracy)
+    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[12]-f[11]+f[13]-f[14];
+    uz = f[ 5]-f[ 6]+f[ 7]-f[ 8]+f[10]-f[ 9]+f[11]-f[12]+f[13]-f[14];
+    #elif defined(D3Q19)
+    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[13]-f[14]+f[15]-f[16]; // calculate velocity from fi (alternating + and - for best accuracy)
+    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[11]-f[12]+f[14]-f[13]+f[17]-f[18];
+    uz = f[ 5]-f[ 6]+f[ 9]-f[10]+f[11]-f[12]+f[16]-f[15]+f[18]-f[17];
+    #elif defined(D3Q27)
+    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[13]-f[14]+f[15]-f[16]+f[19]-f[20]+f[21]-f[22]+f[23]-f[24]+f[26]-f[25]; // calculate velocity from fi (alternating + and - for best accuracy)
+    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[11]-f[12]+f[14]-f[13]+f[17]-f[18]+f[19]-f[20]+f[21]-f[22]+f[24]-f[23]+f[25]-f[26];
+    uz = f[ 5]-f[ 6]+f[ 9]-f[10]+f[11]-f[12]+f[16]-f[15]+f[18]-f[17]+f[19]-f[20]+f[22]-f[21]+f[23]-f[24]+f[25]-f[26];
+    #endif
+    *rhon = rho;
+    *uxn = ux/rho;
+    *uyn = uy/rho;
+    *uzn = uz/rho;
+} // calculate_rho_u
 
 void calculate_f_eq(const float rho, float ux, float uy, float uz, float* feq) {
     const float c3=-3.0f*(sq(ux)+sq(uy)+sq(uz)), rhom1=rho-1.0f; // c3 = -2*sq(u)/(2*sq(c)), rhom1 is arithmetic optimization to minimize digit extinction
@@ -223,7 +247,19 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     load_f(n, fhn, fi, j, t); // perform streaming (part 2)
 
     float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
+
+    #ifndef EQUILIBRIUM_BOUNDARIES // EQUILIBRIUM_BOUNDARIES
     calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
+    #else
+    if(flagsn_bo==TYPE_E) {
+    	rhon = rho[               n]; // apply preset velocity/density
+    	uxn  = u[                 n];
+    	uyn  = u[    def_N+(ulong)n];
+    	uzn  = u[2ul*def_N+(ulong)n];
+    } else {
+    	calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
+    }
+    #endif // EQUILIBRIUM_BOUNDARIES
 
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
     float Fin[def_velocity_set]; // forcing terms
@@ -237,9 +273,32 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     calculate_f_eq(rhon, uxn, uyn, uzn, feq); // calculate equilibrium DDFs
     float w = def_w; // LBM relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
 
-    #if defined(SRT)
-        for(uint i=0u; i<def_velocity_set; i++) fhn[i] = fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
-    #endif
+    #if defined(SRT) // SRT
+        #ifndef EQUILIBRIUM_BOUNDARIES
+            for(uint i=0u; i<def_velocity_set; i++) fhn[i] = fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
+        #else
+            for(uint i=0u; i<def_velocity_set; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
+        #endif // EQUILIBRIUM_BOUNDARIES
+    #elif defined(TRT) // TRT
+        const float wp = w; // TRT: inverse of "+" relaxation time
+        const float wm = 1.0f/(0.1875f/(1.0f/w-0.5f)+0.5f); // TRT: inverse of "-" relaxation time wm = 1.0f/(0.1875f/(3.0f*nu)+0.5f), nu = (1.0f/w-0.5f)/3.0f;
+
+        float fhb[def_velocity_set]; // fhn in inverse directions
+        float feb[def_velocity_set]; // feq in inverse directions
+        fhb[0] = fhn[0];
+        feb[0] = feq[0];
+        for(uint i=1u; i<def_velocity_set; i+=2u) {
+        	fhb[i   ] = fhn[i+1u];
+        	fhb[i+1u] = fhn[i   ];
+        	feb[i   ] = feq[i+1u];
+        	feb[i+1u] = feq[i   ];
+        }
+        #ifndef EQUILIBRIUM_BOUNDARIES
+            for(uint i=0u; i<def_velocity_set; i++) fhn[i] = fma(0.5f*wp, feq[i]-fhn[i]+feb[i]-fhb[i], fma(0.5f*wm, feq[i]-feb[i]-fhn[i]+fhb[i], fhn[i]+Fin[i])); // perform collision (TRT)
+        #else // EQUILIBRIUM_BOUNDARIES
+            for(uint i=0u; i<def_velocity_set; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(0.5f*wp, feq[i]-fhn[i]+feb[i]-fhb[i], fma(0.5f*wm, feq[i]-feb[i]-fhn[i]+fhb[i], fhn[i]+Fin[i])); // perform collision (TRT)
+        #endif // EQUILIBRIUM_BOUNDARIES
+    #endif // TRT
 
     store_f(n, fhn, fi, j, t); // perform streaming (part 1)
 } // stream_collide()

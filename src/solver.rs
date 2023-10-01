@@ -13,7 +13,7 @@ pub fn simloop(
     //TODO: Simulation here
     //sim_tx.send(sim) sends data to the main window loop
     let mut state = SimControlTx {
-        paused: true,
+        paused: false,
         save: false,
         active: true,
     };
@@ -24,8 +24,9 @@ pub fn simloop(
 
     let mut lbm_config = LbmConfig::new();
     lbm_config.n_x = 1024;
-    lbm_config.n_y = 1024;
+    lbm_config.n_y = 512;
     lbm_config.n_z = 512;
+    lbm_config.ext_equilibrium_boudaries = true;
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.initialize();
 
