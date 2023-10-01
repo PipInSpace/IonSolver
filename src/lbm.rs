@@ -1,5 +1,5 @@
 use crate::*;
-use ocl::{flags, Buffer, Context, Device, Kernel, Platform, ProQue, Program, Queue};
+use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -61,29 +61,29 @@ pub enum VariableFloatBuffer {
 
 #[derive(Clone, Copy, Default)]
 pub struct LbmConfig {
-    velocity_set: VelocitySet,
-    relaxation_time: RelaxationTime,
-    float_type: FloatType,
-    n_x: u32, //Size
-    n_y: u32,
-    n_z: u32,
+    pub velocity_set: VelocitySet,
+    pub relaxation_time: RelaxationTime,
+    pub float_type: FloatType,
+    pub n_x: u32, //Size
+    pub n_y: u32,
+    pub n_z: u32,
 
-    d_x: u32, //Domains
-    d_y: u32,
-    d_z: u32,
+    pub d_x: u32, //Domains
+    pub d_y: u32,
+    pub d_z: u32,
 
-    nu: f32,
-    fx: f32,
-    fy: f32,
-    fz: f32,
-    sigma: f32,
-    alpha: f32,
-    beta: f32,
+    pub nu: f32,
+    pub fx: f32,
+    pub fy: f32,
+    pub fz: f32,
+    pub sigma: f32,
+    pub alpha: f32,
+    pub beta: f32,
 
-    particles_n: u32,
-    particles_rho: f32,
+    pub particles_n: u32,
+    pub particles_rho: f32,
 
-    ext_equilibrium_boudaries: bool, //Extensions
+    pub ext_equilibrium_boudaries: bool, //Extensions
 }
 
 impl LbmConfig {
@@ -366,7 +366,7 @@ impl LbmDomain {
             FloatType::FP16S => VariableFloatBuffer::U16(
                 Buffer::<u16>::builder()
                     .queue(queue.clone())
-                    .len(1)
+                    .len([n_x, n_y, n_z])
                     .fill_val(0u16)
                     .build()
                     .unwrap(),
@@ -374,7 +374,7 @@ impl LbmDomain {
             FloatType::FP16C => VariableFloatBuffer::U16(
                 Buffer::<u16>::builder()
                     .queue(queue.clone())
-                    .len(1)
+                    .len([n_x, n_y, n_z])
                     .fill_val(0u16)
                     .build()
                     .unwrap(),
@@ -382,7 +382,7 @@ impl LbmDomain {
             FloatType::FP32 => VariableFloatBuffer::F32(
                 Buffer::<f32>::builder()
                     .queue(queue.clone())
-                    .len(1)
+                    .len([n_x, n_y, n_z])
                     .fill_val(0.0f32)
                     .build()
                     .unwrap(),
@@ -390,21 +390,21 @@ impl LbmDomain {
         };
         let rho = Buffer::<f32>::builder()
             .queue(queue.clone())
-            .len(n as u32)
+            .len([n_x, n_y, n_z])
             .fill_val(1.0f32)
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
         let u = Buffer::<f32>::builder()
             .queue(queue.clone())
-            .len(n as u32 * 3)
+            .len([n_x*3, n_y, n_z])
             .fill_val(0.0f32)
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
         let flags = Buffer::<u8>::builder()
             .queue(queue.clone())
-            .len(n as u32)
+            .len([n_x, n_y, n_z])
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
@@ -418,7 +418,7 @@ impl LbmDomain {
                     .program(&program)
                     .name("initialize")
                     .queue(queue.clone())
-                    .global_work_size(n as u32)
+                    .global_work_size([n_x, n_y, n_z])
                     .arg_named("fi", fi_u16)
                     .arg_named("rho", rho.clone())
                     .arg_named("u", u.clone())
@@ -431,7 +431,7 @@ impl LbmDomain {
                     .program(&program)
                     .name("initialize")
                     .queue(queue.clone())
-                    .global_work_size(n as u32)
+                    .global_work_size([n_x, n_y, n_z])
                     .arg_named("fi", fi_f32)
                     .arg_named("rho", rho.clone())
                     .arg_named("u", u.clone())
@@ -448,7 +448,7 @@ impl LbmDomain {
                     .program(&program)
                     .name("stream_collide")
                     .queue(queue.clone())
-                    .global_work_size(n as u32)
+                    .global_work_size([n_x, n_y, n_z])
                     .arg_named("fi", fi_u16)
                     .arg_named("rho", rho.clone())
                     .arg_named("u", u.clone())
@@ -465,7 +465,7 @@ impl LbmDomain {
                     .program(&program)
                     .name("stream_collide")
                     .queue(queue.clone())
-                    .global_work_size(n as u32)
+                    .global_work_size([n_x, n_y, n_z])
                     .arg_named("fi", fi_f32)
                     .arg_named("rho", rho.clone())
                     .arg_named("u", u.clone())

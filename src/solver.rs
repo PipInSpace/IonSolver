@@ -22,9 +22,12 @@ pub fn simloop(
     //OpenCL Test function
     //test_function().unwrap();
 
-    let lbm_config = LbmConfig::new();
+    let mut lbm_config = LbmConfig::new();
+    lbm_config.n_x = 1024;
+    lbm_config.n_y = 1024;
+    lbm_config.n_z = 512;
     let test_lbm = Lbm::init(lbm_config);
-    test_lbm.run(200);
+    test_lbm.run(20);
 
     loop {
         //This is the master loop, cannot be paused
