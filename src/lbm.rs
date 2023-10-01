@@ -1,5 +1,5 @@
 use crate::*;
-use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue};
+use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue, ProQue};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -149,11 +149,11 @@ impl Lbm {
 
         let mut lbm_domains: Vec<LbmDomain> = Vec::new();
         for d in 0..domain_numbers {
-            println!("Initializing domain {}/{}", d, domain_numbers);
+            println!("Initializing domain {}/{}", d+1, domain_numbers);
             let x = (d % (lbm_config.d_x * lbm_config.d_y)) % lbm_config.d_x;
             let y = (d % (lbm_config.d_x * lbm_config.d_y)) / lbm_config.d_x;
             let z = d / (lbm_config.d_x * lbm_config.d_y);
-            println!("Using device {} for domain {}", device_infos[d as usize].name().unwrap(), d);
+            println!("Using device {} for domain {}", device_infos[d as usize].name().unwrap(), d+1);
             lbm_domains.push(LbmDomain::init(
                 lbm_config,
                 device_infos[d as usize],
@@ -174,11 +174,26 @@ impl Lbm {
         lbm
     }
 
-    fn initialize(self) {
-        //for d in 0..self.get_domain_numbers() {self.domains[d]}
+    fn initialize(&mut self) {
+        for d in 0..self.get_domain_numbers() {// the communicate calls at initialization need an odd time step
+            self.domains[d].increment_timestep(1);
+        }
+        //communicate_rho_u_flags
+        for d in 0..self.get_domain_numbers() {
+            self.domains[d].enqueue_initialize().unwrap();
+        }
+        //communicate_rho_u_flags
+        //communicate_fi
+        for d in 0..self.get_domain_numbers() {
+            self.domains[d].queue.finish().unwrap();
+        }
+        for d in 0..self.get_domain_numbers() {
+            self.domains[d].reset_timestep();
+        }
+        self.initialized = true;
     }
 
-    pub fn run(self, steps: u64) {
+    pub fn run(mut self, steps: u64) {
         //Run simulation for steps
         //TODO: Display info in command line
         if !self.initialized {
@@ -186,6 +201,21 @@ impl Lbm {
             self.initialize();
             //TODO: Display initialization info in comman line
         }
+        for i in 0..steps {
+            println!("Step {}", i);
+            self.do_time_step();
+        }
+    }
+
+    pub fn do_time_step(&mut self) {// call kernel stream_collide to perform one LBM time step
+        for d in 0..self.get_domain_numbers() {self.domains[d].enqueue_stream_collide().unwrap();}
+        //communicate_fi
+        for d in 0..self.get_domain_numbers() {self.domains[d].queue.finish().unwrap();}
+        for d in 0..self.get_domain_numbers() {self.domains[d].increment_timestep(1);}
+    }
+
+    fn get_domain_numbers(&self) -> usize {
+        self.domains.len()
     }
 
     //Helper functions:
@@ -230,6 +260,7 @@ pub struct LbmDomain {
     rho: Buffer<f32>,
     u: Buffer<f32>,
     flags: Buffer<u8>,
+    t: u64,
 }
 
 impl LbmDomain {
@@ -306,6 +337,7 @@ impl LbmDomain {
         let platform = Platform::default();
         let context = Context::builder().platform(platform).devices(device.clone()).build().unwrap();
         let queue = Queue::new(&context, device, None).unwrap();
+        println!("Compiling Program...");
         let program = Program::builder()
             .devices(device)
             .src(ocl_code.clone())
@@ -506,6 +538,7 @@ impl LbmDomain {
             rho,
             u,
             flags,
+            t,
         };
         domain //Returns initialised domain
     }
@@ -615,16 +648,31 @@ impl LbmDomain {
         //Extensions
     }
 
-    fn enque_initialize() {}
+    fn enqueue_initialize(&self) -> ocl::Result<()> { //Enqueues Initialization kernel, arguments are already set
+        unsafe { 
+            self.kernel_initialize.cmd().queue(&self.queue).global_work_size(self.n_x * self.n_y * self.n_z).enq()
+        }
+    }
+
+    fn enqueue_stream_collide(&self) -> ocl::Result<()> { //Enqueues Initialization kernel, arguments are already set
+        unsafe { 
+            self.kernel_stream_collide.set_arg("t", self.t)?;
+            self.kernel_stream_collide.set_arg("fx", self.fx)?;
+            self.kernel_stream_collide.set_arg("fy", self.fy)?;
+            self.kernel_stream_collide.set_arg("fz", self.fz)?;
+            self.kernel_stream_collide.cmd().queue(&self.queue).global_work_size(self.n_x * self.n_y * self.n_z).enq()
+        }
+    }
+
+    fn increment_timestep(&mut self, steps: u32) {
+        self.t += steps as u64;
+    }
+
+    fn reset_timestep(&mut self) {
+        self.t = 0;
+    }
 
     fn get_n(n_x: u32, n_y: u32, n_z: u32) -> u64 {
         n_x as u64 * n_y as u64 * n_z as u64
     }
-}
-
-fn get_tau() -> f32 {
-    3.0f32 * get_nu() + 0.5f32
-}
-fn get_nu() -> f32 {
-    1.0f32 / 6.0f32
 }

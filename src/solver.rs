@@ -20,10 +20,11 @@ pub fn simloop(
     let mut i = 0;
 
     //OpenCL Test function
-    test_function().unwrap();
+    //test_function().unwrap();
 
     let lbm_config = LbmConfig::new();
     let test_lbm = Lbm::init(lbm_config);
+    test_lbm.run(200);
 
     //OpenCL setup
     let src = include_str!("kernels.cl");

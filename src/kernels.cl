@@ -49,75 +49,6 @@
 #define TYPE_GI 0x38 // 0b00111000 // change from gas to interface
 #define TYPE_SU 0x38 // 0b00111000 // any flag bit used for SURFACE
 
-
-
-__kernel void add(__global float* buffer, float scalar) {
-    uint index = get_global_id(0) + (get_global_id(1) * get_global_size(1));
-    buffer[index] += scalar;
-}
-
-__kernel void addtwo(__global float* buffer, float scalar) {
-    uint index = get_global_id(0) + (get_global_id(1) * get_global_size(1));
-    buffer[index] += scalar;
-}
-
-__kernel void gauss_seidel_step(__global float* buffer_new, __global float* buffer_old, float factor_a, float factor_c) {
-    uint x = get_global_id(0);
-    uint y = get_global_id(1);
-    uint n_x = get_global_size(0);
-    uint n_y = get_global_size(1);
-
-    // Linear solving is impossible on buffer edges
-    if (x != 0 && y != 0 && x != n_x-1 && y != n_y-1) {
-        buffer_new[x + y*n_y] = (buffer_old[x + y*n_y] + 
-        factor_a * (buffer_new[x - 1 + y*n_y] + buffer_new[x + 1 + y*n_y] + buffer_new[x + (y-1)*n_y] + buffer_new[x + (y+1)*n_y])) 
-        / factor_c;
-    }
-}
-
-__kernel void advect(int b, __global float* buffer_new, __global float* buffer_old, __global float* force_x, __global float* force_y, float dt) {
-    uint x_index = get_global_id(0);
-    uint y_index = get_global_id(1);
-    uint n_x = get_global_size(0);
-    uint n_y = get_global_size(1);
-
-    // Advection is impossible at buffer edges
-    // Valid x/y value indexes range from 1 to (n_x/n_y-2)
-    if (x_index != 0 && y_index != 0 && x_index != n_x-1 && y_index != n_y-1) {
-        uint buffer_index = x_index + (y_index * n_y);
-
-        float x = as_float(x_index) - dt * force_x[buffer_index];
-        float y = as_float(y_index) - dt * force_y[buffer_index];
-
-        // BRANCHING VERY BAD PLS FIX
-        if (x < 0.5f) {
-            x = 0.5f;
-        }
-        if (x > as_float(n_x-2) + 0.5f) {
-            x = as_float(n_x-2) + 0.5f;
-        }
-        uint x_idx0 = as_uint(x);
-        uint x_idx1 = x_idx0 + 1;
-
-        if (y < 0.5f) {
-            y = 0.5f;
-        }
-        if (y > as_float(n_y-2) + 0.5f) {
-            y = as_float(n_y-2) + 0.5f;
-        }
-        uint y_idx0 = as_uint(y);
-        uint y_idx1 = y_idx0 + 1;
-
-        float fac_s1 = x - as_float(x_idx0);
-        float fac_s0 = 1.0f - fac_s1;
-        float fac_t1 = y - as_float(y_idx0);
-        float fac_t0 = 1.0f - fac_t1;
-
-        buffer_new[buffer_index] = fac_s0 * (fac_t0 * buffer_old[x_idx0 + y_idx0*n_y] + fac_t1 * buffer_old[x_idx0 + y_idx1*n_y])
-        + fac_s1 * (fac_t0 * buffer_old[x_idx1 + y_idx0*n_y] + fac_t1 * buffer_old[x_idx1 + y_idx1*n_y]);
-    }
-}
-
 void store_f(const uint n, const float* fhn, global fpxx* fi, const uint* j, const ulong t) {
 	store(fi, index_f(n, 0u), fhn[0]); // Esoteric-Pull
 	for(uint i=1u; i<def_velocity_set; i+=2u) {
@@ -132,6 +63,21 @@ void load_f(const uint n, float* fhn, const global fpxx* fi, const uint* j, cons
 		fhn[i   ] = load(fi, index_f(n   , t%2ul ? i    : i+1u));
 		fhn[i+1u] = load(fi, index_f(j[i], t%2ul ? i+1u : i   ));
 	}
+}
+
+void calculate_rho_u() {
+    
+}
+
+void neighbors(const uint n, uint* j) {
+    uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
+    calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
+    j[0] = n;
+    //TODO: if defined d2q9
+    j[ 1] = xp+y0; j[ 2] = xm+y0; // +00 -00
+    j[ 3] = x0+yp; j[ 4] = x0+ym; // 0+0 0-0
+    j[ 5] = xp+yp; j[ 6] = xm+ym; // ++0 --0
+    j[ 7] = xp+ym; j[ 8] = xm+yp; // +-0 -+0
 }
 
 __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
@@ -168,3 +114,60 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
     store_f(n, fhn, fi, j, t); // perform streaming (part 1)
 } // stream_collide()
+
+__kernel void initialize(global fpxx* fi, const global float* rho, global float* u, global uchar* flags) {
+    const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
+    if(n>=(uint)def_N||is_halo(n)) return; // don't execute initialize() on halo
+    uchar flagsn = flags[n];
+    const uchar flagsn_bo = flagsn&TYPE_BO; // extract boundary flags
+    uint j[def_velocity_set]; // neighbor indices
+    neighbors(n, j); // calculate neighbor indices
+    uchar flagsj[def_velocity_set]; // cache neighbor flags for multiple readings
+    for(uint i=1u; i<def_velocity_set; i++) flagsj[i] = flags[j[i]];
+    if(flagsn_bo==TYPE_S) { // cell is solid
+	    bool TYPE_ONLY_S = true; // has only solid neighbors
+	    for(uint i=1u; i<def_velocity_set; i++) TYPE_ONLY_S = TYPE_ONLY_S&&(flagsj[i]&TYPE_BO)==TYPE_S;
+	    if(TYPE_ONLY_S) {
+	    	u[                 n] = 0.0f; // reset velocity for solid lattice points with only boundary neighbors
+	    	u[    def_N+(ulong)n] = 0.0f;
+	    	u[2ul*def_N+(ulong)n] = 0.0f;
+	    }
+        if(flagsn_bo==TYPE_S) {
+	        u[                 n] = 0.0f; // reset velocity for all solid lattice points
+	        u[    def_N+(ulong)n] = 0.0f;
+	        u[2ul*def_N+(ulong)n] = 0.0f;
+        }
+    }
+    float feq[def_velocity_set]; // f_equilibrium
+    calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
+    store_f(n, feq, fi, j, 1ul); // write to fi
+} // initialize()
+
+kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
+    const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
+    if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_fields() on halo
+    const uchar flagsn = flags[n];
+    const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
+    if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // don't update fields for boundary or gas lattice points
+
+    uint j[def_velocity_set]; // neighbor indices
+    neighbors(n, j); // calculate neighbor indices
+    float fhn[def_velocity_set]; // local DDFs
+    load_f(n, fhn, fi, j, t); // perform streaming (part 2)
+
+    float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
+    calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
+    float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
+    {
+        uxn = clamp(uxn, -def_c, def_c); // limit velocity (for stability purposes)
+        uyn = clamp(uyn, -def_c, def_c); // force term: F*dt/(2*rho)
+        uzn = clamp(uzn, -def_c, def_c);
+    }
+
+    rho[               n] = rhon; // update density field
+    u[                 n] = uxn; // update velocity field
+    u[    def_N+(ulong)n] = uyn;
+    u[2ul*def_N+(ulong)n] = uzn;
+
+
+}
