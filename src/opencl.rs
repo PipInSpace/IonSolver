@@ -51,6 +51,10 @@ pub fn get_devices() -> Vec<Device> {
     devices
 }
 
+pub fn get_opencl_code() -> String {
+    return include_str!("kernels.cl").to_string(); //TODO Kernel needs to be preproccessed first
+}
+
 fn get_tflops(device: Device) -> i32 {
     let freq: i32 = device
         .info(ocl::enums::DeviceInfo::MaxClockFrequency)

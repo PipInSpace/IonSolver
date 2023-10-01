@@ -205,10 +205,6 @@ pub struct LbmDomain {
     particles_n: u32,
     particles_rho: f32,
 
-    dimensions: u8,
-    velocity_set: u8,
-    transfers: u8,
-
     fi: VariableFloatBuffer,
     rho: Buffer<f32>,
     u: Buffer<f32>,
@@ -226,46 +222,10 @@ impl LbmDomain {
         y: u32,
         z: u32,
     ) -> LbmDomain {
-        // OCL variables are directly exposed, due to no other device struct.
-        let platform = Platform::default();
-        let context = Context::builder().devices(device.clone()).build().unwrap();
-        let queue = Queue::new(&context, device, None).unwrap();
-        let program = Program::builder()
-            .devices(device)
-            .src("")
-            .build(&context)
-            .unwrap();
-
-        let fi = match lbm_config.float_type {
-            FloatType::FP16S => VariableFloatBuffer::U16(
-                Buffer::<u16>::builder()
-                    .queue(queue.clone())
-                    .len(1)
-                    .fill_val(0u16)
-                    .build()
-                    .unwrap(),
-            ),
-            FloatType::FP16C => VariableFloatBuffer::U16(
-                Buffer::<u16>::builder()
-                    .queue(queue.clone())
-                    .len(1)
-                    .fill_val(0u16)
-                    .build()
-                    .unwrap(),
-            ),
-            FloatType::FP32 => VariableFloatBuffer::F32(
-                Buffer::<f32>::builder()
-                    .queue(queue.clone())
-                    .len(1)
-                    .fill_val(0.0f32)
-                    .build()
-                    .unwrap(),
-            ),
-        };
-
         let n_x = lbm_config.n_x / lbm_config.d_x + 2u32 * h_x;
         let n_y = lbm_config.n_y / lbm_config.d_y + 2u32 * h_y;
         let n_z = lbm_config.n_z / lbm_config.d_z + 2u32 * h_z;
+        let n = Self::get_n(n_x, n_y, n_z);
 
         let d_x = lbm_config.d_x;
         let d_y = lbm_config.d_y;
@@ -302,6 +262,8 @@ impl LbmDomain {
             }
         }
 
+        let t = 0;
+
         let ocl_code = Self::get_device_defines(
             n_x,
             n_y,
@@ -317,27 +279,192 @@ impl LbmDomain {
             transfers,
             lbm_config.nu,
             lbm_config,
-        ) + &LbmDomain::get_opencl_code();
+        ) + &opencl::get_opencl_code();
 
-        let mut domain = LbmDomain {
+        // OCL variables are directly exposed, due to no other device struct.
+        let platform = Platform::default();
+        let context = Context::builder().platform(platform).devices(device.clone()).build().unwrap();
+        let queue = Queue::new(&context, device, None).unwrap();
+        let program = Program::builder()
+            .devices(device)
+            .src(ocl_code.clone())
+            .build(&context)
+            .unwrap();
+
+        // Initialize Buffers
+        let fi = match lbm_config.float_type {
+            FloatType::FP16S => VariableFloatBuffer::U16(
+                Buffer::<u16>::builder()
+                    .queue(queue.clone())
+                    .len(1)
+                    .fill_val(0u16)
+                    .build()
+                    .unwrap(),
+            ),
+            FloatType::FP16C => VariableFloatBuffer::U16(
+                Buffer::<u16>::builder()
+                    .queue(queue.clone())
+                    .len(1)
+                    .fill_val(0u16)
+                    .build()
+                    .unwrap(),
+            ),
+            FloatType::FP32 => VariableFloatBuffer::F32(
+                Buffer::<f32>::builder()
+                    .queue(queue.clone())
+                    .len(1)
+                    .fill_val(0.0f32)
+                    .build()
+                    .unwrap(),
+            ),
+        };
+        let rho = Buffer::<f32>::builder()
+            .queue(queue.clone())
+            .len(n as u32)
+            .fill_val(1.0f32)
+            .flags(flags::MEM_READ_WRITE)
+            .build()
+            .unwrap();
+        let u = Buffer::<f32>::builder()
+            .queue(queue.clone())
+            .len(n as u32 * 3)
+            .fill_val(0.0f32)
+            .flags(flags::MEM_READ_WRITE)
+            .build()
+            .unwrap();
+        let flags = Buffer::<u8>::builder()
+            .queue(queue.clone())
+            .len(n as u32)
+            .flags(flags::MEM_READ_WRITE)
+            .build()
+            .unwrap();
+
+        // Initialize Kernels
+        let kernel_initialize: Kernel;
+        match fi.clone() { //Initialize initialize kernel
+            VariableFloatBuffer::U16(fi_u16) => {
+                kernel_initialize = Kernel::builder()
+                    .program(&program)
+                    .name("initialize")
+                    .queue(queue.clone())
+                    .global_work_size(n as u32)
+                    .arg_named("fi", fi_u16)
+                    .arg_named("rho", rho.clone())
+                    .arg_named("u", u.clone())
+                    .arg_named("flags", flags.clone())
+                    .build()
+                    .unwrap();
+            },
+            VariableFloatBuffer::F32(fi_f32) => {
+                kernel_initialize = Kernel::builder()
+                    .program(&program)
+                    .name("initialize")
+                    .queue(queue.clone())
+                    .global_work_size(n as u32)
+                    .arg_named("fi", fi_f32)
+                    .arg_named("rho", rho.clone())
+                    .arg_named("u", u.clone())
+                    .arg_named("flags", flags.clone())
+                    .build()
+                    .unwrap();
+            },
+        }
+        let kernel_stream_collide: Kernel;
+        match fi.clone() { //Initialize stream_collide kernel
+            VariableFloatBuffer::U16(fi_u16) => {
+                kernel_stream_collide = Kernel::builder()
+                    .program(&program)
+                    .name("stream_collide")
+                    .queue(queue.clone())
+                    .global_work_size(n as u32)
+                    .arg_named("fi", fi_u16)
+                    .arg_named("rho", rho.clone())
+                    .arg_named("u", u.clone())
+                    .arg_named("flags", flags.clone())
+                    .arg_named("t", t.clone())
+                    .arg_named("fx", lbm_config.fx.clone())
+                    .arg_named("fy", lbm_config.fy.clone())
+                    .arg_named("fz", lbm_config.fz.clone())
+                    .build()
+                    .unwrap();
+            },
+            VariableFloatBuffer::F32(fi_f32) => {
+                kernel_stream_collide = Kernel::builder()
+                    .program(&program)
+                    .name("stream_collide")
+                    .queue(queue.clone())
+                    .global_work_size(n as u32)
+                    .arg_named("fi", fi_f32)
+                    .arg_named("rho", rho.clone())
+                    .arg_named("u", u.clone())
+                    .arg_named("flags", flags.clone())
+                    .arg_named("t", t.clone())
+                    .arg_named("fx", lbm_config.fx.clone())
+                    .arg_named("fy", lbm_config.fy.clone())
+                    .arg_named("fz", lbm_config.fz.clone())
+                    .build()
+                    .unwrap();
+            },
+        }
+        let kernel_update_fields: Kernel;
+        match fi.clone() { //Initialize update_fields kernel
+            VariableFloatBuffer::U16(fi_u16) => {
+                kernel_update_fields = Kernel::builder()
+                    .program(&program)
+                    .name("update_fields")
+                    .queue(queue.clone())
+                    .global_work_size(n as u32)
+                    .arg_named("fi", fi_u16)
+                    .arg_named("rho", rho.clone())
+                    .arg_named("u", u.clone())
+                    .arg_named("flags", flags.clone())
+                    .arg_named("t", t.clone())
+                    .arg_named("fx", lbm_config.fx.clone())
+                    .arg_named("fy", lbm_config.fy.clone())
+                    .arg_named("fz", lbm_config.fz.clone())
+                    .build()
+                    .unwrap();
+            },
+            VariableFloatBuffer::F32(fi_f32) => {
+                kernel_update_fields = Kernel::builder()
+                    .program(&program)
+                    .name("update_fields")
+                    .queue(queue.clone())
+                    .global_work_size(n as u32)
+                    .arg_named("fi", fi_f32)
+                    .arg_named("rho", rho.clone())
+                    .arg_named("u", u.clone())
+                    .arg_named("flags", flags.clone())
+                    .arg_named("t", t.clone())
+                    .arg_named("fx", lbm_config.fx.clone())
+                    .arg_named("fy", lbm_config.fy.clone())
+                    .arg_named("fz", lbm_config.fz.clone())
+                    .build()
+                    .unwrap();
+            },
+        }
+
+        //TODO: allocate transfer buffers
+
+        let domain = LbmDomain {
             device,
             context,
             queue,
             program,
-            ocl_code: String::new(),
+            ocl_code,
             lbm_config,
 
-            n_x: lbm_config.n_x / lbm_config.d_x + 2u32 * h_x,
-            n_y: lbm_config.n_y / lbm_config.d_y + 2u32 * h_y,
-            n_z: lbm_config.n_z / lbm_config.d_z + 2u32 * h_z,
+            n_x,
+            n_y,
+            n_z,
 
-            d_x: lbm_config.d_x,
-            d_y: lbm_config.d_y,
-            d_z: lbm_config.d_z,
+            d_x,
+            d_y,
+            d_z,
 
-            o_x: (x * lbm_config.n_x / lbm_config.d_x) as i32 - h_x as i32,
-            o_y: (y * lbm_config.n_y / lbm_config.d_y) as i32 - h_y as i32,
-            o_z: (z * lbm_config.n_z / lbm_config.d_z) as i32 - h_z as i32,
+            o_x,
+            o_y,
+            o_z,
 
             nu: lbm_config.nu,
             fx: lbm_config.fx,
@@ -350,95 +477,14 @@ impl LbmDomain {
             particles_n: lbm_config.particles_n,
             particles_rho: lbm_config.particles_rho,
 
-            dimensions,
-            velocity_set,
-            transfers, //Completes ONLY velocity set values, check for other completions
-
             fi,
-            rho: todo!(),
-            u: todo!(),
-            flags: todo!(),
+            rho,
+            u,
+            flags,
         };
 
-        domain.allocate(domain.device);
+        //domain.allocate(domain.device);
         domain //Returns initialised domain
-    }
-
-    fn allocate(mut self, device: Device) {
-        let n = 1; //self.clone().get_n();
-                   //TODO: n is too big for buffer allocation.
-        let fi = match self.lbm_config.float_type {
-            FloatType::FP16S => VariableFloatBuffer::U16(
-                Buffer::<u16>::builder()
-                    .queue(self.queue.clone())
-                    .len(n as u32 * self.velocity_set as u32)
-                    .fill_val(0u16)
-                    .flags(flags::MEM_READ_WRITE)
-                    .build()
-                    .unwrap(),
-            ),
-            FloatType::FP16C => VariableFloatBuffer::U16(
-                Buffer::<u16>::builder()
-                    .queue(self.queue.clone())
-                    .len(n as u32 * self.velocity_set as u32)
-                    .fill_val(0u16)
-                    .flags(flags::MEM_READ_WRITE)
-                    .build()
-                    .unwrap(),
-            ),
-            FloatType::FP32 => VariableFloatBuffer::F32(
-                Buffer::<f32>::builder()
-                    .queue(self.queue.clone())
-                    .len(n as u32 * self.velocity_set as u32)
-                    .fill_val(0.0f32)
-                    .flags(flags::MEM_READ_WRITE)
-                    .build()
-                    .unwrap(),
-            ),
-        };
-        let rho = Buffer::<f32>::builder()
-            .queue(self.queue.clone())
-            .len(n as u32)
-            .fill_val(1.0f32)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
-        let u = Buffer::<f32>::builder()
-            .queue(self.queue.clone())
-            .len(n as u32 * 3)
-            .fill_val(0.0f32)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
-        let flags = Buffer::<u8>::builder()
-            .queue(self.queue.clone())
-            .len(n as u32)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
-        self.fi = fi;
-        self.rho = rho;
-        self.u = u;
-        self.flags = flags;
-
-        let program = Program::builder()
-            .devices(self.device)
-            .src(self.ocl_code)
-            .build(&self.context)
-            .unwrap();
-        self.program = program;
-
-        let kernel_initialize = Kernel::builder()
-            .program(&self.program)
-            .name("initialize")
-            .queue(self.queue.clone())
-            .global_work_size(n as u32)
-            .build()
-            .unwrap(); //TODO set arguments
-    }
-
-    fn get_opencl_code() -> String {
-        return include_str!("kernels.cl").to_string(); //TODO Kernel needs to be preproccessed first
     }
 
     fn get_device_defines(
