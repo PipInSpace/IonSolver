@@ -169,6 +169,7 @@ impl Lbm {
                 z,
             ))
         }
+        println!("All domains initialized.");
 
         let lbm = Lbm {
             domains: lbm_domains,
@@ -198,8 +199,8 @@ impl Lbm {
         self.initialized = true;
     }
 
-    pub fn run(&mut self, steps: u64) {
-        //Run simulation for steps
+    #[allow(unused)]
+    pub fn run(&mut self, steps: u64) { //Initialize, then run simulation for steps
         //TODO: Display info in command line
         if !self.initialized {
             //Run initialization Kernel
@@ -233,6 +234,7 @@ impl Lbm {
     //Helper functions:
 }
 
+#[allow(dead_code)]
 pub struct LbmDomain {
     device: Device, //FluidX3D creates contexts/queues/programs for each device automatically through another struct
     context: Context,
@@ -516,7 +518,7 @@ impl LbmDomain {
                     .unwrap();
             }
         }
-
+        println!("Kernels for domain compiled.");
         //TODO: allocate transfer buffers
 
         let domain = LbmDomain {
