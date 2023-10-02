@@ -3,10 +3,10 @@ extern crate ocl;
 use std::time::Duration;
 use std::{sync::mpsc, thread};
 
+mod info;
 mod lbm;
 mod opencl;
 mod solver;
-mod info;
 use solver::*;
 
 //use image::{ImageBuffer, Rgb};
@@ -128,7 +128,7 @@ impl SimControl {
 }
 
 impl App for SimControl {
-    /// UI update loop, called repeatedly if sim is not paused
+    /// UI update loop
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // let spectrum_img = draw_spectrum(&self.s, &self.dens, self.step, "densRel", self.save);
 
@@ -139,10 +139,13 @@ impl App for SimControl {
         //Update gui
         egui::TopBottomPanel::top("top_controls").show(ctx, |ui| {
             ui.heading("IonSolver Simulation");
-            ui.separator();
+            //ui.separator();
             ui.horizontal(|ui| {
                 if ui
-                    .button(if self.paused { "Play" } else { "Pause" })
+                    .add(
+                        egui::Button::new(if self.paused { "Play" } else { "Pause" })
+                            .rounding(0.0f32),
+                    )
                     .clicked()
                 {
                     self.paused = !self.paused;
@@ -155,24 +158,27 @@ impl App for SimControl {
                         .expect("GUI cannot communicate with sim thread");
                     let _z = self.paused;
                 }
-                if ui.button("Reset").clicked() {
+                if ui
+                    .add(egui::Button::new("Reset").rounding(0.0f32))
+                    .clicked()
+                {
                     self.reset_sim();
                 }
             })
         });
         //TODO: Display the Simulation
-        // egui::CentralPanel::default().show(ctx, |ui| {
-        //     ui.image(
-        //         ui.ctx()
-        //             .load_texture(
-        //                 "sim",
-        //                 ColorImage::from_rgb(size, spectrum_img.into_raw().as_slice()),
-        //                 Default::default(),
-        //             )
-        //             .id(),
-        //         ui.available_size(),
-        //     );
-        // });
+        egui::CentralPanel::default().show(ctx, |ui| {
+            //ui.image(
+            //    ui.ctx()
+            //        .load_texture(
+            //            "sim",
+            //            ColorImage::from_rgb(size, spectrum_img.into_raw().as_slice()),
+            //            Default::default(),
+            //        )
+            //        .id(),
+            //    ui.available_size(),
+            //);
+        });
 
         ctx.request_repaint_after(Duration::from_millis(100))
     }
@@ -204,8 +210,10 @@ fn main() {
     // UI params
     let icon_bytes = include_bytes!("../icons/IonSolver.png");
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(320.0, 240.0)),
+        initial_window_size: Some(egui::vec2(1000.0, 500.0)),
         icon_data: load_icon(&icon_bytes.to_vec()),
+        follow_system_theme: false,
+        default_theme: Theme::Light,
         ..Default::default()
     };
 
@@ -221,10 +229,10 @@ fn main() {
 
     // setup simcontrol struc to pass params and channels to GUI
     let simcontrol = SimControl {
-        paused: false,
+        paused: true,
         save: false,
-        ctrl_tx: ctrl_tx,
-        sim_rx: sim_rx,
+        ctrl_tx,
+        sim_rx,
     };
 
     // Start window loop

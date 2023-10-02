@@ -200,7 +200,8 @@ impl Lbm {
     }
 
     #[allow(unused)]
-    pub fn run(&mut self, steps: u64) { //Initialize, then run simulation for steps
+    pub fn run(&mut self, steps: u64) {
+        //Initialize, then run simulation for steps
         //TODO: Display info in command line
         if !self.initialized {
             //Run initialization Kernel
@@ -368,7 +369,7 @@ impl LbmDomain {
             FloatType::FP16S => VariableFloatBuffer::U16(
                 Buffer::<u16>::builder()
                     .queue(queue.clone())
-                    .len([n_x, n_y, n_z])
+                    .len([n_x*velocity_set as u32, n_y, n_z])
                     .fill_val(0u16)
                     .build()
                     .unwrap(),
@@ -376,7 +377,7 @@ impl LbmDomain {
             FloatType::FP16C => VariableFloatBuffer::U16(
                 Buffer::<u16>::builder()
                     .queue(queue.clone())
-                    .len([n_x, n_y, n_z])
+                    .len([n_x*velocity_set as u32, n_y, n_z])
                     .fill_val(0u16)
                     .build()
                     .unwrap(),
@@ -384,7 +385,7 @@ impl LbmDomain {
             FloatType::FP32 => VariableFloatBuffer::F32(
                 Buffer::<f32>::builder()
                     .queue(queue.clone())
-                    .len([n_x, n_y, n_z])
+                    .len([n_x*velocity_set as u32, n_y, n_z])
                     .fill_val(0.0f32)
                     .build()
                     .unwrap(),
@@ -399,7 +400,7 @@ impl LbmDomain {
             .unwrap();
         let u = Buffer::<f32>::builder()
             .queue(queue.clone())
-            .len([n_x*3, n_y, n_z])
+            .len([n_x * 3, n_y, n_z])
             .fill_val(0.0f32)
             .flags(flags::MEM_READ_WRITE)
             .build()
@@ -446,6 +447,7 @@ impl LbmDomain {
         match fi.clone() {
             //Initialize stream_collide kernel
             VariableFloatBuffer::U16(fi_u16) => {
+                println!("Buffer fi of length {}", &fi_u16.len());
                 kernel_stream_collide = Kernel::builder()
                     .program(&program)
                     .name("stream_collide")
@@ -463,6 +465,7 @@ impl LbmDomain {
                     .unwrap();
             }
             VariableFloatBuffer::F32(fi_f32) => {
+                println!("Buffer fi of length {}", &fi_f32.len());
                 kernel_stream_collide = Kernel::builder()
                     .program(&program)
                     .name("stream_collide")
@@ -616,24 +619,24 @@ impl LbmDomain {
         +"\n	#define def_Ny "+ &n_y.to_string()+"u"
         +"\n	#define def_Nz "+ &n_z.to_string()+"u"
         +"\n	#define def_N  "+ &Self::get_n(n_x, n_y, n_z).to_string()+"ul"
-    
+
         +"\n	#define def_Dx "+ &d_x.to_string()+"u"
         +"\n	#define def_Dy "+ &d_y.to_string()+"u"
         +"\n	#define def_Dz "+ &d_z.to_string()+"u"
-    
+
         +"\n	#define def_Ox "+ &o_x.to_string()+"" // offsets are signed integer!
         +"\n	#define def_Oy "+ &o_y.to_string()+""
         +"\n	#define def_Oz "+ &o_z.to_string()+""
-    
+
         +"\n	#define def_Ax "+ &(n_y * n_z).to_string()+"u"
         +"\n	#define def_Ay "+ &(n_z * n_x).to_string()+"u"
         +"\n	#define def_Az "+ &(n_x * n_y).to_string()+"u"
-    
+
         +"\n	#define D"+ &dimensions.to_string()+"Q"+ &velocity_set.to_string()+"" // D2Q9/D3Q15/D3Q19/D3Q27
         +"\n	#define def_velocity_set "+ &velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
         +"\n	#define def_dimensions "+ &dimensions.to_string()+"u" // number spatial dimensions (2D or 3D)
         +"\n	#define def_transfers "+ &transfers.to_string()+"u" // number of DDFs that are transferred between multiple domains
-    
+
         +"\n	#define def_c 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
         +"\n	#define def_w " + &format!("{:.5}", 1.0f32/(3.0f32*nu+0.5f32))+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
         + match lbm_config.velocity_set {

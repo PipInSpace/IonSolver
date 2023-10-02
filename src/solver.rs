@@ -13,7 +13,7 @@ pub fn simloop(
     //TODO: Simulation here
     //sim_tx.send(sim) sends data to the main window loop
     let mut state = SimControlTx {
-        paused: false,
+        paused: true,
         save: false,
         active: true,
     };
@@ -36,13 +36,19 @@ pub fn simloop(
             loop {
                 //This is the loop of the simulation. Can be paused by receiving a control message
                 let recieve_result = ctrl_rx.try_recv();
-                if let Ok(recieve) = recieve_result {state = recieve;}
-                if state.paused || !state.active { break;}
+                if let Ok(recieve) = recieve_result {
+                    state = recieve;
+                }
+                if state.paused || !state.active {
+                    break;
+                }
 
                 //Simulation commences here
                 test_lbm.do_time_step();
 
-                if i % 10 == 0 {println!("Step {}", i);}
+                if i % 10 == 0 {
+                    println!("Step {}", i);
+                }
                 i += 1;
             }
         }
@@ -51,7 +57,9 @@ pub fn simloop(
             break;
         }
         let recieve_result = ctrl_rx.recv();
-        if let Ok(recieve) = recieve_result {state = recieve; }
+        if let Ok(recieve) = recieve_result {
+            state = recieve;
+        }
     }
 }
 

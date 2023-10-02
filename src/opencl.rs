@@ -53,7 +53,9 @@ pub fn get_devices() -> Vec<Device> {
 }
 
 pub fn get_opencl_code() -> String {
-    let string: Vec<&str> = include_str!("kernels.cl").split("EndTempDefines%").collect();
+    let string: Vec<&str> = include_str!("kernels.cl")
+        .split("EndTempDefines%")
+        .collect();
     return string[1].to_string(); // Removes embedded default defines needed for syntax highlighting etc.
 }
 

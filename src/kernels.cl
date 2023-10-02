@@ -52,6 +52,10 @@
 #define TYPE_GI 0x38 // 0b00111000 // change from gas to interface
 #define TYPE_SU 0x38 // 0b00111000 // any flag bit used for SURFACE
 
+#define fpxx_copy ushort
+#define load(p,o) half_to_float_custom(p[o])
+#define store(p,o,x) p[o]=float_to_half_custom(x)
+
 #define EQUILIBRIUM_BOUNDARIES
 
 //These defines are for code completion only and are removed from the code before compilation 
