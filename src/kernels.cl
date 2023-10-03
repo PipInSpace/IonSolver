@@ -1,3 +1,4 @@
+
 #if defined(FP16S) || defined(FP16C)
 #define fpxx ushort
 #else // FP32
@@ -80,11 +81,34 @@
 //These defines are for code completion only and are removed from the code before compilation 
 #define EndTempDefines%
 
+// Helper functions 
+float sq(const float x) {
+	return x*x;
+}
+ushort float_to_half_custom(const float x) { // custom 16-bit floating-point format, 1-4-11, exp-15, +-1.99951168, +-6.10351562E-5, +-2.98023224E-8, 3.612 digits
+	const uint b = as_uint(x)+0x00000800; // round-to-nearest-even: add last bit after truncated mantissa
+	const uint e = (b&0x7F800000)>>23; // exponent
+	const uint m = b&0x007FFFFF; // mantissa; in line below: 0x007FF800 = 0x00800000-0x00000800 = decimal indicator flag - initial rounding
+	return (b&0x80000000)>>16 | (e>112)*((((e-112)<<11)&0x7800)|m>>12) | ((e<113)&(e>100))*((((0x007FF800+m)>>(124-e))+1)>>1); // sign : normalized : denormalized (assume [-2,2])
+}
+float half_to_float_custom(const ushort x) { // custom 16-bit floating-point format, 1-4-11, exp-15, +-1.99951168, +-6.10351562E-5, +-2.98023224E-8, 3.612 digits
+	const uint e = (x&0x7800)>>11; // exponent
+	const uint m = (x&0x07FF)<<12; // mantissa
+	const uint v = as_uint((float)m)>>23; // evil log2 bit hack to count leading zeros in denormalized format
+	return as_float((x&0x8000)<<16 | (e!=0)*((e+112)<<23|m) | ((e==0)&(m!=0))*((v-37)<<23|((m<<(150-v))&0x007FF000))); // sign : normalized : denormalized
+}
+
 //Graphics Helper functions:
 #ifdef GRAPHICS
 int color_average(const int c1, const int c2) { // (c1+c2)/s
 	const uchar4 cc1=as_uchar4(c1), cc2=as_uchar4(c2);
 	return as_int((uchar4)((uchar)((cc1.x+cc2.x)/2u), (uchar)((cc1.y+cc2.y)/2u), (uchar)((cc1.z+cc2.z)/2u), (uchar)0u));
+}
+int color_mix_3(const int c0, const int c1, const int c2, const float w0, const float w1, const float w2) { // w1*c1+w2*c2+w3*c3, w0+w1+w2 = 1
+	const uchar4 cc0=as_uchar4(c0), cc1=as_uchar4(c1), cc2=as_uchar4(c2);
+	const float3 fc0=(float3)((float)cc0.x, (float)cc0.y, (float)cc0.z),  fc1=(float3)((float)cc1.x, (float)cc1.y, (float)cc1.z), fc2=(float3)((float)cc2.x, (float)cc2.y, (float)cc2.z);
+	const float3 fcm = fma(w0, fc0, fma(w1, fc1, fma(w2, fc2, (float3)(0.5f, 0.5f, 0.5f))));
+	return as_int((uchar4)((uchar)fcm.x, (uchar)fcm.y, (uchar)fcm.z, (uchar)0u));
 }
 int shading(const int c, const float3 p, const float3 normal, const float* camera_cache) {
     const float dis  = camera_cache[ 1]; // fetch camera parameters (rotation matrix, camera position, etc.)
@@ -106,6 +130,44 @@ int shading(const int c, const float3 p, const float3 normal, const float* camer
 void draw(const int x, const int y, const float z, const int color, global int* bitmap, volatile global int* zbuffer, const int stereo) {
 	const int index=x+y*def_screen_width, iz=(int)(z*(2147483647.0f/10000.0f)); // use int z-buffer and atomic_max to minimize noise in image
 }
+bool is_off_screen(const int x, const int y, const int stereo) {
+	switch(stereo) {
+		default: return x<                 0||x>=def_screen_width  ||y<0||y>=def_screen_height; // entire screen
+		case -1: return x<                 0||x>=def_screen_width/2||y<0||y>=def_screen_height; // left half
+		case +1: return x<def_screen_width/2||x>=def_screen_width  ||y<0||y>=def_screen_height; // right half
+	}
+}
+bool convert(int* rx, int* ry, float* rz, const float3 p, const float* camera_cache, const int stereo) { // 3D -> 2D
+	const float zoom = camera_cache[0]; // fetch camera parameters (rotation matrix, camera position, etc.)
+	const float dis  = camera_cache[1];
+	const float posx = camera_cache[2];
+	const float posy = camera_cache[3];
+	const float posz = camera_cache[4];
+	const float Rxx  = camera_cache[5];
+	const float Rxy  = camera_cache[6];
+	const float Rxz  = camera_cache[7];
+	const float Ryx  = camera_cache[8];
+	const float Ryy  = camera_cache[9];
+	const float Ryz  = camera_cache[10];
+	const float Rzx  = camera_cache[11];
+	const float Rzy  = camera_cache[12];
+	const float Rzz  = camera_cache[13];
+	const float eye_distance = vload_half(28, (half*)camera_cache);
+	float3 t, r;
+	t.x = p.x+def_domain_offset_x-posx-(float)stereo*eye_distance/zoom*Rxx; // transformation
+	t.y = p.y+def_domain_offset_y-posy-(float)stereo*eye_distance/zoom*Rxy;
+	t.z = p.z+def_domain_offset_z-posz;
+	r.z = Rzx*t.x+Rzy*t.y+Rzz*t.z; // z-position for z-buffer
+	const float rs = zoom*dis/(dis-r.z*zoom); // perspective (reciprocal is more efficient)
+	if(rs<=0.0f) return false; // point is behins camera
+	const float tv = ((as_int(camera_cache[14])>>30)&0x1)&&stereo!=0 ? 0.5f : 1.0f;
+	r.x = ((Rxx*t.x+Rxy*t.y+Rxz*t.z)*rs+(float)stereo*eye_distance)*tv+(0.5f+(float)stereo*0.25f)*(float)def_screen_width; // x position on screen
+	r.y =  (Ryx*t.x+Ryy*t.y+Ryz*t.z)*rs+0.5f*(float)def_screen_height; // y position on screen
+	*rx = (int)(r.x+0.5f);
+	*ry = (int)(r.y+0.5f);
+	*rz = r.z;
+	return true;
+}
 void convert_line(const float3 p0, const float3 p1, const int color, const float* camera_cache, global int* bitmap, global int* zbuffer, const int stereo) { // 3D -> 2D
 	int r0x, r0y, r1x, r1y; float r0z, r1z;
 	if(convert(&r0x, &r0y, &r0z, p0, camera_cache, stereo) && convert(&r1x, &r1y, &r1z, p1, camera_cache, stereo)
@@ -123,6 +185,65 @@ void convert_line(const float3 p0, const float3 p1, const int color, const float
 		}
 	}
 }
+void convert_triangle(float3 p0, float3 p1, float3 p2, const int color, const float* camera_cache, global int* bitmap, global int* zbuffer, const int stereo) { // 3D -> 2D
+	int r0x, r0y, r1x, r1y, r2x, r2y; float r0z, r1z, r2z;
+	if(convert(&r0x, &r0y, &r0z, p0, camera_cache, stereo) && convert(&r1x, &r1y, &r1z, p1, camera_cache, stereo) && convert(&r2x, &r2y, &r2z, p2, camera_cache, stereo)
+		&& !(is_off_screen(r0x, r0y, stereo) && is_off_screen(r1x, r1y, stereo) && is_off_screen(r2x, r2y, stereo))) { // cancel drawing if all points are off screen
+		if(r0x*(r1y-r2y)+r1x*(r2y-r0y)+r2x*(r0y-r1y)>100000 || (r0y==r1y&&r0y==r2y)) return; // return for large triangle area or degenerate triangles
+		if(r0y>r1y) { const int xt = r0x; const int yt = r0y; r0x = r1x; r0y = r1y; r1x = xt; r1y = yt; } // sort vertices ascending by y
+		if(r0y>r2y) { const int xt = r0x; const int yt = r0y; r0x = r2x; r0y = r2y; r2x = xt; r2y = yt; }
+		if(r1y>r2y) { const int xt = r1x; const int yt = r1y; r1x = r2x; r1y = r2y; r2x = xt; r2y = yt; }
+		const float z = (r0z+r1z+r2z)/3.0f; // approximate triangle z position for each pixel to be equal
+		for(int y=r0y; y<r1y; y++) { // Bresenham algorithm (lower triangle half)
+			const int xA = r0x+(r2x-r0x)*(y-r0y)/(r2y-r0y);
+			const int xB = r0x+(r1x-r0x)*(y-r0y)/(r1y-r0y);
+			for(int x=min(xA, xB); x<max(xA, xB); x++) {
+				draw(x, y, z, color, bitmap, zbuffer, stereo);
+			}
+		}
+		for(int y=r1y; y<r2y; y++) { // Bresenham algorithm (upper triangle half)
+			const int xA = r0x+(r2x-r0x)*(y-r0y)/(r2y-r0y);
+			const int xB = r1x+(r2x-r1x)*(y-r1y)/(r2y-r1y);
+			for(int x=min(xA, xB); x<max(xA, xB); x++) {
+				draw(x, y, z, color, bitmap, zbuffer, stereo);
+			}
+		}
+	}
+}
+void convert_triangle_interpolated(float3 p0, float3 p1, float3 p2, int c0, int c1, int c2, const float* camera_cache, global int* bitmap, global int* zbuffer, const int stereo) { // 3D -> 2D
+	int r0x, r0y, r1x, r1y, r2x, r2y; float r0z, r1z, r2z;
+	if(convert(&r0x, &r0y, &r0z, p0, camera_cache, stereo) && convert(&r1x, &r1y, &r1z, p1, camera_cache, stereo) && convert(&r2x, &r2y, &r2z, p2, camera_cache, stereo)
+		&& !(is_off_screen(r0x, r0y, stereo) && is_off_screen(r1x, r1y, stereo) && is_off_screen(r2x, r2y, stereo))) { // cancel drawing if all points are off screen
+		if(r0x*(r1y-r2y)+r1x*(r2y-r0y)+r2x*(r0y-r1y)>100000 || (r0y==r1y&&r0y==r2y)) return; // return for large triangle area or degenerate triangles
+		if(r0y>r1y) { const int xt = r0x; const int yt = r0y; r0x = r1x; r0y = r1y; r1x = xt; r1y = yt; const int ct = c0; c0 = c1; c1 = ct; } // sort vertices ascending by y
+		if(r0y>r2y) { const int xt = r0x; const int yt = r0y; r0x = r2x; r0y = r2y; r2x = xt; r2y = yt; const int ct = c0; c0 = c2; c2 = ct; }
+		if(r1y>r2y) { const int xt = r1x; const int yt = r1y; r1x = r2x; r1y = r2y; r2x = xt; r2y = yt; const int ct = c1; c1 = c2; c2 = ct; }
+		const float z = (r0z+r1z+r2z)/3.0f; // approximate triangle z position for each pixel to be equal
+		const float d = (float)((r1y-r2y)*(r0x-r2x)+(r2x-r1x)*(r0y-r2y));
+		for(int y=r0y; y<r1y; y++) { // Bresenham algorithm (lower triangle half)
+			const int xA = r0x+(r2x-r0x)*(y-r0y)/(r2y-r0y);
+			const int xB = r0x+(r1x-r0x)*(y-r0y)/(r1y-r0y);
+			for(int x=min(xA, xB); x<max(xA, xB); x++) {
+				const float w0 = (float)((r1y-r2y)*(x-r2x)+(r2x-r1x)*(y-r2y))/d; // barycentric coordinates
+				const float w1 = (float)((r2y-r0y)*(x-r2x)+(r0x-r2x)*(y-r2y))/d;
+				const float w2 = 1.0f-w0-w1;
+				const int color = color_mix_3(c0, c1, c2, w0, w1, w2); // interpolate color
+				draw(x, y, z, color, bitmap, zbuffer, stereo);
+			}
+		}
+		for(int y=r1y; y<r2y; y++) { // Bresenham algorithm (upper triangle half)
+			const int xA = r0x+(r2x-r0x)*(y-r0y)/(r2y-r0y);
+			const int xB = r1x+(r2x-r1x)*(y-r1y)/(r2y-r1y);
+			for(int x=min(xA, xB); x<max(xA, xB); x++) {
+				const float w0 = (float)((r1y-r2y)*(x-r2x)+(r2x-r1x)*(y-r2y))/d; // barycentric coordinates
+				const float w1 = (float)((r2y-r0y)*(x-r2x)+(r0x-r2x)*(y-r2y))/d;
+				const float w2 = 1.0f-w0-w1;
+				const int color = color_mix_3(c0, c1, c2, w0, w1, w2); // interpolate color
+				draw(x, y, z, color, bitmap, zbuffer, stereo);
+			}
+		}
+	}
+}
 void draw_line(const float3 p0, const float3 p1, const int color, const float* camera_cache, global int* bitmap, global int* zbuffer) { // 3D -> 2D
 	const bool vr = (as_int(camera_cache[14])>>31)&0x1;
 	if(!vr) {
@@ -131,6 +252,86 @@ void draw_line(const float3 p0, const float3 p1, const int color, const float* c
 		convert_line(p0, p1, color, camera_cache, bitmap, zbuffer, -1); // left eye
 		convert_line(p0, p1, color, camera_cache, bitmap, zbuffer, +1); // right eye
 	}
+}
+void draw_triangle(const float3 p0, const float3 p1, const float3 p2, const int color, const float* camera_cache, global int* bitmap, global int* zbuffer) { // 3D -> 2D
+	const bool vr = (as_int(camera_cache[14])>>31)&0x1;
+	if(!vr) {
+		convert_triangle(p0, p1, p2, color, camera_cache, bitmap, zbuffer,  0);
+	} else {
+		convert_triangle(p0, p1, p2, color, camera_cache, bitmap, zbuffer, -1); // left eye
+		convert_triangle(p0, p1, p2, color, camera_cache, bitmap, zbuffer, +1); // right eye
+	}
+}
+void draw_triangle_interpolated(const float3 p0, const float3 p1, const float3 p2, const int c0, const int c1, const int c2, const float* camera_cache, global int* bitmap, global int* zbuffer) { // 3D -> 2D
+	const bool vr = (as_int(camera_cache[14])>>31)&0x1;
+	if(!vr) {
+		convert_triangle_interpolated(p0, p1, p2, c0, c1, c2, camera_cache, bitmap, zbuffer,  0);
+	} else {
+		convert_triangle_interpolated(p0, p1, p2, c0, c1, c2, camera_cache, bitmap, zbuffer, -1); // left eye
+		convert_triangle_interpolated(p0, p1, p2, c0, c1, c2, camera_cache, bitmap, zbuffer, +1); // right eye
+	}
+}
+constant ushort edge_table_data[128] = { // source: Paul Bourke, http://paulbourke.net/geometry/polygonise/, mirror symmetry applied, makes marching-cubes 31% faster
+	0x000, 0x109, 0x203, 0x30A, 0x406, 0x50F, 0x605, 0x70C, 0x80C, 0x905, 0xA0F, 0xB06, 0xC0A, 0xD03, 0xE09, 0xF00,
+	0x190, 0x099, 0x393, 0x29A, 0x596, 0x49F, 0x795, 0x69C, 0x99C, 0x895, 0xB9F, 0xA96, 0xD9A, 0xC93, 0xF99, 0xE90,
+	0x230, 0x339, 0x033, 0x13A, 0x636, 0x73F, 0x435, 0x53C, 0xA3C, 0xB35, 0x83F, 0x936, 0xE3A, 0xF33, 0xC39, 0xD30,
+	0x3A0, 0x2A9, 0x1A3, 0x0AA, 0x7A6, 0x6AF, 0x5A5, 0x4AC, 0xBAC, 0xAA5, 0x9AF, 0x8A6, 0xFAA, 0xEA3, 0xDA9, 0xCA0,
+	0x460, 0x569, 0x663, 0x76A, 0x066, 0x16F, 0x265, 0x36C, 0xC6C, 0xD65, 0xE6F, 0xF66, 0x86A, 0x963, 0xA69, 0xB60,
+	0x5F0, 0x4F9, 0x7F3, 0x6FA, 0x1F6, 0x0FF, 0x3F5, 0x2FC, 0xDFC, 0xCF5, 0xFFF, 0xEF6, 0x9FA, 0x8F3, 0xBF9, 0xAF0,
+	0x650, 0x759, 0x453, 0x55A, 0x256, 0x35F, 0x055, 0x15C, 0xE5C, 0xF55, 0xC5F, 0xD56, 0xA5A, 0xB53, 0x859, 0x950,
+	0x7C0, 0x6C9, 0x5C3, 0x4CA, 0x3C6, 0x2CF, 0x1C5, 0x0CC, 0xFCC, 0xEC5, 0xDCF, 0xCC6, 0xBCA, 0xAC3, 0x9C9, 0x8C0
+};
+constant uchar triangle_table_data[1920] = { // source: Paul Bourke, http://paulbourke.net/geometry/polygonise/, termination value 15, bit packed
+	255,255,255,255,255,255,255, 15, 56,255,255,255,255,255,255, 16,249,255,255,255,255,255, 31, 56,137,241,255,255,255,255, 33,250,255,255,255,255,255, 15, 56, 33,250,255,255,255,255, 41, 10,146,
+	255,255,255,255, 47, 56,162,168,137,255,255,255,179,242,255,255,255,255,255, 15, 43,184,240,255,255,255,255,145, 32,179,255,255,255,255, 31, 43,145,155,184,255,255,255,163,177, 58,255,255,255,
+	255, 15, 26,128,138,171,255,255,255,147, 48,155,171,249,255,255,159,168,138,251,255,255,255,255,116,248,255,255,255,255,255, 79,  3, 55,244,255,255,255,255, 16,137,116,255,255,255,255, 79,145,
+	116,113, 19,255,255,255, 33,138,116,255,255,255,255, 63,116,  3, 20,162,255,255,255, 41,154, 32, 72,247,255,255, 47,154,146, 39, 55,151,244,255, 72, 55, 43,255,255,255,255,191,116, 43, 36, 64,
+	255,255,255,  9,129,116, 50,251,255,255, 79,183, 73,155, 43, 41,241,255,163, 49,171,135,244,255,255, 31,171, 65, 27, 64,183,244,255,116,152,176,185,186, 48,255, 79,183,180,153,171,255,255,255,
+	 89,244,255,255,255,255,255,159, 69,128,243,255,255,255,255, 80, 20,  5,255,255,255,255,143, 69, 56, 53, 81,255,255,255, 33,154, 69,255,255,255,255, 63,128, 33, 74, 89,255,255,255, 37, 90, 36,
+	  4,242,255,255, 47, 90, 35, 53, 69, 67,248,255, 89, 36,179,255,255,255,255, 15, 43,128, 75, 89,255,255,255, 80,  4, 81, 50,251,255,255, 47, 81, 82, 40,184,132,245,255, 58,171, 49, 89,244,255,
+	255, 79, 89,128,129, 26,184,250,255, 69, 80,176,181,186, 48,255, 95,132,133,170,184,255,255,255,121, 88,151,255,255,255,255,159,  3, 89, 83, 55,255,255,255,112,  8,113, 81,247,255,255, 31, 53,
+	 83,247,255,255,255,255,121,152,117, 26,242,255,255,175, 33, 89, 80,  3,117,243,255,  8,130, 82, 88,167, 37,255, 47, 90, 82, 51,117,255,255,255,151,117,152,179,242,255,255,159,117,121,146,  2,
+	114,251,255, 50, 11,129,113, 24,117,255,191, 18, 27,119, 81,255,255,255, 89,136,117, 26,163,179,255, 95,  7,  5,121, 11,  1,186, 10,171,176, 48, 90,128,112,117,176, 90,183,245,255,255,255,255,
+	106,245,255,255,255,255,255, 15, 56,165,246,255,255,255,255,  9, 81,106,255,255,255,255, 31, 56,145, 88,106,255,255,255, 97, 37, 22,255,255,255,255, 31, 86, 33, 54,128,255,255,255,105,149, 96,
+	 32,246,255,255, 95,137,133, 82, 98, 35,248,255, 50,171, 86,255,255,255,255,191,128, 43,160, 86,255,255,255, 16, 41,179,165,246,255,255, 95,106,145,146, 43,137,251,255, 54,107, 53, 21,243,255,
+	255, 15,184,176,  5, 21,181,246,255,179,  6, 99, 96,  5,149,255,111,149,150,187,137,255,255,255,165, 70,135,255,255,255,255, 79,  3,116, 99,165,255,255,255,145, 80,106, 72,247,255,255,175, 86,
+	145, 23, 55,151,244,255, 22, 98, 21,116,248,255,255, 31, 82, 37, 54, 64, 67,247,255, 72,151, 80, 96,  5, 98,255,127,147,151, 52,146,149, 38,150,179,114, 72,106,245,255,255, 95,106,116, 66,  2,
+	114,251,255, 16, 73,135, 50, 91,106,255,159, 18,185,146,180,183, 84,106, 72, 55, 91, 83, 81,107,255, 95,177,181, 22,176,183,  4,180, 80,  9, 86, 48,182, 54, 72,103,149,150, 75,151,183,249,255,
+	 74,105,164,255,255,255,255, 79,106,148, 10, 56,255,255,255, 10,161,  6, 70,240,255,255,143, 19, 24,134, 70, 22,250,255, 65, 25, 66, 98,244,255,255, 63,128, 33, 41,148, 98,244,255, 32, 68, 98,
+	255,255,255,255,143, 35, 40, 68, 98,255,255,255, 74,169, 70, 43,243,255,255, 15, 40,130, 75,169,164,246,255,179,  2, 97, 96,100,161,255,111, 20, 22, 74, 24, 18,139, 27,105,148, 99, 25,179, 54,
+	255,143, 27, 24,176, 22, 25,100, 20,179, 54,  6, 96,244,255,255,111,132,107,248,255,255,255,255,167,118,168,152,250,255,255, 15, 55,160,  7,169,118,250,255,106, 23,122,113, 24,  8,255,175,118,
+	122, 17, 55,255,255,255, 33, 22,134,129,137,118,255, 47,150,146, 97,151,144,115,147,135,112, 96,  6,242,255,255,127, 35,118,242,255,255,255,255, 50,171,134,138,137,118,255, 47,112,114, 11,121,
+	118,154,122,129, 16,135,161,103,167, 50,187, 18, 27,167, 22,118,241,255,152,134,118, 25,182, 54, 49,  6, 25,107,247,255,255,255,255,135,112, 96,179,176,  6,255,127,107,255,255,255,255,255,255,
+	103,251,255,255,255,255,255, 63,128,123,246,255,255,255,255, 16,185,103,255,255,255,255,143,145, 56,177,103,255,255,255, 26, 98,123,255,255,255,255, 31,162,  3,104,123,255,255,255,146, 32,154,
+	182,247,255,255,111,123,162,163, 56,154,248,255, 39, 99,114,255,255,255,255,127,128,103, 96,  2,255,255,255,114, 38,115, 16,249,255,255, 31, 38,129, 22,137,120,246,255,122,166,113, 49,247,255,
+	255,175,103,113, 26,120,  1,248,255, 48,  7,167,160,105,122,255,127,166,167,136,154,255,255,255,134,180,104,255,255,255,255, 63,182,  3,  6,100,255,255,255,104,139,100,  9,241,255,255,159,100,
+	105,147, 19, 59,246,255,134,100,139,162,241,255,255, 31,162,  3, 11,182, 64,246,255,180, 72,182, 32, 41,154,255,175, 57, 58,146, 52, 59, 70, 54, 40,131, 36,100,242,255,255, 15, 36,100,242,255,
+	255,255,255,145, 32, 67, 66, 70,131,255, 31, 73, 65, 34,100,255,255,255, 24,131, 22, 72,102, 26,255,175,  1, 10,102, 64,255,255,255,100, 67,131,166,  3,147,154,163, 73,166,244,255,255,255,255,
+	148,117,182,255,255,255,255, 15, 56,148,181,103,255,255,255,  5, 81,  4,103,251,255,255,191,103, 56, 52, 69, 19,245,255, 89,164, 33,103,251,255,255,111,123, 33, 10, 56,148,245,255,103, 91,164,
+	 36, 74, 32,255, 63,132, 83, 52, 82, 90,178,103, 39,115, 38, 69,249,255,255,159, 69,128,  6, 38,134,247,255, 99, 50,103, 81, 80,  4,255,111,130,134, 39,129,132, 21,133, 89,164, 97,113, 22,115,
+	255, 31,166,113, 22,112,120,144, 69,  4, 74, 90, 48,106,122,115,122,166,167, 88,164,132,250,255,150,101,155,139,249,255,255, 63,182, 96,  3,101,144,245,255,176,  8,181, 16, 85,182,255,111, 59,
+	 54, 85, 19,255,255,255, 33,154,181,185,184,101,255, 15, 59, 96, 11,105,101, 25,162,139,181,101,  8,165, 37, 32,101, 59, 54, 37, 58, 90,243,255,133, 89,130,101, 50, 40,255,159,101,105,  0, 38,
+	255,255,255, 81, 24,  8,101, 56, 40, 38, 24,101, 18,246,255,255,255,255, 49, 22,166,131, 86,150,152,166,  1, 10,150,  5,101,240,255, 48, 88,166,255,255,255,255,175,101,255,255,255,255,255,255,
+	 91,122,181,255,255,255,255,191,165,123,133,  3,255,255,255,181, 87,186,145,240,255,255,175, 87,186,151, 24, 56,241,255, 27,178, 23, 87,241,255,255, 15, 56, 33, 23, 87, 39,251,255,121,149,114,
+	  9, 34,123,255,127, 37, 39, 91, 41, 35,152, 40, 82, 42, 83,115,245,255,255,143,  2, 88,130, 87, 42,245,255,  9, 81, 58, 53, 55, 42,255,159, 40, 41,129, 39, 42,117, 37, 49, 53, 87,255,255,255,
+	255, 15,120,112, 17, 87,255,255,255,  9,147, 83, 53,247,255,255,159,120,149,247,255,255,255,255,133, 84,138,186,248,255,255, 95, 64,181, 80,186, 59,240,255, 16,137,164,168,171, 84,255,175, 75,
+	 74,181, 67, 73, 49, 65, 82, 33, 88,178, 72,133,255, 15,180,176, 67,181,178, 81,177, 32,  5,149,178, 69,133,139,149, 84,178,243,255,255,255,255, 82, 58, 37, 67, 53, 72,255, 95, 42, 37, 68,  2,
+	255,255,255,163, 50,165,131, 69,133, 16, 89, 42, 37, 20, 41, 73,242,255, 72,133, 53, 83,241,255,255, 15, 84,  1,245,255,255,255,255, 72,133, 53,  9,  5, 83,255,159, 84,255,255,255,255,255,255,
+	180, 71,185,169,251,255,255, 15, 56,148,151,123,169,251,255,161, 27, 75, 65,112,180,255, 63, 65, 67, 24, 74, 71,171, 75,180,151, 75, 41,155, 33,255,159, 71,185,151,177,178,  1, 56,123,180, 36,
+	 66,240,255,255,191, 71, 75,130, 67, 35,244,255,146, 42,151, 50,119,148,255,159,122,121,164,114,120, 32,112,115, 58, 42, 71, 26, 10,  4, 26, 42,120,244,255,255,255,255,148, 65,113, 23,243,255,
+	255, 79, 25, 20,  7, 24,120,241,255,  4,115, 52,255,255,255,255, 79,120,255,255,255,255,255,255,169,168,139,255,255,255,255, 63,144,147,187,169,255,255,255, 16, 10,138,168,251,255,255, 63,161,
+	 59,250,255,255,255,255, 33, 27,155,185,248,255,255, 63,144,147, 27,146,178,249,255, 32,139,176,255,255,255,255, 63,178,255,255,255,255,255,255, 50, 40,168,138,249,255,255,159, 42,144,242,255,
+	255,255,255, 50, 40,168, 16, 24,138,255, 31, 42,255,255,255,255,255,255, 49,152,129,255,255,255,255, 15, 25,255,255,255,255,255,255, 48,248,255,255,255,255,255,255,255,255,255,255,255,255,255
+};
+ushort edge_table(const uint i) {
+	return edge_table_data[i<128u?i:255u-i];
+}
+uchar triangle_table(const uint i) {
+	return (triangle_table_data[i/2u]>>(4u*(i%2u)))&0xF;
+}
+float3 interpolate_vertex(const float3 p1, const float3 p2, const float v1, const float v2, const float iso) { // linearly interpolate position where isosurface cuts an edge between 2 vertices
+	const float w = (iso-v1)/(v2-v1);
+	return (1.0f-w)*p1+w*p2;
 }
 uint marching_cubes(const float* v, const float iso, float3* triangles) { // input: 8 values v, isovalue; output: returns number of triangles, 15 triangle vertices t
 	uint cube = 0u; // determine index of which vertices are inside of the isosurface
@@ -179,9 +380,6 @@ float3 position(const uint3 xyz) { // 3D coordinates to 3D position
 uint3 coordinates(const uint n) { // disassemble 1D index to 3D coordinates (n -> x,y,z)
 	const uint t = n%(def_Nx*def_Ny);
 	return (uint3)(t%def_Nx, t/def_Nx, n/(def_Nx*def_Ny)); // n = x+(y+z*Ny)*Nx
-}
-float sq(const float x) {
-	return x*x;
 }
 bool is_halo(const uint n) {
 	const uint3 xyz = coordinates(n);
@@ -342,6 +540,31 @@ void neighbors(const uint n, uint* j) {
     #endif
 } //neighbors
 
+float3 load_u(const uint n, const global float* u) {
+	return (float3)(u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n]);
+}
+float calculate_Q_cached(const float3 u0, const float3 u1, const float3 u2, const float3 u3, const float3 u4, const float3 u5) { // Q-criterion
+	const float duxdx=u0.x-u1.x, duydx=u0.y-u1.y, duzdx=u0.z-u1.z; // du/dx = (u2-u0)/2
+	const float duxdy=u2.x-u3.x, duydy=u2.y-u3.y, duzdy=u2.z-u3.z;
+	const float duxdz=u4.x-u5.x, duydz=u4.y-u5.y, duzdz=u4.z-u5.z;
+	const float omega_xy=duxdy-duydx, omega_xz=duxdz-duzdx, omega_yz=duydz-duzdy; // antisymmetric tensor, omega_xx = omega_yy = omega_zz = 0
+	const float s_xx2=duxdx, s_yy2=duydy, s_zz2=duzdz; // s_xx2 = s_xx/2, s_yy2 = s_yy/2, s_zz2 = s_zz/2
+	const float s_xy=duxdy+duydx, s_xz=duxdz+duzdx, s_yz=duydz+duzdy; // symmetric tensor
+	const float omega2 = sq(omega_xy)+sq(omega_xz)+sq(omega_yz); // ||omega||_2^2
+	const float s2 = 2.0f*(sq(s_xx2)+sq(s_yy2)+sq(s_zz2))+sq(s_xy)+sq(s_xz)+sq(s_yz); // ||s||_2^2
+	return 0.25f*(omega2-s2); // Q = 1/2*(||omega||_2^2-||s||_2^2), addidional factor 1/2 from cental finite differences of velocity
+} // calculate_Q_cached()
+
+float calculate_Q(const uint n, const global float* u) { // Q-criterion
+	uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
+	calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
+	uint j[6];
+	j[0] = xp+y0+z0; j[1] = xm+y0+z0; // +00 -00
+	j[2] = x0+yp+z0; j[3] = x0+ym+z0; // 0+0 0-0
+	j[4] = x0+y0+zp; j[5] = x0+y0+zm; // 00+ 00-
+	return calculate_Q_cached(load_u(j[0], u), load_u(j[1], u), load_u(j[2], u), load_u(j[3], u), load_u(j[4], u), load_u(j[5], u));
+} // calculate_Q()
+
 __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute stream_collide() on halo
@@ -471,6 +694,47 @@ kernel void update_fields(const global fpxx* fi, global float* rho, global float
 
 // Graphics code
 #ifdef GRAPHICS
+int iron_color(float x) { // coloring scheme (float 0-255 -> int color)
+	x = clamp(360.0f-x*360.0f/255.0f, 0.0f, 360.0f);
+	float r=255.0f, g=0.0f, b=0.0f;
+	if(x<60.0f) { // white - yellow
+		g = 255.0f;
+		b = 255.0f-255.0f*x/60.0f;
+	} else if(x<180.0f) { // yellow - red
+		g = 255.0f-255.0f*(x-60.0f)/120.0f;
+	} else if(x<270.0f) { // red - violet
+		r = 255.0f-255.0f*(x-180.0f)/180.0f;
+		b = 255.0f*(x-180.0f)/90.0f;
+	} else { // violet - black
+		r = 255.0f-255.0f*(x-180.0f)/180.0f;
+		b = 255.0f-255.0f*(x-270.0f)/90.0f;
+	}
+	return (((int)r)<<16)|(((int)g)<<8)|((int)b);
+}
+int rainbow_color(float x) { // coloring scheme (float 0-255 -> int color)
+	x = clamp(360.0f-x*360.0f/255.0f, 0.0f, 360.0f);
+	float r=0.0f, g=0.0f, b=0.0f; // black
+	if(x<60.0f) { // red - yellow
+		r = 255.0f;
+		g = 255.0f*x/60.0f;
+	} else if(x>=60.0f&&x<120.0f) { // yellow - green
+		r = 255.0f-255.0f*(x-60.0f)/60.0f;
+		g = 255.0f;
+	} else if(x>=120.0f&&x<180.0f) { // green - cyan
+		g = 255.0f;
+		b = 255.0f*(x-120.0f)/60.0f;
+	} else if(x>=180.0f&&x<240.0f) { // cyan - blue
+		g = 255.0f-255.0f*(x-180.0f)/60.0f;
+		b = 255.0f;
+	} else if(x>=240.0f&&x<300.0f) { // blue - violet
+		r = (255.0f*(x-240.0f)/60.0f)/2.0f;
+		b = 255.0f;
+	} else { // violet - black
+		r = (255.0f-255.0f*(x-300.0f)/60.0f)/2.0f;
+		b = 255.0f-255.0f*(x-300.0f)/60.0f;
+	}
+	return (((int)r)<<16)|(((int)g)<<8)|((int)b);
+}
 kernel void graphics_flags(const global uchar* flags, const global float* camera, global int* bitmap, global int* zbuffer) {
     const uint n = get_global_id(0);
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute graphics_flags() on halo
@@ -735,6 +999,6 @@ kernel void graphics_q(const global uchar* flags, const global float* u, const g
 		}
 		draw_triangle_interpolated(p0+offset, p1+offset, p2+offset, c0, c1, c2, camera_cache, bitmap, zbuffer); // draw triangle with interpolated colors
 	}
-//}
+}
 
 #endif // Graphics
