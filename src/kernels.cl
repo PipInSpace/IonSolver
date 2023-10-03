@@ -363,3 +363,61 @@ kernel void update_fields(const global fpxx* fi, global float* rho, global float
 
 
 }
+
+// Graphics code
+#ifdef GRAPHICS
+kernel void graphics_flags(const global uchar* flags, const global float* camera, global int* bitmap, global int* zbuffer) {
+    const uint n = get_global_id(0);
+    if(n>=(uint)def_N||is_halo(n)) return; // don't execute graphics_flags() on halo
+    const uchar flagsn = flags[n]; // cache flags
+    const uchar flagsn_bo = flagsn&TYPE_BO; // extract boundary flags
+    if(flagsn==0u||flagsn==TYPE_G) return; // don't draw regular fluid cells
+    //if(flagsn&TYPE_SU) return; // don't draw surface
+    float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
+    for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
+    uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
+    calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
+    const uint3 xyz = coordinates(n);
+    const float3 p = position(xyz);
+    const int c =  // coloring scheme
+    	flagsn_bo==TYPE_S ? COLOR_S : // solid boundary
+    	((flagsn&TYPE_T)&&flagsn_bo==TYPE_E) ? color_average(COLOR_T, COLOR_E) : // both temperature boundary and equilibrium boundary
+    	((flagsn&TYPE_T)&&flagsn_bo==TYPE_MS) ? color_average(COLOR_T, COLOR_M) : // both temperature boundary and moving boundary
+    	flagsn&TYPE_T ? COLOR_T : // temperature boundary
+    	flagsn_bo==TYPE_E ? COLOR_E : // equilibrium boundary
+    	flagsn_bo==TYPE_MS ? COLOR_M : // moving boundary
+    	flagsn&TYPE_F ? COLOR_F : // fluid
+    	flagsn&TYPE_I ? COLOR_I : // interface
+    	flagsn&TYPE_X ? COLOR_X : // reserved type X
+    	flagsn&TYPE_Y ? COLOR_Y : // reserved type Y
+    	COLOR_0; // regular or gas cell
+    //draw_point(p, c, camera_cache, bitmap, zbuffer); // draw one pixel for every boundary cell
+    uint t;
+    t = xp+y0+z0; const bool not_xp = xyz.x<def_Nx-1u && flagsn==flags[t] && !is_halo(t); // +00
+    t = xm+y0+z0; const bool not_xm = xyz.x>       0u && flagsn==flags[t] && !is_halo(t); // -00
+    t = x0+yp+z0; const bool not_yp = xyz.y<def_Ny-1u && flagsn==flags[t] && !is_halo(t); // 0+0
+    t = x0+ym+z0; const bool not_ym = xyz.y>       0u && flagsn==flags[t] && !is_halo(t); // 0-0
+    t = x0+y0+zp; const bool not_zp = xyz.z<def_Nz-1u && flagsn==flags[t] && !is_halo(t); // 00+
+    t = x0+y0+zm; const bool not_zm = xyz.z>       0u && flagsn==flags[t] && !is_halo(t); // 00-
+    const float3 p0 = (float3)(p.x-0.5f, p.y-0.5f, p.z-0.5f); // ---
+    const float3 p1 = (float3)(p.x+0.5f, p.y+0.5f, p.z+0.5f); // +++
+    const float3 p2 = (float3)(p.x-0.5f, p.y-0.5f, p.z+0.5f); // --+
+    const float3 p3 = (float3)(p.x+0.5f, p.y+0.5f, p.z-0.5f); // ++-
+    const float3 p4 = (float3)(p.x-0.5f, p.y+0.5f, p.z-0.5f); // -+-
+    const float3 p5 = (float3)(p.x+0.5f, p.y-0.5f, p.z+0.5f); // +-+
+    const float3 p6 = (float3)(p.x+0.5f, p.y-0.5f, p.z-0.5f); // +--
+    const float3 p7 = (float3)(p.x-0.5f, p.y+0.5f, p.z+0.5f); // -++
+    if(!(not_xm||not_ym)) draw_line(p0, p2, c, camera_cache, bitmap, zbuffer); // to draw the entire surface, replace || by &&
+    if(!(not_xm||not_zm)) draw_line(p0, p4, c, camera_cache, bitmap, zbuffer);
+    if(!(not_ym||not_zm)) draw_line(p0, p6, c, camera_cache, bitmap, zbuffer);
+    if(!(not_xp||not_yp)) draw_line(p1, p3, c, camera_cache, bitmap, zbuffer);
+    if(!(not_xp||not_zp)) draw_line(p1, p5, c, camera_cache, bitmap, zbuffer);
+    if(!(not_yp||not_zp)) draw_line(p1, p7, c, camera_cache, bitmap, zbuffer);
+    if(!(not_ym||not_zp)) draw_line(p2, p5, c, camera_cache, bitmap, zbuffer);
+    if(!(not_xm||not_zp)) draw_line(p2, p7, c, camera_cache, bitmap, zbuffer);
+    if(!(not_yp||not_zm)) draw_line(p3, p4, c, camera_cache, bitmap, zbuffer);
+    if(!(not_xp||not_zm)) draw_line(p3, p6, c, camera_cache, bitmap, zbuffer);
+    if(!(not_xm||not_yp)) draw_line(p4, p7, c, camera_cache, bitmap, zbuffer);
+    if(!(not_xp||not_ym)) draw_line(p5, p6, c, camera_cache, bitmap, zbuffer);
+}
+#endif

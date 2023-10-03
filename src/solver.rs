@@ -49,6 +49,9 @@ pub fn simloop(
 
                 if i % 1000 == 0 {
                     println!("Step {}", i);
+                    if lbm_config.graphics_config.graphics {
+                        test_lbm.draw_frame();
+                    }
                 }
                 i += 1;
             }

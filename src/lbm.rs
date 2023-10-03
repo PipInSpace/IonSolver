@@ -1,4 +1,8 @@
-use crate::{*, graphics::Graphics, graphics::Camera};
+use crate::{
+    graphics::Graphics,
+    graphics::{Camera, GraphicsConfig},
+    *,
+};
 use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 #[allow(dead_code)]
@@ -84,6 +88,8 @@ pub struct LbmConfig {
     pub particles_rho: f32,
 
     pub ext_equilibrium_boudaries: bool, //Extensions
+
+    pub graphics_config: GraphicsConfig,
 }
 
 impl LbmConfig {
@@ -110,6 +116,8 @@ impl LbmConfig {
             particles_rho: 0.0f32,
 
             ext_equilibrium_boudaries: false,
+
+            graphics_config: GraphicsConfig::new(),
         }
     }
 }
@@ -349,7 +357,8 @@ impl LbmDomain {
             transfers,
             lbm_config.nu,
             lbm_config,
-        ) + &opencl::get_opencl_code();
+        ) + &if lbm_config.graphics_config.graphics {graphics::get_graphics_defines(lbm_config.graphics_config)} else {"".to_string()}
+            + &opencl::get_opencl_code(); // Only appends graphics defines if needed
 
         // OCL variables are directly exposed, due to no other device struct.
         let platform = Platform::default();
@@ -525,9 +534,8 @@ impl LbmDomain {
         }
         println!("Kernels for domain compiled.");
         //TODO: allocate transfer buffers
-        
-        let camera = Camera::default();
-        let graphics = Graphics::new(camera, lbm_config.clone(), &program, &queue, &flags, &u, 4);
+
+        let graphics = Graphics::new(lbm_config.clone(), &program, &queue, &flags, &u);
 
         let domain = LbmDomain {
             device,
@@ -570,7 +578,7 @@ impl LbmDomain {
             flags,
             t,
 
-            graphics
+            graphics,
         };
         domain //Returns initialised domain
     }
