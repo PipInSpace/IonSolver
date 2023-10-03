@@ -160,9 +160,9 @@ impl Graphics {
         Graphics {
             kernel_clear,
             bitmap,
-            bitmap_host: vec![],
+            bitmap_host: vec![0; (width * height) as usize],
             zbuffer,
-            zbuffer_host: vec![],
+            zbuffer_host: vec![0; (width * height) as usize],
             camera_params,
 
             lbm_config,
