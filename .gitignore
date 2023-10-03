@@ -17,3 +17,4 @@ Cargo.lock
 /target
 
 /.vscode
+opencl-language-server.log
