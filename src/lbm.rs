@@ -369,7 +369,7 @@ impl LbmDomain {
             FloatType::FP16S => VariableFloatBuffer::U16(
                 Buffer::<u16>::builder()
                     .queue(queue.clone())
-                    .len([n_x*velocity_set as u32, n_y, n_z])
+                    .len([n_x * velocity_set as u32, n_y, n_z])
                     .fill_val(0u16)
                     .build()
                     .unwrap(),
@@ -377,7 +377,7 @@ impl LbmDomain {
             FloatType::FP16C => VariableFloatBuffer::U16(
                 Buffer::<u16>::builder()
                     .queue(queue.clone())
-                    .len([n_x*velocity_set as u32, n_y, n_z])
+                    .len([n_x * velocity_set as u32, n_y, n_z])
                     .fill_val(0u16)
                     .build()
                     .unwrap(),
@@ -385,7 +385,7 @@ impl LbmDomain {
             FloatType::FP32 => VariableFloatBuffer::F32(
                 Buffer::<f32>::builder()
                     .queue(queue.clone())
-                    .len([n_x*velocity_set as u32, n_y, n_z])
+                    .len([n_x * velocity_set as u32, n_y, n_z])
                     .fill_val(0.0f32)
                     .build()
                     .unwrap(),
@@ -414,7 +414,7 @@ impl LbmDomain {
 
         // Initialize Kernels
         let kernel_initialize: Kernel;
-        match fi.clone() {
+        match &fi {
             //Initialize initialize kernel
             VariableFloatBuffer::U16(fi_u16) => {
                 kernel_initialize = Kernel::builder()
@@ -423,9 +423,9 @@ impl LbmDomain {
                     .queue(queue.clone())
                     .global_work_size([n_x, n_y, n_z])
                     .arg_named("fi", fi_u16)
-                    .arg_named("rho", rho.clone())
-                    .arg_named("u", u.clone())
-                    .arg_named("flags", flags.clone())
+                    .arg_named("rho", &rho)
+                    .arg_named("u", &u)
+                    .arg_named("flags", &flags)
                     .build()
                     .unwrap();
             }
@@ -436,15 +436,15 @@ impl LbmDomain {
                     .queue(queue.clone())
                     .global_work_size([n_x, n_y, n_z])
                     .arg_named("fi", fi_f32)
-                    .arg_named("rho", rho.clone())
-                    .arg_named("u", u.clone())
-                    .arg_named("flags", flags.clone())
+                    .arg_named("rho", &rho)
+                    .arg_named("u", &u)
+                    .arg_named("flags", &flags)
                     .build()
                     .unwrap();
             }
         }
         let kernel_stream_collide: Kernel;
-        match fi.clone() {
+        match &fi {
             //Initialize stream_collide kernel
             VariableFloatBuffer::U16(fi_u16) => {
                 println!("Buffer fi of length {}", &fi_u16.len());
@@ -454,13 +454,13 @@ impl LbmDomain {
                     .queue(queue.clone())
                     .global_work_size([n_x, n_y, n_z])
                     .arg_named("fi", fi_u16)
-                    .arg_named("rho", rho.clone())
-                    .arg_named("u", u.clone())
-                    .arg_named("flags", flags.clone())
-                    .arg_named("t", t.clone())
-                    .arg_named("fx", lbm_config.fx.clone())
-                    .arg_named("fy", lbm_config.fy.clone())
-                    .arg_named("fz", lbm_config.fz.clone())
+                    .arg_named("rho", &rho)
+                    .arg_named("u", &u)
+                    .arg_named("flags", &flags)
+                    .arg_named("t", &t)
+                    .arg_named("fx", &lbm_config.fx)
+                    .arg_named("fy", &lbm_config.fy)
+                    .arg_named("fz", &lbm_config.fz)
                     .build()
                     .unwrap();
             }
@@ -472,19 +472,19 @@ impl LbmDomain {
                     .queue(queue.clone())
                     .global_work_size([n_x, n_y, n_z])
                     .arg_named("fi", fi_f32)
-                    .arg_named("rho", rho.clone())
-                    .arg_named("u", u.clone())
-                    .arg_named("flags", flags.clone())
-                    .arg_named("t", t.clone())
-                    .arg_named("fx", lbm_config.fx.clone())
-                    .arg_named("fy", lbm_config.fy.clone())
-                    .arg_named("fz", lbm_config.fz.clone())
+                    .arg_named("rho", &rho)
+                    .arg_named("u", &u)
+                    .arg_named("flags", &flags)
+                    .arg_named("t", &t)
+                    .arg_named("fx", &lbm_config.fx)
+                    .arg_named("fy", &lbm_config.fy)
+                    .arg_named("fz", &lbm_config.fz)
                     .build()
                     .unwrap();
             }
         }
         let kernel_update_fields: Kernel;
-        match fi.clone() {
+        match &fi {
             //Initialize update_fields kernel
             VariableFloatBuffer::U16(fi_u16) => {
                 kernel_update_fields = Kernel::builder()
@@ -493,13 +493,13 @@ impl LbmDomain {
                     .queue(queue.clone())
                     .global_work_size(n as u32)
                     .arg_named("fi", fi_u16)
-                    .arg_named("rho", rho.clone())
-                    .arg_named("u", u.clone())
-                    .arg_named("flags", flags.clone())
-                    .arg_named("t", t.clone())
-                    .arg_named("fx", lbm_config.fx.clone())
-                    .arg_named("fy", lbm_config.fy.clone())
-                    .arg_named("fz", lbm_config.fz.clone())
+                    .arg_named("rho", &rho)
+                    .arg_named("u", &u)
+                    .arg_named("flags", &flags)
+                    .arg_named("t", &t)
+                    .arg_named("fx", &lbm_config.fx)
+                    .arg_named("fy", &lbm_config.fy)
+                    .arg_named("fz", &lbm_config.fz)
                     .build()
                     .unwrap();
             }
@@ -510,13 +510,13 @@ impl LbmDomain {
                     .queue(queue.clone())
                     .global_work_size(n as u32)
                     .arg_named("fi", fi_f32)
-                    .arg_named("rho", rho.clone())
-                    .arg_named("u", u.clone())
-                    .arg_named("flags", flags.clone())
-                    .arg_named("t", t.clone())
-                    .arg_named("fx", lbm_config.fx.clone())
-                    .arg_named("fy", lbm_config.fy.clone())
-                    .arg_named("fz", lbm_config.fz.clone())
+                    .arg_named("rho", &rho)
+                    .arg_named("u", &u)
+                    .arg_named("flags", &flags)
+                    .arg_named("t", &t)
+                    .arg_named("fx", &lbm_config.fx)
+                    .arg_named("fy", &lbm_config.fy)
+                    .arg_named("fz", &lbm_config.fz)
                     .build()
                     .unwrap();
             }

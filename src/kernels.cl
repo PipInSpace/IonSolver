@@ -253,16 +253,16 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
 
     #ifndef EQUILIBRIUM_BOUNDARIES // EQUILIBRIUM_BOUNDARIES
-    calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
+        calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
     #else
-    if(flagsn_bo==TYPE_E) {
-    	rhon = rho[               n]; // apply preset velocity/density
-    	uxn  = u[                 n];
-    	uyn  = u[    def_N+(ulong)n];
-    	uzn  = u[2ul*def_N+(ulong)n];
-    } else {
-    	calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
-    }
+        if(flagsn_bo==TYPE_E) {
+        	rhon = rho[               n]; // apply preset velocity/density
+        	uxn  = u[                 n];
+        	uyn  = u[    def_N+(ulong)n];
+        	uzn  = u[2ul*def_N+(ulong)n];
+        } else {
+        	calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
+        }
     #endif // EQUILIBRIUM_BOUNDARIES
 
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)

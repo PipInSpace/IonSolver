@@ -3,6 +3,7 @@ extern crate ocl;
 use std::time::Duration;
 use std::{sync::mpsc, thread};
 
+mod graphics;
 mod info;
 mod lbm;
 mod opencl;

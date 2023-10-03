@@ -23,9 +23,10 @@ pub fn simloop(
     //test_function().unwrap();
 
     let mut lbm_config = LbmConfig::new();
-    lbm_config.n_x = 144;
-    lbm_config.n_y = 144;
-    lbm_config.n_z = 144;
+    lbm_config.n_x = 512;
+    lbm_config.n_y = 512;
+    lbm_config.n_z = 256;
+    lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.ext_equilibrium_boudaries = true;
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.initialize();
@@ -46,7 +47,7 @@ pub fn simloop(
                 //Simulation commences here
                 test_lbm.do_time_step();
 
-                if i % 10 == 0 {
+                if i % 1000 == 0 {
                     println!("Step {}", i);
                 }
                 i += 1;
