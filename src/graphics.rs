@@ -150,6 +150,7 @@ impl Graphics {
             .queue(queue.clone())
             .global_work_size([lbm_config.n_x, lbm_config.n_y, lbm_config.n_z])
             .arg_named("flags", flags)
+            .arg_named("u", u)
             .arg_named("camera_params", &camera_params)
             .arg_named("bitmap", &bitmap)
             .arg_named("zbuffer", &zbuffer)

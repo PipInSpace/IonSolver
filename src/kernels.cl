@@ -6,10 +6,10 @@
 #endif // FP32
 
 //THESE ARE TO BE REMOVED
-#define def_Nx 2u
-#define def_Ny 2u
-#define def_Nz 2u
-#define def_N 2ul
+#define def_Nx 20u
+#define def_Ny 20u
+#define def_Nz 20u
+#define def_N 8000ul
 
 #define def_Dx 1u
 #define def_Dy 1u
@@ -66,6 +66,7 @@
 #define def_screen_height 1080u
 #define def_scale_u 1.0f
 #define def_scale_Q_min 0.0001f
+#define def_background_color 0x000000
 
 #define COLOR_S (127<<16|127<<8|127)
 #define COLOR_E (  0<<16|255<<8|  0)
@@ -270,6 +271,11 @@ void draw_triangle_interpolated(const float3 p0, const float3 p1, const float3 p
 		convert_triangle_interpolated(p0, p1, p2, c0, c1, c2, camera_cache, bitmap, zbuffer, -1); // left eye
 		convert_triangle_interpolated(p0, p1, p2, c0, c1, c2, camera_cache, bitmap, zbuffer, +1); // right eye
 	}
+}
+kernel void graphics_clear(global int* bitmap, global int* zbuffer) {
+	const uint n = get_global_id(0);
+	bitmap[n] = def_background_color; // black background = 0x000000, use 0xFFFFFF for white background
+	zbuffer[n] = -2147483648;
 }
 constant ushort edge_table_data[128] = { // source: Paul Bourke, http://paulbourke.net/geometry/polygonise/, mirror symmetry applied, makes marching-cubes 31% faster
 	0x000, 0x109, 0x203, 0x30A, 0x406, 0x50F, 0x605, 0x70C, 0x80C, 0x905, 0xA0F, 0xB06, 0xC0A, 0xD03, 0xE09, 0xF00,

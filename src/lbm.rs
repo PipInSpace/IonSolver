@@ -647,6 +647,10 @@ impl LbmDomain {
         +"\n	#define def_Ay "+ &(n_z * n_x).to_string()+"u"
         +"\n	#define def_Az "+ &(n_x * n_y).to_string()+"u"
 
+        +"\n	#define def_domain_offset_x "+ &format!("{:.5}", (o_x as f32+(d_x>1) as i32 as f32 - 0.5*(d_x as f32 - 1.0) * (n_x - 2u32 * (d_x>1u32) as i32 as u32) as f32))+"f"
+        +"\n	#define def_domain_offset_y "+ &format!("{:.5}", (o_y as f32+(d_y>1) as i32 as f32 - 0.5*(d_y as f32 - 1.0) * (n_y - 2u32 * (d_y>1u32) as i32 as u32) as f32))+"f"
+        +"\n	#define def_domain_offset_z "+ &format!("{:.5}", (o_z as f32+(d_z>1) as i32 as f32 - 0.5*(d_z as f32 - 1.0) * (n_z - 2u32 * (d_z>1u32) as i32 as u32) as f32))+"f"
+
         +"\n	#define D"+ &dimensions.to_string()+"Q"+ &velocity_set.to_string()+"" // D2Q9/D3Q15/D3Q19/D3Q27
         +"\n	#define def_velocity_set "+ &velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
         +"\n	#define def_dimensions "+ &dimensions.to_string()+"u" // number spatial dimensions (2D or 3D)
