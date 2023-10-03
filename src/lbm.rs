@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{*, graphics::Graphics, graphics::Camera};
 use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 #[allow(dead_code)]
@@ -115,7 +115,7 @@ impl LbmConfig {
 }
 
 pub struct Lbm {
-    domains: Vec<LbmDomain>,
+    pub domains: Vec<LbmDomain>,
     pub config: LbmConfig,
     initialized: bool,
 }
@@ -228,7 +228,7 @@ impl Lbm {
         }
     }
 
-    fn get_domain_numbers(&self) -> usize {
+    pub fn get_domain_numbers(&self) -> usize {
         self.domains.len()
     }
 
@@ -240,7 +240,7 @@ pub struct LbmDomain {
     device: Device, //FluidX3D creates contexts/queues/programs for each device automatically through another struct
     context: Context,
     program: Program,
-    queue: Queue,
+    pub queue: Queue,
     lbm_config: LbmConfig,
     ocl_code: String,
 
@@ -275,7 +275,9 @@ pub struct LbmDomain {
     rho: Buffer<f32>,
     u: Buffer<f32>,
     flags: Buffer<u8>,
-    t: u64,
+    pub t: u64,
+
+    pub graphics: Graphics,
 }
 
 impl LbmDomain {
@@ -523,6 +525,9 @@ impl LbmDomain {
         }
         println!("Kernels for domain compiled.");
         //TODO: allocate transfer buffers
+        
+        let camera = Camera::default();
+        let graphics = Graphics::new(camera, lbm_config.clone(), &program, &queue, &flags, &u, 4);
 
         let domain = LbmDomain {
             device,
@@ -564,6 +569,8 @@ impl LbmDomain {
             u,
             flags,
             t,
+
+            graphics
         };
         domain //Returns initialised domain
     }

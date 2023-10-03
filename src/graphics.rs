@@ -1,13 +1,15 @@
 use ocl::{flags, Buffer, Kernel, Program, Queue};
 
-use crate::lbm::{LbmConfig, VelocitySet};
+use crate::lbm::{LbmConfig, VelocitySet, Lbm};
 
-// Each LbmDomain renders it's own frame. Frames are stitched back together in the Lbm drawFrame function.
-struct Graphics {
+// Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
+pub struct Graphics {
     camera: Camera,
     kernel_clear: Kernel,
     bitmap: Buffer<i32>,
+    bitmap_host: Vec<i32>,
     zbuffer: Buffer<i32>,
+    zbuffer_host: Vec<i32>,
     camera_params: Buffer<f32>,
 
     lbm_config: LbmConfig,
@@ -24,11 +26,11 @@ impl Graphics {
     pub fn new(
         camera: Camera,
         lbm_config: LbmConfig,
-        program: Program,
-        queue: Queue,
+        program: &Program,
+        queue: &Queue,
         flags: &Buffer<u8>,
         u: &Buffer<f32>,
-        streamlines_every: u32,
+        streamlines_every: u32, // Show streamlines every x cells
     ) -> Graphics {
         let bitmap = Buffer::<i32>::builder()
             .queue(queue.clone())
@@ -158,7 +160,9 @@ impl Graphics {
             camera,
             kernel_clear,
             bitmap,
+            bitmap_host: vec![],
             zbuffer,
+            zbuffer_host: vec![],
             camera_params,
 
             lbm_config,
@@ -170,10 +174,50 @@ impl Graphics {
             t_last_rendered_frame: 0,
         }
     }
+
+    fn enqueue_draw_frame(&mut self){
+        // camera_params = update_camera()
+        // camera_params.enqueue_write
+        unsafe { 
+            self.kernel_clear.enq().unwrap(); 
+            //if visualisation mode
+            self.kernel_graphics_q.enq().unwrap();
+
+            self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
+            self.zbuffer.read(&mut self.zbuffer_host).enq().unwrap();
+        }
+    }
 }
 
 #[derive(Default)]
-struct Camera {
+pub struct Camera {
     width: u32,
     height: u32,
+}
+
+// draw_frame function for Lbm
+impl Lbm {
+    pub fn draw_frame(&mut self) -> Vec<i32> {
+        for d in 0..self.get_domain_numbers() {
+            self.domains[d].graphics.enqueue_draw_frame();
+        }
+        for d in 0..self.get_domain_numbers() {
+            self.domains[d].queue.finish().unwrap();
+        }
+
+        let mut bitmap = self.domains[0].graphics.bitmap_host.clone();
+        let mut zbuffer = self.domains[0].graphics.zbuffer_host.clone();
+        for d in 1..self.get_domain_numbers() {
+            let bitmap_d = &self.domains[d].graphics.bitmap_host;
+            let zbuffer_d = &self.domains[d].graphics.zbuffer_host;
+            for i in 0..(self.domains[0].graphics.camera.width * self.domains[0].graphics.camera.height) as usize {
+                let zdi = zbuffer_d[i];
+                if zdi>zbuffer[i] {
+                    bitmap[i] = bitmap_d[i];
+                    zbuffer[i] = zbuffer_d[i];
+                }
+            }
+        }
+        return bitmap;
+    }
 }
