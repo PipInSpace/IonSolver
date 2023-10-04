@@ -128,6 +128,7 @@ struct SimControl {
     clear_images: bool,
     frame_spacing: u32,
     frame_spacing_str: String,
+    display_img: ColorImage,
     ctrl_tx: mpsc::Sender<SimControlTx>,
     sim_rx: mpsc::Receiver<SimState>,
 }
@@ -153,10 +154,9 @@ impl SimControl {
 impl App for SimControl {
     /// UI update loop
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let img: Vec<u8> = vec![1920*1080; 0];
         let recieve_result = self.sim_rx.try_recv();
         if let Ok(recieve) = recieve_result {
-            img = recieve.img;
+            self.display_img = ColorImage::from_rgb([1920, 1080], &recieve.img);
         }
 
         // Prepare images
@@ -220,7 +220,7 @@ impl App for SimControl {
                 ui.ctx()
                     .load_texture(
                         "sim",
-                        ColorImage::from_rgb([1920, 1080], spectrum_img.into_raw().as_slice()),
+                        self.display_img.clone(),
                         Default::default(),
                     )
                     .id(),
@@ -258,7 +258,7 @@ fn main() {
     // UI params
     let icon_bytes = include_bytes!("../icons/IonSolver.png");
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(1000.0, 500.0)),
+        initial_window_size: Some(egui::vec2(1000.0, 650.0)),
         icon_data: load_icon(&icon_bytes.to_vec()),
         follow_system_theme: false,
         default_theme: Theme::Light,
@@ -278,10 +278,11 @@ fn main() {
     // setup simcontrol struc to pass params and channels to GUI
     let simcontrol = SimControl {
         paused: true,
-        save: true,
+        save: false,
         clear_images: true,
-        frame_spacing: 10,
+        frame_spacing: 100,
         frame_spacing_str: "1".to_string(),
+        display_img: ColorImage::example(),
         ctrl_tx,
         sim_rx,
     };

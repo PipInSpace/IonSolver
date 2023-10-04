@@ -68,8 +68,12 @@ pub fn simloop(
                     println!("Step {}", i);
                     if lbm_config.graphics_config.graphics {
                         let image = test_lbm.draw_frame();
+                        sim_tx.send(SimState { s: SimSize { x:1, y:1 }, visc: 1.0, diff: 1.0, dt: 1.0, dt_text: "()".to_string(), step: i as i32, paused: false, save: state.save, img: image.clone() }).unwrap();
                         if state.save {
-                            //image.save(format!(r"out/img_{}.png", (i/state.frame_spacing))).unwrap();
+                            thread::spawn(move || { //Saving needs own thread for performance reasons
+                                let imgbuffer: ImageBuffer<Rgb<u8>, _> = ImageBuffer::from_raw(1920, 1080, image).unwrap();
+                                imgbuffer.save(format!(r"out/img_{}.png", (i/state.frame_spacing))).unwrap();
+                            });
                         }
                     }
                 }
