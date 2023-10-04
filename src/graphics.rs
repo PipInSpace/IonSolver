@@ -208,6 +208,9 @@ pub struct GraphicsConfig {
     pub stream_line_lenght: u32,
     pub ray_transmittance: f32,
     pub ray_colour: u32,
+    pub frame_spacing: u32,
+    pub save: bool,
+    pub clear_images: bool,
 }
 
 impl GraphicsConfig {
@@ -224,6 +227,9 @@ impl GraphicsConfig {
             stream_line_lenght: 128,
             ray_transmittance: 0.25,
             ray_colour: 0x005F7F,
+            frame_spacing: 1,
+            save: true,
+            clear_images: true,
         }
     }
 }

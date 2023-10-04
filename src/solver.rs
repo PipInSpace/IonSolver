@@ -3,6 +3,7 @@ use crate::lbm::*;
 use crate::*;
 use ocl::ProQue;
 use std::sync::mpsc;
+use std::fs;
 
 #[allow(unused)]
 pub fn simloop(
@@ -31,6 +32,13 @@ pub fn simloop(
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.initialize();
 
+
+    // Clearing out folder if requested
+    if lbm_config.graphics_config.save && lbm_config.graphics_config.clear_images {
+        fs::remove_dir_all("out").unwrap();// TODO: make not bad
+        fs::create_dir("out").unwrap();
+    }
+
     loop {
         //This is the master loop, cannot be paused
         if !state.paused {
@@ -47,10 +55,13 @@ pub fn simloop(
                 //Simulation commences here
                 test_lbm.do_time_step();
 
-                if i % 1000 == 0 {
+                if i % lbm_config.graphics_config.frame_spacing == 0 {
                     println!("Step {}", i);
                     if lbm_config.graphics_config.graphics {
-                        test_lbm.draw_frame();
+                        let image = test_lbm.draw_frame();
+                        if lbm_config.graphics_config.save {
+                            image.save(format!(r"out/img_{}.png", (i/lbm_config.graphics_config.frame_spacing))).unwrap();
+                        }
                     }
                 }
                 i += 1;
