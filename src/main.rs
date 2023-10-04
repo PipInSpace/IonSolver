@@ -25,7 +25,6 @@ pub struct SimSize {
     pub y: usize,
 }
 
-
 pub struct SimState {
     s: SimSize,
     //force: Array<Vec2, 2>,
@@ -45,7 +44,6 @@ pub struct SimState {
 
     img: Vec<u8>,
 }
-
 
 impl SimState {
     pub fn new(s: SimSize, visc: f64, diff: f64, dt: f64) -> SimState {
@@ -138,16 +136,16 @@ impl SimControl {
         self.paused = true;
     }
 
-    
-    pub fn send_control(&self){
-        self.ctrl_tx.send(SimControlTx {
-            paused: self.paused,
-            save: self.save,
-            clear_images: self.clear_images,
-            frame_spacing: self.frame_spacing,
-            active: true,
-        })
-        .expect("GUI cannot communicate with sim thread");
+    pub fn send_control(&self) {
+        self.ctrl_tx
+            .send(SimControlTx {
+                paused: self.paused,
+                save: self.save,
+                clear_images: self.clear_images,
+                frame_spacing: self.frame_spacing,
+                active: true,
+            })
+            .expect("GUI cannot communicate with sim thread");
     }
 }
 
@@ -186,25 +184,35 @@ impl App for SimControl {
                     self.reset_sim();
                 }
                 if ui
-                    .add(egui::Button::new(if self.save {"Saving Enabled"} else {"Saving Disabled"})
-                    .rounding(0.0f32))
+                    .add(
+                        egui::Button::new(if self.save {
+                            "Saving Enabled"
+                        } else {
+                            "Saving Disabled"
+                        })
+                        .rounding(0.0f32),
+                    )
                     .clicked()
                 {
                     self.save = !self.save;
                     self.send_control();
                 }
                 if ui
-                    .add(egui::Button::new(if self.clear_images {"Old Output Deleted"} else {"Old Output Kept"})
-                    .rounding(0.0f32))
+                    .add(
+                        egui::Button::new(if self.clear_images {
+                            "Old Output Deleted"
+                        } else {
+                            "Old Output Kept"
+                        })
+                        .rounding(0.0f32),
+                    )
                     .clicked()
                 {
                     self.clear_images = !self.clear_images;
                     self.send_control();
                 }
                 let mut text = self.frame_spacing_str.clone();
-                if ui.add(egui::TextEdit::singleline(&mut text))
-                    .changed()
-                {
+                if ui.add(egui::TextEdit::singleline(&mut text)).changed() {
                     self.frame_spacing_str = text.clone(); // clone jik text is cbv here
                     let result = str::parse::<u32>(&text);
                     if let Ok(value) = result {
@@ -218,11 +226,7 @@ impl App for SimControl {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.image(
                 ui.ctx()
-                    .load_texture(
-                        "sim",
-                        self.display_img.clone(),
-                        Default::default(),
-                    )
+                    .load_texture("sim", self.display_img.clone(), Default::default())
                     .id(),
                 ui.available_size(),
             );
@@ -281,7 +285,7 @@ fn main() {
         save: false,
         clear_images: true,
         frame_spacing: 100,
-        frame_spacing_str: "1".to_string(),
+        frame_spacing_str: "100".to_string(),
         display_img: ColorImage::example(),
         ctrl_tx,
         sim_rx,

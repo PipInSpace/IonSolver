@@ -357,8 +357,11 @@ impl LbmDomain {
             transfers,
             lbm_config.nu,
             lbm_config,
-        ) + &if lbm_config.graphics_config.graphics {graphics::get_graphics_defines(lbm_config.graphics_config)} else {"".to_string()}
-            + &opencl::get_opencl_code(); // Only appends graphics defines if needed
+        ) + &if lbm_config.graphics_config.graphics {
+            graphics::get_graphics_defines(lbm_config.graphics_config)
+        } else {
+            "".to_string()
+        } + &opencl::get_opencl_code(); // Only appends graphics defines if needed
 
         // OCL variables are directly exposed, due to no other device struct.
         let platform = Platform::default();
@@ -458,7 +461,6 @@ impl LbmDomain {
         match &fi {
             //Initialize stream_collide kernel
             VariableFloatBuffer::U16(fi_u16) => {
-                println!("Buffer fi of length {}", &fi_u16.len());
                 kernel_stream_collide = Kernel::builder()
                     .program(&program)
                     .name("stream_collide")
@@ -476,7 +478,6 @@ impl LbmDomain {
                     .unwrap();
             }
             VariableFloatBuffer::F32(fi_f32) => {
-                println!("Buffer fi of length {}", &fi_f32.len());
                 kernel_stream_collide = Kernel::builder()
                     .program(&program)
                     .name("stream_collide")

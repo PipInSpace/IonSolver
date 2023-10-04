@@ -3,8 +3,8 @@ use crate::lbm::*;
 use crate::*;
 use image::{ImageBuffer, Rgb};
 use ocl::ProQue;
-use std::sync::mpsc;
 use std::fs;
+use std::sync::mpsc;
 
 #[allow(unused)]
 pub fn simloop(
@@ -35,7 +35,6 @@ pub fn simloop(
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.initialize();
 
-
     // get initial config from ui
     let recieve_result = ctrl_rx.try_recv();
     if let Ok(recieve) = recieve_result {
@@ -44,7 +43,7 @@ pub fn simloop(
 
     // Clearing out folder if requested
     if state.save && state.clear_images {
-        fs::remove_dir_all("out").unwrap();// TODO: make not bad
+        fs::remove_dir_all("out").unwrap(); // TODO: make not bad
         fs::create_dir("out").unwrap();
     }
 
@@ -67,14 +66,7 @@ pub fn simloop(
                 if i % state.frame_spacing == 0 {
                     println!("Step {}", i);
                     if lbm_config.graphics_config.graphics {
-                        let image = test_lbm.draw_frame();
-                        sim_tx.send(SimState { s: SimSize { x:1, y:1 }, visc: 1.0, diff: 1.0, dt: 1.0, dt_text: "()".to_string(), step: i as i32, paused: false, save: state.save, img: image.clone() }).unwrap();
-                        if state.save {
-                            thread::spawn(move || { //Saving needs own thread for performance reasons
-                                let imgbuffer: ImageBuffer<Rgb<u8>, _> = ImageBuffer::from_raw(1920, 1080, image).unwrap();
-                                imgbuffer.save(format!(r"out/img_{}.png", (i/state.frame_spacing))).unwrap();
-                            });
-                        }
+                        test_lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
                     }
                 }
                 i += 1;

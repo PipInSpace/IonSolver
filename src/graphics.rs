@@ -1,7 +1,12 @@
+use std::{sync::mpsc::Sender, thread};
+
 use image::{ImageBuffer, Rgb};
 use ocl::{flags, Buffer, Kernel, Program, Queue};
 
-use crate::lbm::{Lbm, LbmConfig, VelocitySet};
+use crate::{
+    lbm::{Lbm, LbmConfig, VelocitySet},
+    SimSize, SimState,
+};
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
 pub struct Graphics {
@@ -230,7 +235,13 @@ impl GraphicsConfig {
 
 // draw_frame function for Lbm
 impl Lbm {
-    pub fn draw_frame(&mut self) -> Vec<u8> {
+    pub fn draw_frame(
+        &mut self,
+        state_save: bool,
+        frame_spacing: u32,
+        sim_tx: Sender<SimState>,
+        i: u32,
+    ) {
         let width = self.config.graphics_config.camera_width;
         let height = self.config.graphics_config.camera_height;
         for d in 0..self.get_domain_numbers() {
@@ -253,14 +264,38 @@ impl Lbm {
                 }
             }
         }
-        let mut frame: Vec<u8> = vec![];
-        for pixel in 0..bitmap.len() {
-            let color = bitmap[pixel] & 0xFFFFFF;
-            frame.push(((color >> 16) & 0xFF) as u8);
-            frame.push(((color >> 8) & 0xFF) as u8);
-            frame.push((color & 0xFF) as u8);
-        }
-        frame
+        thread::spawn(move || { // Generating images needs own tread for performance reasons
+            let mut frame: Vec<u8> = vec![];
+            for pixel in 0..bitmap.len() {
+                let color = bitmap[pixel] & 0xFFFFFF;
+                frame.push(((color >> 16) & 0xFF) as u8);
+                frame.push(((color >> 8) & 0xFF) as u8);
+                frame.push((color & 0xFF) as u8);
+            }
+            sim_tx
+                .send(SimState {
+                    s: SimSize { x: 1, y: 1 },
+                    visc: 1.0,
+                    diff: 1.0,
+                    dt: 1.0,
+                    dt_text: "()".to_string(),
+                    step: 1,
+                    paused: false,
+                    save: state_save,
+                    img: frame.clone(),
+                })
+                .unwrap();
+            if state_save {
+                thread::spawn(move || {
+                    //Saving needs own thread for performance reasons
+                    let imgbuffer: ImageBuffer<Rgb<u8>, _> =
+                        ImageBuffer::from_raw(1920, 1080, frame).unwrap();
+                    imgbuffer
+                        .save(format!(r"out/img_{}.png", (i / frame_spacing)))
+                        .unwrap();
+                });
+            }
+        });
     }
 }
 
