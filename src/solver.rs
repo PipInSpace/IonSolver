@@ -16,7 +16,9 @@ pub fn simloop(
     //sim_tx.send(sim) sends data to the main window loop
     let mut state = SimControlTx {
         paused: true,
-        save: false,
+        save: true,
+        clear_images: true,
+        frame_spacing: 10,
         active: true,
     };
     let mut i = 0;
@@ -30,14 +32,18 @@ pub fn simloop(
     lbm_config.n_z = 256;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.ext_equilibrium_boudaries = true;
-    lbm_config.graphics_config.save = false;
-    lbm_config.graphics_config.frame_spacing = 10;
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.initialize();
 
 
+    // get initial config from ui
+    let recieve_result = ctrl_rx.try_recv();
+    if let Ok(recieve) = recieve_result {
+        state = recieve;
+    }
+
     // Clearing out folder if requested
-    if lbm_config.graphics_config.save && lbm_config.graphics_config.clear_images {
+    if state.save && state.clear_images {
         fs::remove_dir_all("out").unwrap();// TODO: make not bad
         fs::create_dir("out").unwrap();
     }
@@ -58,12 +64,12 @@ pub fn simloop(
                 //Simulation commences here
                 test_lbm.do_time_step();
 
-                if i % lbm_config.graphics_config.frame_spacing == 0 {
+                if i % state.frame_spacing == 0 {
                     println!("Step {}", i);
                     if lbm_config.graphics_config.graphics {
                         let image = test_lbm.draw_frame();
-                        if lbm_config.graphics_config.save {
-                            //image.save(format!(r"out/img_{}.png", (i/lbm_config.graphics_config.frame_spacing))).unwrap();
+                        if state.save {
+                            //image.save(format!(r"out/img_{}.png", (i/state.frame_spacing))).unwrap();
                         }
                     }
                 }

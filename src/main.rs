@@ -9,6 +9,7 @@ mod lbm;
 mod opencl;
 mod solver;
 use egui::ColorImage;
+use egui::TextBuffer;
 use solver::*;
 
 //use image::{ImageBuffer, Rgb};
@@ -113,6 +114,8 @@ pub struct SimControlTx {
     //SimControlTx is used to send information to the simulation thread
     paused: bool,
     save: bool,
+    clear_images: bool,
+    frame_spacing: u32,
     active: bool,
 }
 
@@ -122,6 +125,9 @@ struct SimControl {
     //SimControl handles control/displaying of the Simulation over the UI
     paused: bool,
     save: bool,
+    clear_images: bool,
+    frame_spacing: u32,
+    frame_spacing_str: String,
     ctrl_tx: mpsc::Sender<SimControlTx>,
     sim_rx: mpsc::Receiver<SimState>,
 }
@@ -129,6 +135,18 @@ struct SimControl {
 impl SimControl {
     pub fn reset_sim(&mut self) {
         self.paused = true;
+    }
+
+    
+    pub fn send_control(&self){
+        self.ctrl_tx.send(SimControlTx {
+            paused: self.paused,
+            save: self.save,
+            clear_images: self.clear_images,
+            frame_spacing: self.frame_spacing,
+            active: true,
+        })
+        .expect("GUI cannot communicate with sim thread");
     }
 }
 
@@ -158,13 +176,7 @@ impl App for SimControl {
                     .clicked()
                 {
                     self.paused = !self.paused;
-                    self.ctrl_tx
-                        .send(SimControlTx {
-                            paused: self.paused,
-                            save: self.save,
-                            active: true,
-                        })
-                        .expect("GUI cannot communicate with sim thread");
+                    self.send_control();
                     let _z = self.paused;
                 }
                 if ui
@@ -172,6 +184,33 @@ impl App for SimControl {
                     .clicked()
                 {
                     self.reset_sim();
+                }
+                if ui
+                    .add(egui::Button::new(if self.save {"Saving Enabled"} else {"Saving Disabled"})
+                    .rounding(0.0f32))
+                    .clicked()
+                {
+                    self.save = !self.save;
+                    self.send_control();
+                }
+                if ui
+                    .add(egui::Button::new(if self.clear_images {"Old Output Deleted"} else {"Old Output Kept"})
+                    .rounding(0.0f32))
+                    .clicked()
+                {
+                    self.clear_images = !self.clear_images;
+                    self.send_control();
+                }
+                let mut text = self.frame_spacing_str.clone();
+                if ui.add(egui::TextEdit::singleline(&mut text))
+                    .changed()
+                {
+                    self.frame_spacing_str = text.clone(); // clone jik text is cbv here
+                    let result = str::parse::<u32>(&text);
+                    if let Ok(value) = result {
+                        self.frame_spacing = value;
+                        self.send_control();
+                    }
                 }
             })
         });
@@ -239,7 +278,10 @@ fn main() {
     // setup simcontrol struc to pass params and channels to GUI
     let simcontrol = SimControl {
         paused: true,
-        save: false,
+        save: true,
+        clear_images: true,
+        frame_spacing: 10,
+        frame_spacing_str: "1".to_string(),
         ctrl_tx,
         sim_rx,
     };
@@ -256,6 +298,8 @@ fn main() {
         .send(SimControlTx {
             paused: true,
             save: false,
+            clear_images: true,
+            frame_spacing: 10,
             active: false,
         })
         .expect("Exit Channel cannot reach Simulation thread");
