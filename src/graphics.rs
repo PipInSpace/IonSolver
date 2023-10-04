@@ -256,9 +256,6 @@ impl Lbm {
         let mut frame: Vec<u8> = vec![];
         for pixel in 0..bitmap.len() {
             let color = bitmap[pixel] & 0xFFFFFF;
-            let r = ((color >> 16) & 0xFF) as u8;
-            let g = ((color >> 8) & 0xFF) as u8;
-            let b = (color & 0xFF) as u8;
             frame.push(((color >> 16) & 0xFF) as u8);
             frame.push(((color >> 8) & 0xFF) as u8);
             frame.push((color & 0xFF) as u8);
