@@ -236,7 +236,7 @@ impl GraphicsConfig {
 
 // draw_frame function for Lbm
 impl Lbm {
-    pub fn draw_frame(&mut self) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+    pub fn draw_frame(&mut self) -> Vec<u8> {
         let width = self.config.graphics_config.camera_width;
         let height = self.config.graphics_config.camera_height;
         for d in 0..self.get_domain_numbers() {
@@ -259,13 +259,15 @@ impl Lbm {
                 }
             }
         }
-        let mut frame = ImageBuffer::new(width, height);
-        for (x, y, pixel) in frame.enumerate_pixels_mut() {
-            let color = bitmap[(y * width + x) as usize] & 0xFFFFFF;
+        let mut frame: Vec<u8> = vec![];
+        for pixel in 0..bitmap.len() {
+            let color = bitmap[pixel] & 0xFFFFFF;
             let r = ((color >> 16) & 0xFF) as u8;
             let g = ((color >> 8) & 0xFF) as u8;
             let b = (color & 0xFF) as u8;
-            *pixel = Rgb([r, g, b]);
+            frame.push(((color >> 16) & 0xFF) as u8);
+            frame.push(((color >> 8) & 0xFF) as u8);
+            frame.push((color & 0xFF) as u8);
         }
         frame
     }

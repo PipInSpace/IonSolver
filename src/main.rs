@@ -8,6 +8,7 @@ mod info;
 mod lbm;
 mod opencl;
 mod solver;
+use egui::ColorImage;
 use solver::*;
 
 //use image::{ImageBuffer, Rgb};
@@ -23,7 +24,7 @@ pub struct SimSize {
     pub y: usize,
 }
 
-#[allow(unused)]
+
 pub struct SimState {
     s: SimSize,
     //force: Array<Vec2, 2>,
@@ -40,9 +41,11 @@ pub struct SimState {
     //Control:
     paused: bool,
     save: bool,
+
+    img: Vec<u8>,
 }
 
-#[allow(unused)]
+
 impl SimState {
     pub fn new(s: SimSize, visc: f64, diff: f64, dt: f64) -> SimState {
         Self {
@@ -58,6 +61,7 @@ impl SimState {
             s,
             paused: true,
             save: false,
+            img: vec![],
         }
     }
 
@@ -131,7 +135,11 @@ impl SimControl {
 impl App for SimControl {
     /// UI update loop
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // let spectrum_img = draw_spectrum(&self.s, &self.dens, self.step, "densRel", self.save);
+        let img: Vec<u8> = vec![1920*1080; 0];
+        let recieve_result = self.sim_rx.try_recv();
+        if let Ok(recieve) = recieve_result {
+            img = recieve.img;
+        }
 
         // Prepare images
         // let size = spectrum_img.dimensions();
@@ -169,16 +177,16 @@ impl App for SimControl {
         });
         //TODO: Display the Simulation
         egui::CentralPanel::default().show(ctx, |ui| {
-            //ui.image(
-            //    ui.ctx()
-            //        .load_texture(
-            //            "sim",
-            //            ColorImage::from_rgb(size, spectrum_img.into_raw().as_slice()),
-            //            Default::default(),
-            //        )
-            //        .id(),
-            //    ui.available_size(),
-            //);
+            ui.image(
+                ui.ctx()
+                    .load_texture(
+                        "sim",
+                        ColorImage::from_rgb([1920, 1080], spectrum_img.into_raw().as_slice()),
+                        Default::default(),
+                    )
+                    .id(),
+                ui.available_size(),
+            );
         });
 
         ctx.request_repaint_after(Duration::from_millis(100))

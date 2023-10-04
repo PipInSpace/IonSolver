@@ -1,6 +1,7 @@
 extern crate ocl;
 use crate::lbm::*;
 use crate::*;
+use image::{ImageBuffer, Rgb};
 use ocl::ProQue;
 use std::sync::mpsc;
 use std::fs;
@@ -29,6 +30,8 @@ pub fn simloop(
     lbm_config.n_z = 256;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.ext_equilibrium_boudaries = true;
+    lbm_config.graphics_config.save = false;
+    lbm_config.graphics_config.frame_spacing = 10;
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.initialize();
 
@@ -60,7 +63,7 @@ pub fn simloop(
                     if lbm_config.graphics_config.graphics {
                         let image = test_lbm.draw_frame();
                         if lbm_config.graphics_config.save {
-                            image.save(format!(r"out/img_{}.png", (i/lbm_config.graphics_config.frame_spacing))).unwrap();
+                            //image.save(format!(r"out/img_{}.png", (i/lbm_config.graphics_config.frame_spacing))).unwrap();
                         }
                     }
                 }
