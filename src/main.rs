@@ -8,7 +8,9 @@ mod info;
 mod lbm;
 mod opencl;
 mod solver;
-use egui::ColorImage;
+use egui::epaint::Shadow;
+use egui::style::Spacing;
+use egui::{ColorImage, Rounding, Color32, Stroke, Button};
 use egui::TextBuffer;
 use solver::*;
 
@@ -161,15 +163,32 @@ impl App for SimControl {
         // let size = spectrum_img.dimensions();
         // let size = [size.0 as usize, size.1 as usize];
 
+        let zeromargin = egui::Margin {left: 0.0, right: 0.0, top: 0.0, bottom: 0.0};
+        let small_left_margin = egui::Margin {left: 0.0, right: 0.0, top: 1.0, bottom: -1.0};
+        let mut frame = egui::Frame::default();
+        frame.fill = Color32::WHITE;
+        frame.inner_margin = small_left_margin;
+        frame.outer_margin = zeromargin;
+
+        let transparent_stroke = Stroke{width: 0.0, color: Color32::TRANSPARENT};
+
         //Update gui
-        egui::TopBottomPanel::top("top_controls").show(ctx, |ui| {
-            ui.heading("IonSolver Simulation");
-            //ui.separator();
+        egui::TopBottomPanel::top("top_controls").frame(frame).show(ctx, |ui| {
             ui.horizontal(|ui| {
+                let mut spacing = Spacing::default();
+                spacing.item_spacing = egui::Vec2{x: 0., y: 0.};
+                ui.style_mut().spacing = spacing;
+                ui.style_mut().visuals.widgets.hovered.expansion = 0.0;
+                ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb( 0xCC, 0xCC, 0xCC);
+                ui.style_mut().visuals.widgets.hovered.rounding = 0.0.into();
+                ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::WHITE;
+                ui.style_mut().visuals.widgets.inactive.rounding = 0.0.into();
+                ui.style_mut().visuals.widgets.active.rounding = 0.0.into();
+                ui.style_mut().visuals.widgets.noninteractive.rounding = 0.0.into();
                 if ui
-                    .add(
+                    .add_sized( [40.,18.],
                         egui::Button::new(if self.paused { "Play" } else { "Pause" })
-                            .rounding(0.0f32),
+                            .rounding(0.0f32).stroke(transparent_stroke),
                     )
                     .clicked()
                 {
@@ -178,7 +197,7 @@ impl App for SimControl {
                     let _z = self.paused;
                 }
                 if ui
-                    .add(egui::Button::new("Reset").rounding(0.0f32))
+                    .add(egui::Button::new("Reset").rounding(0.0f32).stroke(transparent_stroke))
                     .clicked()
                 {
                     self.reset_sim();
@@ -190,7 +209,7 @@ impl App for SimControl {
                         } else {
                             "Saving Disabled"
                         })
-                        .rounding(0.0f32),
+                        .rounding(0.0f32).stroke(transparent_stroke),
                     )
                     .clicked()
                 {
@@ -204,7 +223,7 @@ impl App for SimControl {
                         } else {
                             "Old Output Kept"
                         })
-                        .rounding(0.0f32),
+                        .rounding(0.0f32).stroke(transparent_stroke),
                     )
                     .clicked()
                 {
@@ -212,18 +231,23 @@ impl App for SimControl {
                     self.send_control();
                 }
                 let mut text = self.frame_spacing_str.clone();
-                if ui.add(egui::TextEdit::singleline(&mut text)).changed() {
+                if ui.add(egui::TextEdit::singleline(&mut text).desired_width(50.0)).changed() {
                     self.frame_spacing_str = text.clone(); // clone jik text is cbv here
                     let result = str::parse::<u32>(&text);
                     if let Ok(value) = result {
-                        self.frame_spacing = value;
-                        self.send_control();
+                        if value >= 10 {
+                            self.frame_spacing = value;
+                            self.send_control();
+                        }
                     }
                 }
             })
         });
         //TODO: Display the Simulation
-        egui::CentralPanel::default().show(ctx, |ui| {
+
+        frame.outer_margin = zeromargin;
+        frame.fill = Color32::from_rgb( 0x6C, 0x6C, 0x6C);
+        egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
             ui.image(
                 ui.ctx()
                     .load_texture("sim", self.display_img.clone(), Default::default())
@@ -263,9 +287,9 @@ fn main() {
     let icon_bytes = include_bytes!("../icons/IonSolver.png");
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(1000.0, 650.0)),
-        icon_data: load_icon(&icon_bytes.to_vec()),
         follow_system_theme: false,
         default_theme: Theme::Light,
+        icon_data: load_icon(&icon_bytes.to_vec()),
         ..Default::default()
     };
 
