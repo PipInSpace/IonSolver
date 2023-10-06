@@ -1,4 +1,4 @@
-use std::{sync::mpsc::Sender, thread};
+use std::{sync::mpsc::Sender, thread, f32::consts::PI};
 
 use egui::{Color32, ColorImage};
 use image::{ImageBuffer, Rgb};
@@ -11,6 +11,7 @@ use crate::{
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
 pub struct Graphics {
+    queue: Queue,
     kernel_clear: Kernel,
     bitmap: Buffer<i32>,
     bitmap_host: Vec<i32>,
@@ -38,6 +39,7 @@ impl Graphics {
     ) -> Graphics {
         let width = lbm_config.graphics_config.camera_width;
         let height = lbm_config.graphics_config.camera_height;
+        let n = lbm_config.n_x as u64 * lbm_config.n_y as u64* lbm_config.n_z as u64; //TODO: use domain size
         let bitmap = Buffer::<i32>::builder()
             .queue(queue.clone())
             .len([width, height])
@@ -59,6 +61,7 @@ impl Graphics {
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
+        camera_params.write(&new_camera_params()).enq().unwrap();
 
         let kernel_clear = Kernel::builder()
             .program(&program)
@@ -75,7 +78,7 @@ impl Graphics {
             .program(&program)
             .name("graphics_flags")
             .queue(queue.clone())
-            .global_work_size([lbm_config.n_x, lbm_config.n_y, lbm_config.n_z])
+            .global_work_size([n])
             .arg_named("flags", flags)
             .arg_named("camera_params", &camera_params)
             .arg_named("bitmap", &bitmap)
@@ -86,7 +89,7 @@ impl Graphics {
             .program(&program)
             .name("graphics_flags_mc")
             .queue(queue.clone())
-            .global_work_size([lbm_config.n_x, lbm_config.n_y, lbm_config.n_z])
+            .global_work_size([n])
             .arg_named("flags", flags)
             .arg_named("camera_params", &camera_params)
             .arg_named("bitmap", &bitmap)
@@ -97,7 +100,7 @@ impl Graphics {
             .program(&program)
             .name("graphics_field")
             .queue(queue.clone())
-            .global_work_size([lbm_config.n_x, lbm_config.n_y, lbm_config.n_z])
+            .global_work_size([n])
             .arg_named("flags", flags)
             .arg_named("u", u)
             .arg_named("camera_params", &camera_params)
@@ -115,8 +118,8 @@ impl Graphics {
                 .name("graphics_streamline")
                 .queue(queue.clone())
                 .global_work_size([
-                    lbm_config.n_x / lbm_config.graphics_config.streamline_every,
-                    lbm_config.n_y / lbm_config.graphics_config.streamline_every,
+                    (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64*
+                    (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64
                 ])
                 .arg_named("flags", flags)
                 .arg_named("u", u)
@@ -134,9 +137,9 @@ impl Graphics {
                 .name("graphics_streamline")
                 .queue(queue.clone())
                 .global_work_size([
-                    lbm_config.n_x / lbm_config.graphics_config.streamline_every,
-                    lbm_config.n_y / lbm_config.graphics_config.streamline_every,
-                    lbm_config.n_z / lbm_config.graphics_config.streamline_every,
+                    (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64*
+                    (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64*
+                    (lbm_config.n_z / lbm_config.graphics_config.streamline_every) as u64
                 ])
                 .arg_named("flags", flags)
                 .arg_named("u", u)
@@ -154,7 +157,7 @@ impl Graphics {
             .program(&program)
             .name("graphics_q")
             .queue(queue.clone())
-            .global_work_size([lbm_config.n_x, lbm_config.n_y, lbm_config.n_z])
+            .global_work_size([n])//TODO: this is incorrect, need own dimension size
             .arg_named("flags", flags)
             .arg_named("u", u)
             .arg_named("camera_params", &camera_params)
@@ -162,9 +165,10 @@ impl Graphics {
             .arg_named("zbuffer", &zbuffer)
             .build()
             .unwrap();
-        camera_params.write(&new_camera_params()).enq().unwrap();
+        
 
         Graphics {
+            queue: queue.clone(),
             kernel_clear,
             bitmap,
             bitmap_host: vec![0; (width * height) as usize],
@@ -359,9 +363,27 @@ pub fn get_graphics_defines(graphics_config: GraphicsConfig) -> String {
 
 fn new_camera_params() -> Vec<f32> {
     let mut params: Vec<f32> = vec![0.0; 15];
-    params[0] = 1.0; //zoom
-    params[1] = 0.0; //dis
-                     //2-4 is pos x y z
-                     //5-13 is a rotation matrix
+    //Defaults from FluidX3D: graphics.hpp:20
+    let rx = 0.5 * PI;
+    let sinrx = rx.sin();
+    let cosrx = rx.cos();
+    let ry = PI;
+    let sinry = ry.sin();
+    let cosry = ry.cos();
+
+    params[0] = 540.0; //zoom
+    params[1] = 850.0; //distance from rotation center
+    //2-4 is pos x y z
+    //5-13 is a rotation matrix
+    params[5] = cosrx;//Rxx
+    params[6] = sinrx;//Rxy
+    params[7] = 0.0;  //Rxz
+    params[8] = sinrx*sinry; //Ryx
+    params[9] = -cosrx*sinry;//Ryy
+    params[10]= cosry;       //Ryz
+    params[11]= -sinrx*cosry;//Rzx
+    params[12]= cosrx*cosry; //Rzy
+    params[13]= sinry;//Rzz
+    params[14]= ((false as u32)<<31|(false as u32)<<30|(0&0xFFFF)) as f32;
     params
 }

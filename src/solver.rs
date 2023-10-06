@@ -26,14 +26,17 @@ pub fn simloop(
     //test_function().unwrap();
 
     let mut lbm_config = LbmConfig::new();
-    lbm_config.n_x = 512;
-    lbm_config.n_y = 512;
+    lbm_config.n_x = 256;
+    lbm_config.n_y = 256;
     lbm_config.n_z = 256;
+    lbm_config.nu = 0.01;
     lbm_config.velocity_set = VelocitySet::D3Q19;
-    lbm_config.ext_equilibrium_boudaries = true;
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.domains[0].setup();
     test_lbm.initialize();
+    let mut test_vec:Vec<f32> = vec![0.0; 256*256*256];
+    test_lbm.domains[0].rho.read(&mut test_vec).enq().unwrap();
+    println!("rho at index 5000: {}", test_vec[5000]);
 
     // get initial config from ui
     let recieve_result = ctrl_rx.try_recv();
@@ -62,6 +65,8 @@ pub fn simloop(
 
                 //Simulation commences here
                 test_lbm.do_time_step();
+                test_lbm.domains[0].rho.read(&mut test_vec).enq().unwrap();
+                println!("rho at index 5000: {}", test_vec[5000]);
 
                 if i % state.frame_spacing == 0 {
                     println!("Step {}", i);
@@ -86,6 +91,7 @@ pub fn simloop(
 impl LbmDomain {
     pub fn setup(&mut self) {
         // 3D Taylor-Green vortices
+        println!("Setting up Taylor-Green vorticies");
         let nx = self.n_x;
         let ny = self.n_y;
         let nz = self.n_z;
@@ -119,6 +125,8 @@ impl LbmDomain {
         }
         self.u.write(&vec_u).enq().unwrap();
         self.rho.write(&vec_rho).enq().unwrap();
+        self.queue.finish().unwrap();
+        println!("Finished setting up Taylor-Green vorticies");
     }
 }
 

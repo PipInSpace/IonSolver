@@ -571,7 +571,7 @@ float calculate_Q(const uint n, const global float* u) { // Q-criterion
 	return calculate_Q_cached(load_u(j[0], u), load_u(j[1], u), load_u(j[2], u), load_u(j[3], u), load_u(j[4], u), load_u(j[5], u));
 } // calculate_Q()
 
-__kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
+__kernel void stream_collide(global fpxx* fi, const global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute stream_collide() on halo
     const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
@@ -641,7 +641,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     store_f(n, fhn, fi, j, t); // perform streaming (part 1)
 } // stream_collide()
 
-__kernel void initialize(global fpxx* fi, const global float* rho, global float* u, global uchar* flags) {
+__kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute initialize() on halo
     uchar flagsn = flags[n];

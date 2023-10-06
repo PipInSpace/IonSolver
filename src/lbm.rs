@@ -3,7 +3,7 @@ use crate::{
     graphics::{Camera, GraphicsConfig},
     *,
 };
-use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue};
+use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue, CommandQueueProperties};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -374,7 +374,7 @@ impl LbmDomain {
         println!("Compiling Program...");
         let program = Program::builder()
             .devices(device)
-            .src(ocl_code.clone())
+            .src(&ocl_code)
             .build(&context)
             .unwrap();
 
@@ -435,7 +435,7 @@ impl LbmDomain {
                     .program(&program)
                     .name("initialize")
                     .queue(queue.clone())
-                    .global_work_size([n_x, n_y, n_z])
+                    .global_work_size([n])
                     .arg_named("fi", fi_u16)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
@@ -448,7 +448,7 @@ impl LbmDomain {
                     .program(&program)
                     .name("initialize")
                     .queue(queue.clone())
-                    .global_work_size([n_x, n_y, n_z])
+                    .global_work_size([n])
                     .arg_named("fi", fi_f32)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
@@ -465,7 +465,7 @@ impl LbmDomain {
                     .program(&program)
                     .name("stream_collide")
                     .queue(queue.clone())
-                    .global_work_size([n_x, n_y, n_z])
+                    .global_work_size([n])
                     .arg_named("fi", fi_u16)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
@@ -482,7 +482,7 @@ impl LbmDomain {
                     .program(&program)
                     .name("stream_collide")
                     .queue(queue.clone())
-                    .global_work_size([n_x, n_y, n_z])
+                    .global_work_size([n])
                     .arg_named("fi", fi_f32)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
@@ -503,7 +503,7 @@ impl LbmDomain {
                     .program(&program)
                     .name("update_fields")
                     .queue(queue.clone())
-                    .global_work_size(n as u32)
+                    .global_work_size([n])
                     .arg_named("fi", fi_u16)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
@@ -520,7 +520,7 @@ impl LbmDomain {
                     .program(&program)
                     .name("update_fields")
                     .queue(queue.clone())
-                    .global_work_size(n as u32)
+                    .global_work_size([n])
                     .arg_named("fi", fi_f32)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
@@ -698,10 +698,9 @@ impl LbmDomain {
         unsafe {
             self.kernel_initialize
                 .cmd()
-                .queue(&self.queue)
-                .global_work_size(self.n_x * self.n_y * self.n_z)
-                .enq()
+                .enq()?
         }
+        self.queue.finish()
     }
 
     fn enqueue_stream_collide(&self) -> ocl::Result<()> {
@@ -713,8 +712,6 @@ impl LbmDomain {
             self.kernel_stream_collide.set_arg("fz", self.fz)?;
             self.kernel_stream_collide
                 .cmd()
-                .queue(&self.queue)
-                .global_work_size(self.n_x * self.n_y * self.n_z)
                 .enq()
         }
     }
