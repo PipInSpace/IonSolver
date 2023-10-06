@@ -256,9 +256,9 @@ pub struct LbmDomain {
     kernel_stream_collide: Kernel,
     kernel_update_fields: Kernel,
 
-    n_x: u32, //Size
-    n_y: u32,
-    n_z: u32,
+    pub n_x: u32, //Size
+    pub n_y: u32,
+    pub n_z: u32,
 
     d_x: u32, //Domain
     d_y: u32,
@@ -279,10 +279,10 @@ pub struct LbmDomain {
     particles_n: u32,
     particles_rho: f32,
 
-    fi: VariableFloatBuffer,
-    rho: Buffer<f32>,
-    u: Buffer<f32>,
-    flags: Buffer<u8>,
+    pub fi: VariableFloatBuffer,
+    pub rho: Buffer<f32>,
+    pub u: Buffer<f32>,
+    pub flags: Buffer<u8>,
     pub t: u64,
 
     pub graphics: Graphics,
@@ -729,5 +729,19 @@ impl LbmDomain {
 
     fn get_n(n_x: u32, n_y: u32, n_z: u32) -> u64 {
         n_x as u64 * n_y as u64 * n_z as u64
+    }
+
+    fn self_get_n(&self) -> u64 {
+        self.lbm_config.n_x as u64 * self.lbm_config.n_y as u64 * self.lbm_config.n_z as u64
+    }
+
+    pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
+        let t: u64 = n % (self.lbm_config.n_x as u64 * self.lbm_config.n_y as u64);
+        //x, y, z
+        (
+            (t % self.n_x as u64) as u32,
+            (t / self.n_x as u64) as u32,
+            (n / self.n_x as u64 * self.n_y as u64) as u32,
+        )
     }
 }

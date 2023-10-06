@@ -1,6 +1,6 @@
 use std::{sync::mpsc::Sender, thread};
 
-use egui::{ColorImage, Color32};
+use egui::{Color32, ColorImage};
 use image::{ImageBuffer, Rgb};
 use ocl::{flags, Buffer, Kernel, Program, Queue};
 
@@ -162,6 +162,7 @@ impl Graphics {
             .arg_named("zbuffer", &zbuffer)
             .build()
             .unwrap();
+        camera_params.write(&new_camera_params()).enq().unwrap();
 
         Graphics {
             kernel_clear,
@@ -187,6 +188,7 @@ impl Graphics {
         unsafe {
             self.kernel_clear.enq().unwrap();
             //if visualisation mode
+            self.kernel_graphics_streamline.enq().unwrap();
             self.kernel_graphics_q.enq().unwrap();
 
             self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
@@ -265,19 +267,28 @@ impl Lbm {
                 }
             }
         }
-        thread::spawn(move || { // Generating images needs own tread for performance reasons
+        thread::spawn(move || {
+            // Generating images needs own tread for performance reasons
             let mut save_buffer: Vec<u8> = vec![];
             let mut pixels: Vec<Color32> = vec![];
             for pixel in 0..bitmap.len() {
                 let color = bitmap[pixel] & 0xFFFFFF;
-                pixels.push(Color32::from_rgb(((color >> 16) & 0xFF) as u8, ((color >> 8) & 0xFF) as u8, (color & 0xFF) as u8));
-                if state_save { // only update save buffer if required
+                pixels.push(Color32::from_rgb(
+                    ((color >> 16) & 0xFF) as u8,
+                    ((color >> 8) & 0xFF) as u8,
+                    (color & 0xFF) as u8,
+                ));
+                if state_save {
+                    // only update save buffer if required
                     save_buffer.push(((color >> 16) & 0xFF) as u8);
                     save_buffer.push(((color >> 8) & 0xFF) as u8);
                     save_buffer.push((color & 0xFF) as u8);
                 }
             }
-            let color_image = ColorImage{size: [width as usize, height as usize], pixels};
+            let color_image = ColorImage {
+                size: [width as usize, height as usize],
+                pixels,
+            };
             sim_tx
                 .send(SimState {
                     s: SimSize { x: 1, y: 1 },
@@ -344,4 +355,13 @@ pub fn get_graphics_defines(graphics_config: GraphicsConfig) -> String {
         + "\n	#define COLOR_X (255<<16|127<<8|  0)"
         + "\n	#define COLOR_Y (255<<16|255<<8|  0)"
         + "\n	#define COLOR_P (255<<16|255<<8|191)"
+}
+
+fn new_camera_params() -> Vec<f32> {
+    let mut params: Vec<f32> = vec![0.0; 15];
+    params[0] = 1.0; //zoom
+    params[1] = 0.0; //dis
+                     //2-4 is pos x y z
+                     //5-13 is a rotation matrix
+    params
 }

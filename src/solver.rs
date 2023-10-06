@@ -1,7 +1,6 @@
 extern crate ocl;
 use crate::lbm::*;
 use crate::*;
-use image::{ImageBuffer, Rgb};
 use ocl::ProQue;
 use std::fs;
 use std::sync::mpsc;
@@ -33,6 +32,7 @@ pub fn simloop(
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.ext_equilibrium_boudaries = true;
     let mut test_lbm = Lbm::init(lbm_config);
+    test_lbm.domains[0].setup();
     test_lbm.initialize();
 
     // get initial config from ui
@@ -80,6 +80,45 @@ pub fn simloop(
         if let Ok(recieve) = recieve_result {
             state = recieve;
         }
+    }
+}
+
+impl LbmDomain {
+    pub fn setup(&mut self) {
+        // 3D Taylor-Green vortices
+        let nx = self.n_x;
+        let ny = self.n_y;
+        let nz = self.n_z;
+        let pif = std::f32::consts::PI;
+        let A = 0.25f32;
+        let periodicity = 1u32;
+        let a = nx as f32 / periodicity as f32;
+        let b = ny as f32 / periodicity as f32;
+        let c = nz as f32 / periodicity as f32;
+        let mut vec_u: Vec<f32> = vec![0.0; (nx as u64 * ny as u64 * nz as u64 * 3) as usize];
+        let mut vec_rho: Vec<f32> = vec![0.0; (nx as u64 * ny as u64 * nz as u64) as usize];
+        for n in 0..(nx as u64 * ny as u64 * nz as u64) {
+            let (x, y, z) = self.get_coordinates(n);
+            let fx = x as f32 + 0.5 - 0.5 * nx as f32;
+            let fy = y as f32 + 0.5 - 0.5 * ny as f32;
+            let fz = z as f32 + 0.5 - 0.5 * nz as f32;
+            vec_u[(n * 3) as usize] = A
+                * (2.0 * pif * fx / a).cos()
+                * (2.0 * pif * fy / b).sin()
+                * (2.0 * pif * fz / c).sin(); // x
+            vec_u[(n * 3 + 1) as usize] = A
+                * (2.0 * pif * fx / a).sin()
+                * (2.0 * pif * fy / b).cos()
+                * (2.0 * pif * fz / c).sin(); // y
+            vec_u[(n * 3 + 2) as usize] = A
+                * (2.0 * pif * fx / a).sin()
+                * (2.0 * pif * fy / b).sin()
+                * (2.0 * pif * fz / c).cos(); // z
+            vec_rho[n as usize] =
+                1.0 - (A * A) * 3.0 / 4.0 * (4.0 * pif * fx / a).cos() + (4.0 * pif * fy / b).cos();
+        }
+        self.u.write(&vec_u).enq().unwrap();
+        self.rho.write(&vec_rho).enq().unwrap();
     }
 }
 

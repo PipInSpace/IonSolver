@@ -8,10 +8,8 @@ mod info;
 mod lbm;
 mod opencl;
 mod solver;
-use egui::epaint::{Shadow, TextureManager};
 use egui::style::Spacing;
-use egui::{ColorImage, Rounding, Color32, Stroke, Button, TextureId, TextureHandle, Label, TextureOptions};
-use egui::TextBuffer;
+use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2};
 use solver::*;
 
 //use image::{ImageBuffer, Rgb};
@@ -27,6 +25,7 @@ pub struct SimSize {
     pub y: usize,
 }
 
+#[allow(dead_code)]
 pub struct SimState {
     s: SimSize,
     //force: Array<Vec2, 2>,
@@ -129,6 +128,7 @@ struct SimControl {
     frame_spacing: u32,
     frame_spacing_str: String,
     display_img: Option<egui::TextureHandle>,
+    mouse_locked: bool,
     ctrl_tx: mpsc::Sender<SimControlTx>,
     sim_rx: mpsc::Receiver<SimState>,
 }
@@ -157,118 +157,154 @@ impl App for SimControl {
         let recieve_result = self.sim_rx.try_recv();
         if let Ok(recieve) = recieve_result {
             //self.display_img = Some(ctx.load_texture("sim", ColorImage::from_rgb([1920, 1080], &recieve.img), Default::default()));
-            if self.display_img == None {self.display_img = Some(ctx.load_texture("sim", recieve.img.clone(), Default::default()))}
-            self.display_img.as_mut().expect("Isn't TextureHandle").set(recieve.img, TextureOptions::default());
+            if self.display_img == None {
+                self.display_img =
+                    Some(ctx.load_texture("sim", recieve.img.clone(), Default::default()))
+            }
+            self.display_img
+                .as_mut()
+                .expect("Isn't TextureHandle")
+                .set(recieve.img, TextureOptions::default());
         }
 
         // Prepare images
         // let size = spectrum_img.dimensions();
         // let size = [size.0 as usize, size.1 as usize];
 
-        let zeromargin = egui::Margin {left: 0.0, right: 0.0, top: 0.0, bottom: 0.0};
-        let small_left_margin = egui::Margin {left: 0.0, right: 0.0, top: 1.0, bottom: -1.0};
+        let zeromargin = egui::Margin {
+            left: 0.0,
+            right: 0.0,
+            top: 0.0,
+            bottom: 0.0,
+        };
+        let small_left_margin = egui::Margin {
+            left: 0.0,
+            right: 0.0,
+            top: 1.0,
+            bottom: -1.0,
+        };
         let mut frame = egui::Frame::default();
         frame.fill = Color32::WHITE;
         frame.inner_margin = small_left_margin;
         frame.outer_margin = zeromargin;
 
-        let transparent_stroke = Stroke{width: 0.0, color: Color32::TRANSPARENT};
+        let transparent_stroke = Stroke {
+            width: 0.0,
+            color: Color32::TRANSPARENT,
+        };
 
         //Update gui
-        egui::TopBottomPanel::top("top_controls").frame(frame).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                let mut spacing = Spacing::default();
-                spacing.item_spacing = egui::Vec2{x: 0., y: 0.};
-                ui.style_mut().spacing = spacing;
-                ui.style_mut().visuals.widgets.hovered.expansion = 0.0;
-                ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb( 0xCC, 0xCC, 0xCC);
-                ui.style_mut().visuals.widgets.hovered.rounding = 0.0.into();
-                ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::WHITE;
-                ui.style_mut().visuals.widgets.inactive.rounding = 0.0.into();
-                ui.style_mut().visuals.widgets.active.rounding = 0.0.into();
-                ui.style_mut().visuals.widgets.noninteractive.rounding = 0.0.into();
-                if ui
-                    .add_sized( [40.,18.],
-                        egui::Button::new(if self.paused { "Play" } else { "Pause" })
-                            .rounding(0.0f32).stroke(transparent_stroke),
-                    )
-                    .clicked()
-                {
-                    self.paused = !self.paused;
-                    self.send_control();
-                    let _z = self.paused;
-                }
-                if ui
-                    .add(egui::Button::new("Reset").rounding(0.0f32).stroke(transparent_stroke))
-                    .clicked()
-                {
-                    self.reset_sim();
-                }
-                if ui
-                    .add(
-                        egui::Button::new(if self.save {
-                            "Saving Enabled"
-                        } else {
-                            "Saving Disabled"
-                        })
-                        .rounding(0.0f32).stroke(transparent_stroke),
-                    )
-                    .clicked()
-                {
-                    self.save = !self.save;
-                    self.send_control();
-                }
-                if ui
-                    .add(
-                        egui::Button::new(if self.clear_images {
-                            "Old Output Deleted"
-                        } else {
-                            "Old Output Kept"
-                        })
-                        .rounding(0.0f32).stroke(transparent_stroke),
-                    )
-                    .clicked()
-                {
-                    self.clear_images = !self.clear_images;
-                    self.send_control();
-                }
-                let mut text = self.frame_spacing_str.clone();
-                if ui.add(egui::TextEdit::singleline(&mut text).desired_width(50.0)).changed() {
-                    self.frame_spacing_str = text.clone(); // clone jik text is cbv here
-                    let result = str::parse::<u32>(&text);
-                    if let Ok(value) = result {
-                        if value > 0 {
-                            self.frame_spacing = value;
-                            self.send_control();
+        egui::TopBottomPanel::top("top_controls")
+            .frame(frame)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let mut spacing = Spacing::default();
+                    spacing.item_spacing = egui::Vec2 { x: 0., y: 0. };
+                    ui.style_mut().spacing = spacing;
+                    ui.style_mut().visuals.widgets.hovered.expansion = 0.0;
+                    ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
+                        Color32::from_rgb(0xCC, 0xCC, 0xCC);
+                    ui.style_mut().visuals.widgets.hovered.rounding = 0.0.into();
+                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::WHITE;
+                    ui.style_mut().visuals.widgets.inactive.rounding = 0.0.into();
+                    ui.style_mut().visuals.widgets.active.rounding = 0.0.into();
+                    ui.style_mut().visuals.widgets.noninteractive.rounding = 0.0.into();
+                    if ui
+                        .add_sized(
+                            [40., 18.],
+                            egui::Button::new(if self.paused { "Play" } else { "Pause" })
+                                .rounding(0.0f32)
+                                .stroke(transparent_stroke),
+                        )
+                        .clicked()
+                    {
+                        self.paused = !self.paused;
+                        self.send_control();
+                        let _z = self.paused;
+                    }
+                    if ui
+                        .add(
+                            egui::Button::new("Reset")
+                                .rounding(0.0f32)
+                                .stroke(transparent_stroke),
+                        )
+                        .clicked()
+                    {
+                        self.reset_sim();
+                    }
+                    if ui
+                        .add(
+                            egui::Button::new(if self.save {
+                                "Saving Enabled"
+                            } else {
+                                "Saving Disabled"
+                            })
+                            .rounding(0.0f32)
+                            .stroke(transparent_stroke),
+                        )
+                        .clicked()
+                    {
+                        self.save = !self.save;
+                        self.send_control();
+                    }
+                    if ui
+                        .add(
+                            egui::Button::new(if self.clear_images {
+                                "Old Output Deleted"
+                            } else {
+                                "Old Output Kept"
+                            })
+                            .rounding(0.0f32)
+                            .stroke(transparent_stroke),
+                        )
+                        .clicked()
+                    {
+                        self.clear_images = !self.clear_images;
+                        self.send_control();
+                    }
+                    let mut text = self.frame_spacing_str.clone();
+                    if ui
+                        .add(egui::TextEdit::singleline(&mut text).desired_width(50.0))
+                        .changed()
+                    {
+                        self.frame_spacing_str = text.clone(); // clone jik text is cbv here
+                        let result = str::parse::<u32>(&text);
+                        if let Ok(value) = result {
+                            if value > 0 {
+                                self.frame_spacing = value;
+                                self.send_control();
+                            }
                         }
                     }
-                }
-            })
-        });
+                })
+            });
         //TODO: Display the Simulation
 
         frame.outer_margin = zeromargin;
-        frame.fill = Color32::from_rgb( 0x6C, 0x6C, 0x7C);
+        frame.fill = Color32::from_rgb(0x6C, 0x6C, 0x7C);
         egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
             ui.style_mut().visuals.override_text_color = Some(Color32::WHITE);
             match &self.display_img {
                 Some(img) => {
-                    ui.image(img.id(),
-                        ui.available_size(),
-                    );
+                    let response = ui.add(Image::new(img.id(), ui.available_size()));
+                    let id = ui.id();
+                    let response = ui.interact(response.rect, id, Sense::click_and_drag());
+                    if response.dragged() {
+                        let delta = response.drag_delta();
+                        if delta != Vec2::ZERO {
+                            //TODO: send data to simulation thread for graphics
+                        }
+                    }
                 }
                 None => {
                     ui.add(Label::new("Simulation Graphic Output"));
                 }
             }
-            
         });
 
         ctx.request_repaint_after(Duration::from_millis(100));
 
-        thread::spawn( move || {
-
-        });
+        thread::spawn(move || {});
     }
 }
 
@@ -323,6 +359,7 @@ fn main() {
         frame_spacing: 100,
         frame_spacing_str: "100".to_string(),
         display_img: None,
+        mouse_locked: false,
         ctrl_tx,
         sim_rx,
     };
