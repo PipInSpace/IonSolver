@@ -8,9 +8,9 @@ mod info;
 mod lbm;
 mod opencl;
 mod solver;
-use egui::epaint::Shadow;
+use egui::epaint::{Shadow, TextureManager};
 use egui::style::Spacing;
-use egui::{ColorImage, Rounding, Color32, Stroke, Button};
+use egui::{ColorImage, Rounding, Color32, Stroke, Button, TextureId, TextureHandle, Label, TextureOptions};
 use egui::TextBuffer;
 use solver::*;
 
@@ -44,7 +44,7 @@ pub struct SimState {
     paused: bool,
     save: bool,
 
-    img: Vec<u8>,
+    img: ColorImage,
 }
 
 impl SimState {
@@ -62,7 +62,7 @@ impl SimState {
             s,
             paused: true,
             save: false,
-            img: vec![],
+            img: ColorImage::default(),
         }
     }
 
@@ -128,7 +128,7 @@ struct SimControl {
     clear_images: bool,
     frame_spacing: u32,
     frame_spacing_str: String,
-    display_img: ColorImage,
+    display_img: Option<egui::TextureHandle>,
     ctrl_tx: mpsc::Sender<SimControlTx>,
     sim_rx: mpsc::Receiver<SimState>,
 }
@@ -156,7 +156,9 @@ impl App for SimControl {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let recieve_result = self.sim_rx.try_recv();
         if let Ok(recieve) = recieve_result {
-            self.display_img = ColorImage::from_rgb([1920, 1080], &recieve.img);
+            //self.display_img = Some(ctx.load_texture("sim", ColorImage::from_rgb([1920, 1080], &recieve.img), Default::default()));
+            if self.display_img == None {self.display_img = Some(ctx.load_texture("sim", recieve.img.clone(), Default::default()))}
+            self.display_img.as_mut().expect("Isn't TextureHandle").set(recieve.img, TextureOptions::default());
         }
 
         // Prepare images
@@ -235,7 +237,7 @@ impl App for SimControl {
                     self.frame_spacing_str = text.clone(); // clone jik text is cbv here
                     let result = str::parse::<u32>(&text);
                     if let Ok(value) = result {
-                        if value >= 10 {
+                        if value > 0 {
                             self.frame_spacing = value;
                             self.send_control();
                         }
@@ -246,17 +248,27 @@ impl App for SimControl {
         //TODO: Display the Simulation
 
         frame.outer_margin = zeromargin;
-        frame.fill = Color32::from_rgb( 0x6C, 0x6C, 0x6C);
+        frame.fill = Color32::from_rgb( 0x6C, 0x6C, 0x7C);
         egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
-            ui.image(
-                ui.ctx()
-                    .load_texture("sim", self.display_img.clone(), Default::default())
-                    .id(),
-                ui.available_size(),
-            );
+            ui.style_mut().visuals.override_text_color = Some(Color32::WHITE);
+            match &self.display_img {
+                Some(img) => {
+                    ui.image(img.id(),
+                        ui.available_size(),
+                    );
+                }
+                None => {
+                    ui.add(Label::new("Simulation Graphic Output"));
+                }
+            }
+            
         });
 
-        ctx.request_repaint_after(Duration::from_millis(100))
+        ctx.request_repaint_after(Duration::from_millis(100));
+
+        thread::spawn( move || {
+
+        });
     }
 }
 
@@ -310,7 +322,7 @@ fn main() {
         clear_images: true,
         frame_spacing: 100,
         frame_spacing_str: "100".to_string(),
-        display_img: ColorImage::example(),
+        display_img: None,
         ctrl_tx,
         sim_rx,
     };

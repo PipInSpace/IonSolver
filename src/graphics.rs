@@ -1,5 +1,6 @@
 use std::{sync::mpsc::Sender, thread};
 
+use egui::{ColorImage, Color32};
 use image::{ImageBuffer, Rgb};
 use ocl::{flags, Buffer, Kernel, Program, Queue};
 
@@ -265,13 +266,18 @@ impl Lbm {
             }
         }
         thread::spawn(move || { // Generating images needs own tread for performance reasons
-            let mut frame: Vec<u8> = vec![];
+            let mut save_buffer: Vec<u8> = vec![];
+            let mut pixels: Vec<Color32> = vec![];
             for pixel in 0..bitmap.len() {
                 let color = bitmap[pixel] & 0xFFFFFF;
-                frame.push(((color >> 16) & 0xFF) as u8);
-                frame.push(((color >> 8) & 0xFF) as u8);
-                frame.push((color & 0xFF) as u8);
+                pixels.push(Color32::from_rgb(((color >> 16) & 0xFF) as u8, ((color >> 8) & 0xFF) as u8, (color & 0xFF) as u8));
+                if state_save { // only update save buffer if required
+                    save_buffer.push(((color >> 16) & 0xFF) as u8);
+                    save_buffer.push(((color >> 8) & 0xFF) as u8);
+                    save_buffer.push((color & 0xFF) as u8);
+                }
             }
+            let color_image = ColorImage{size: [width as usize, height as usize], pixels};
             sim_tx
                 .send(SimState {
                     s: SimSize { x: 1, y: 1 },
@@ -282,14 +288,14 @@ impl Lbm {
                     step: 1,
                     paused: false,
                     save: state_save,
-                    img: frame.clone(),
+                    img: color_image,
                 })
                 .unwrap();
             if state_save {
                 thread::spawn(move || {
                     //Saving needs own thread for performance reasons
                     let imgbuffer: ImageBuffer<Rgb<u8>, _> =
-                        ImageBuffer::from_raw(1920, 1080, frame).unwrap();
+                        ImageBuffer::from_raw(1920, 1080, save_buffer).unwrap();
                     imgbuffer
                         .save(format!(r"out/img_{}.png", (i / frame_spacing)))
                         .unwrap();
