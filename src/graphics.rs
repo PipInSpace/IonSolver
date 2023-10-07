@@ -17,7 +17,7 @@ pub struct Graphics {
     bitmap_host: Vec<i32>,
     zbuffer: Buffer<i32>,
     zbuffer_host: Vec<i32>,
-    camera_params: Buffer<f32>,
+    pub camera_params: Buffer<f32>,
 
     lbm_config: LbmConfig,
     kernel_graphics_flags: Kernel,
@@ -192,7 +192,8 @@ impl Graphics {
         unsafe {
             self.kernel_clear.enq().unwrap();
             //if visualisation mode
-            self.kernel_graphics_streamline.enq().unwrap();
+            //self.kernel_graphics_streamline.enq().unwrap();
+            self.kernel_graphics_field.enq().unwrap();
             //self.kernel_graphics_q.enq().unwrap();
 
             self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
@@ -361,13 +362,40 @@ pub fn get_graphics_defines(graphics_config: GraphicsConfig) -> String {
         + "\n	#define COLOR_P (255<<16|255<<8|191)"
 }
 
-fn new_camera_params() -> Vec<f32> {
+pub fn new_camera_params() -> Vec<f32> {
     let mut params: Vec<f32> = vec![0.0; 15];
     //Defaults from FluidX3D: graphics.hpp:20
     let rx = 0.5 * PI;
     let sinrx = rx.sin();
     let cosrx = rx.cos();
     let ry = PI;
+    let sinry = ry.sin();
+    let cosry = ry.cos();
+
+    params[0] = 5400.0; //zoom
+    params[1] = 850.0; //distance from rotation center
+    //2-4 is pos x y z
+    //5-13 is a rotation matrix
+    params[5] = cosrx;//Rxx
+    params[6] = sinrx;//Rxy
+    params[7] = 0.0;  //Rxz
+    params[8] = sinrx*sinry; //Ryx
+    params[9] = -cosrx*sinry;//Ryy
+    params[10]= cosry;       //Ryz
+    params[11]= -sinrx*cosry;//Rzx
+    params[12]= cosrx*cosry; //Rzy
+    params[13]= sinry;//Rzz
+    params[14]= ((false as u32)<<31|(false as u32)<<30|(0&0xFFFF)) as f32;
+    params
+}
+
+pub fn camera_params_rot(rx: f32, ry: f32) -> Vec<f32> {
+    let mut params: Vec<f32> = vec![0.0; 15];
+    //Defaults from FluidX3D: graphics.hpp:20
+    //let rx = 0.5 * PI;
+    let sinrx = rx.sin();
+    let cosrx = rx.cos();
+    //let ry = PI;
     let sinry = ry.sin();
     let cosry = ry.cos();
 

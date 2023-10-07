@@ -781,7 +781,7 @@ impl LbmDomain {
         (
             (t % self.n_x as u64) as u32,
             (t / self.n_x as u64) as u32,
-            (n / self.n_x as u64 * self.n_y as u64) as u32,
+            (n / (self.n_x as u64 * self.n_y as u64)) as u32,
         )
     }
 }

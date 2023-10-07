@@ -2,6 +2,7 @@ extern crate ocl;
 use crate::lbm::*;
 use crate::*;
 use ocl::ProQue;
+use std::f32::consts::PI;
 use std::fs;
 use std::sync::mpsc;
 
@@ -26,9 +27,9 @@ pub fn simloop(
     //test_function().unwrap();
 
     let mut lbm_config = LbmConfig::new();
-    lbm_config.n_x = 256;
-    lbm_config.n_y = 256;
-    lbm_config.n_z = 256;
+    lbm_config.n_x = 128;
+    lbm_config.n_y = 128;
+    lbm_config.n_z = 128;
     lbm_config.nu = 0.01;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     let mut test_lbm = Lbm::init(lbm_config);
@@ -65,6 +66,9 @@ pub fn simloop(
 
                 //Simulation commences here
                 test_lbm.do_time_step();
+                let mut params = graphics::camera_params_rot((0.5*PI*(i as f32/200.0)), PI);
+                params[0] = 4.0;
+                test_lbm.domains[0].graphics.camera_params.write(&params).enq().unwrap();
                 //test_lbm.domains[0].u.read(&mut test_vec).enq().unwrap();
                 //println!("u at index 5000: {}", test_vec[5000]);
 
@@ -95,6 +99,7 @@ impl LbmDomain {
         let nx = self.n_x;
         let ny = self.n_y;
         let nz = self.n_z;
+        let ntotal = nx as u64 * ny as u64 * nz as u64;
         let pif = std::f32::consts::PI;
         let A = 0.25f32;
         let periodicity = 1u32;
@@ -108,15 +113,15 @@ impl LbmDomain {
             let fx = x as f32 + 0.5 - 0.5 * nx as f32;
             let fy = y as f32 + 0.5 - 0.5 * ny as f32;
             let fz = z as f32 + 0.5 - 0.5 * nz as f32;
-            vec_u[(n * 3) as usize] = A
+            vec_u[(n) as usize] = A
                 * (2.0 * pif * fx / a).cos()
                 * (2.0 * pif * fy / b).sin()
                 * (2.0 * pif * fz / c).sin(); // x
-            vec_u[(n * 3 + 1) as usize] = A
+            vec_u[(n + ntotal) as usize] = -A
                 * (2.0 * pif * fx / a).sin()
                 * (2.0 * pif * fy / b).cos()
                 * (2.0 * pif * fz / c).sin(); // y
-            vec_u[(n * 3 + 2) as usize] = A
+            vec_u[(n + (ntotal*2)) as usize] = A
                 * (2.0 * pif * fx / a).sin()
                 * (2.0 * pif * fy / b).sin()
                 * (2.0 * pif * fz / c).cos(); // z
