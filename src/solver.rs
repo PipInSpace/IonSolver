@@ -50,6 +50,8 @@ pub fn simloop(
     let mut has_commenced = false; //has the simulation started
     loop {//This is the master loop, cannot be paused
         if !state.paused {
+            let mut cached_rot = state.camera_rotation.clone();
+            let mut cached_zoom = state.camera_zoom;
             has_commenced = true;
             loop {
                 //This is the loop of the simulation. Can be paused by receiving a control message
@@ -63,11 +65,11 @@ pub fn simloop(
 
                 //Simulation commences here
                 test_lbm.do_time_step();
-                let mut params = graphics::camera_params_rot(state.camera_rotation[0] * (PI/180.0), state.camera_rotation[1] * (PI/180.0));
-                params[0] = state.camera_zoom;
-                test_lbm.domains[0].graphics.camera_params.write(&params).enq().unwrap();
-                //test_lbm.domains[0].u.read(&mut test_vec).enq().unwrap();
-                //println!("u at index 5000: {}", test_vec[5000]);
+                if cached_rot[0] != state.camera_rotation[0] || cached_rot[1] != state.camera_rotation[1] || cached_zoom != state.camera_zoom {//only update params when camera updated
+                    let mut params = graphics::camera_params_rot(state.camera_rotation[0] * (PI/180.0), state.camera_rotation[1] * (PI/180.0));
+                    params[0] = state.camera_zoom;
+                    test_lbm.domains[0].graphics.camera_params.write(&params).enq().unwrap();
+                }
 
                 if i % state.frame_spacing == 0 {
                     println!("Step {}", i);
