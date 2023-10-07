@@ -9,34 +9,12 @@ mod lbm;
 mod opencl;
 mod solver;
 use egui::style::Spacing;
-use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2};
+use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2, Event};
 use solver::*;
-
-//use image::{ImageBuffer, Rgb};
-//use egui::ColorImage;
 use eframe::*;
-
-// Simulation
-#[allow(unused)]
-pub struct SimSize {
-    /// Width of the simulation
-    pub x: usize,
-    /// Height of the simulation
-    pub y: usize,
-}
 
 #[allow(dead_code)]
 pub struct SimState {
-    s: SimSize,
-    //force: Array<Vec2, 2>,
-    //force_prev: Array<Vec2, 2>,
-
-    //dens: Array<f64, 2>,
-    //dens_prev: Array<f64, 2>,
-    visc: f64,
-    diff: f64,
-    dt: f64,
-    dt_text: String,
     step: i32,
 
     //Control:
@@ -47,18 +25,9 @@ pub struct SimState {
 }
 
 impl SimState {
-    pub fn new(s: SimSize, visc: f64, diff: f64, dt: f64) -> SimState {
+    pub fn new() -> SimState {
         Self {
-            //force: Array::new([s.x + 2, s.y + 2]),
-            //force_prev: Array::new([s.x + 2, s.y + 2]),
-            //dens: Array::new([s.x + 2, s.y + 2]),
-            //dens_prev: Array::new([s.x + 2, s.y + 2]),
-            visc,
-            diff,
-            dt,
-            dt_text: "0.1".to_owned(),
             step: 0,
-            s,
             paused: true,
             save: false,
             img: ColorImage::default(),
@@ -66,49 +35,17 @@ impl SimState {
     }
 
     pub fn reset_sim(&mut self) {
-        //self.force = Array::new([self.s.x + 2, self.s.y + 2]);
-        //self.force_prev = Array::new([self.s.x + 2, self.s.y + 2]);
-        //self.dens = Array::new([self.s.x + 2, self.s.y + 2]);
-        //self.dens_prev = Array::new([self.s.x + 2, self.s.y + 2]);
         self.step = 0;
         self.paused = true;
     }
 
     pub fn update_sim(&mut self) {
         println!("Step {}", self.step);
-        //TODO: Update function
-        // Adds sources for the first 400 steps
-        //if self.step < 400 {
-        //    self.dens[[20, 20]] += 4.0;
-        //    self.force_prev[[20, 20]].x += 5.0;
-        //    self.dens[[20, 50]] += 4.0;
-        //    self.force_prev[[20, 50]].y -= 5.0;
-        //    self.dens[[50, 20]] += 4.0;
-        //    self.force_prev[[50, 20]].y += 5.0;
-        //    self.dens[[50, 50]] += 4.0;
-        //    self.force_prev[[50, 50]].x -= 5.0;
-        //}
-        //vel_step(
-        //    &self.s,
-        //    &mut self.force,
-        //    &mut self.force_prev,
-        //    self.visc,
-        //    self.dt,
-        //);
-        //dens_step(
-        //    &self.s,
-        //    &mut self.dens,
-        //    &mut self.dens_prev,
-        //    &mut self.force,
-        //    self.diff,
-        //    self.dt,
-        //);
         self.step += 1;
     }
 }
 
 // UI+Control
-#[allow(unused)]
 pub struct SimControlTx {
     //SimControlTx is used to send information to the simulation thread
     paused: bool,
@@ -116,9 +53,9 @@ pub struct SimControlTx {
     clear_images: bool,
     frame_spacing: u32,
     active: bool,
+    camera_rotation: Vec<f32>,
+    camera_zoom: f32,
 }
-
-#[allow(unused)]
 
 struct SimControl {
     //SimControl handles control/displaying of the Simulation over the UI
@@ -129,6 +66,9 @@ struct SimControl {
     frame_spacing_str: String,
     display_img: Option<egui::TextureHandle>,
     mouse_locked: bool,
+    camera_rotation: Vec<f32>,
+    camera_zoom: f32,
+
     ctrl_tx: mpsc::Sender<SimControlTx>,
     sim_rx: mpsc::Receiver<SimState>,
 }
@@ -146,6 +86,8 @@ impl SimControl {
                 clear_images: self.clear_images,
                 frame_spacing: self.frame_spacing,
                 active: true,
+                camera_rotation: self.camera_rotation.clone(),
+                camera_zoom: self.camera_zoom,
             })
             .expect("GUI cannot communicate with sim thread");
     }
@@ -154,8 +96,8 @@ impl SimControl {
 impl App for SimControl {
     /// UI update loop
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let recieve_result = self.sim_rx.try_recv();
-        if let Ok(recieve) = recieve_result {
+        let recieve_result = self.sim_rx.try_iter().last();
+        if let Some(recieve) = recieve_result {
             //self.display_img = Some(ctx.load_texture("sim", ColorImage::from_rgb([1920, 1080], &recieve.img), Default::default()));
             if self.display_img == None {
                 self.display_img =
@@ -167,10 +109,9 @@ impl App for SimControl {
                 .set(recieve.img, TextureOptions::default());
         }
 
-        // Prepare images
-        // let size = spectrum_img.dimensions();
-        // let size = [size.0 as usize, size.1 as usize];
+        let mut send_control = false; // determines if ui needs to send control
 
+        //egui styles
         let zeromargin = egui::Margin {
             left: 0.0,
             right: 0.0,
@@ -219,7 +160,7 @@ impl App for SimControl {
                         .clicked()
                     {
                         self.paused = !self.paused;
-                        self.send_control();
+                        send_control = true;
                         let _z = self.paused;
                     }
                     if ui
@@ -245,7 +186,7 @@ impl App for SimControl {
                         .clicked()
                     {
                         self.save = !self.save;
-                        self.send_control();
+                        send_control = true;
                     }
                     if ui
                         .add(
@@ -260,7 +201,7 @@ impl App for SimControl {
                         .clicked()
                     {
                         self.clear_images = !self.clear_images;
-                        self.send_control();
+                        send_control = true;
                     }
                     let mut text = self.frame_spacing_str.clone();
                     if ui
@@ -272,7 +213,7 @@ impl App for SimControl {
                         if let Ok(value) = result {
                             if value > 0 {
                                 self.frame_spacing = value;
-                                self.send_control();
+                                send_control = true;
                             }
                         }
                     }
@@ -293,6 +234,9 @@ impl App for SimControl {
                         let delta = response.drag_delta();
                         if delta != Vec2::ZERO {
                             //TODO: send data to simulation thread for graphics
+                            self.camera_rotation[0] += delta.x;
+                            self.camera_rotation[1] = (self.camera_rotation[1] - delta.y).clamp(-90.0, 90.0);
+                            send_control = true;
                         }
                     }
                 }
@@ -300,7 +244,15 @@ impl App for SimControl {
                     ui.add(Label::new("Simulation Graphic Output"));
                 }
             }
+            ui.input(|i| {
+                if i.scroll_delta != Vec2::ZERO {
+                    self.camera_zoom = (self.camera_zoom + (self.camera_zoom * (i.scroll_delta.y*0.001))).max(0.01);
+                    send_control = true;
+                }
+            });
         });
+
+        if send_control {self.send_control()}
 
         ctx.request_repaint_after(Duration::from_millis(100));
 
@@ -323,12 +275,6 @@ pub fn load_icon(icon_bytes: &Vec<u8>) -> Option<eframe::IconData> {
 }
 
 fn main() {
-    // Simulation params
-    let s = SimSize { x: 150, y: 100 };
-    let visc = 0.000004;
-    let diff = 0.00001;
-    let dt = 0.05;
-
     println!("{}", info::LOGO_COLOR.to_string());
 
     // UI params
@@ -347,7 +293,7 @@ fn main() {
     // Start Simulation loop
     let handle = thread::spawn(move || {
         //TODO: Setup mpsc messaging for data transmission
-        let sim = SimState::new(s, visc, diff, dt);
+        let sim = SimState::new();
         simloop(sim, sim_tx, ctrl_rx);
     });
 
@@ -360,6 +306,8 @@ fn main() {
         frame_spacing_str: "100".to_string(),
         display_img: None,
         mouse_locked: false,
+        camera_rotation: vec![0.0; 2],
+        camera_zoom: 3.0,
         ctrl_tx,
         sim_rx,
     };
@@ -379,6 +327,8 @@ fn main() {
             clear_images: true,
             frame_spacing: 10,
             active: false,
+            camera_rotation: vec![0.0; 2],
+            camera_zoom: 3.0,
         })
         .expect("Exit Channel cannot reach Simulation thread");
 

@@ -20,24 +20,20 @@ pub fn simloop(
         clear_images: true,
         frame_spacing: 10,
         active: true,
+        camera_rotation: vec![0.0; 2],
+        camera_zoom: 3.0,
     };
     let mut i = 0;
 
-    //OpenCL Test function
-    //test_function().unwrap();
-
     let mut lbm_config = LbmConfig::new();
-    lbm_config.n_x = 128;
-    lbm_config.n_y = 128;
-    lbm_config.n_z = 128;
+    lbm_config.n_x = 256;
+    lbm_config.n_y = 256;
+    lbm_config.n_z = 156;
     lbm_config.nu = 0.01;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.domains[0].setup();
     test_lbm.initialize();
-    //let mut test_vec:Vec<f32> = vec![0.0; 256*256*256*3];
-    //test_lbm.domains[0].u.read(&mut test_vec).enq().unwrap();
-    //println!("u at index 5000: {}", test_vec[5000]);
 
     // get initial config from ui
     let recieve_result = ctrl_rx.try_recv();
@@ -51,13 +47,14 @@ pub fn simloop(
         fs::create_dir("out").unwrap();
     }
 
-    loop {
-        //This is the master loop, cannot be paused
+    let mut has_commenced = false; //has the simulation started
+    loop {//This is the master loop, cannot be paused
         if !state.paused {
+            has_commenced = true;
             loop {
                 //This is the loop of the simulation. Can be paused by receiving a control message
-                let recieve_result = ctrl_rx.try_recv();
-                if let Ok(recieve) = recieve_result {
+                let recieve_result = ctrl_rx.try_iter().last();
+                if let Some(recieve) = recieve_result {
                     state = recieve;
                 }
                 if state.paused || !state.active {
@@ -66,8 +63,8 @@ pub fn simloop(
 
                 //Simulation commences here
                 test_lbm.do_time_step();
-                let mut params = graphics::camera_params_rot((0.5*PI*(i as f32/200.0)), PI);
-                params[0] = 4.0;
+                let mut params = graphics::camera_params_rot(state.camera_rotation[0] * (PI/180.0), state.camera_rotation[1] * (PI/180.0));
+                params[0] = state.camera_zoom;
                 test_lbm.domains[0].graphics.camera_params.write(&params).enq().unwrap();
                 //test_lbm.domains[0].u.read(&mut test_vec).enq().unwrap();
                 //println!("u at index 5000: {}", test_vec[5000]);
@@ -81,11 +78,38 @@ pub fn simloop(
                 i += 1;
             }
         }
+        if state.paused && state.active && has_commenced {
+            let mut cached_rot = state.camera_rotation.clone();
+            let mut cached_zoom = state.camera_zoom;
+            loop {
+                //This is the loop of the simulation if it is paused but active. useful for displaying the simulation
+                let recieve_result = ctrl_rx.try_iter().last();
+                if let Some(recieve) = recieve_result {
+                    state = recieve;
+                }
+                if !state.paused || !state.active {
+                    break;
+                }
+
+                if cached_rot[0] != state.camera_rotation[0] || cached_rot[1] != state.camera_rotation[1] || cached_zoom != state.camera_zoom {//only draw when camera updated
+                    cached_rot = state.camera_rotation.clone();
+                    cached_zoom = state.camera_zoom;
+                    let mut params = graphics::camera_params_rot(state.camera_rotation[0] * (PI/180.0), state.camera_rotation[1] * (PI/180.0));
+                    params[0] = state.camera_zoom;
+                    test_lbm.domains[0].graphics.camera_params.write(&params).enq().unwrap();
+
+                    if lbm_config.graphics_config.graphics {
+                        test_lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
+                    }
+                }
+                
+            }
+        }
         if !state.active {
             println!("Exiting Simulation Loop");
             break;
         }
-        let recieve_result = ctrl_rx.recv();
+        let recieve_result = ctrl_rx.try_recv();
         if let Ok(recieve) = recieve_result {
             state = recieve;
         }
@@ -101,6 +125,7 @@ impl LbmDomain {
         let nz = self.n_z;
         let ntotal = nx as u64 * ny as u64 * nz as u64;
         let pif = std::f32::consts::PI;
+        #[allow(non_snake_case)]
         let A = 0.25f32;
         let periodicity = 1u32;
         let a = nx as f32 / periodicity as f32;

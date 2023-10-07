@@ -5,8 +5,7 @@ use image::{ImageBuffer, Rgb};
 use ocl::{flags, Buffer, Kernel, Program, Queue};
 
 use crate::{
-    lbm::{Lbm, LbmConfig, VelocitySet},
-    SimSize, SimState,
+    lbm::{Lbm, LbmConfig, VelocitySet}, SimState,
 };
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
@@ -27,6 +26,9 @@ pub struct Graphics {
     kernel_graphics_q: Kernel,
 
     t_last_rendered_frame: u64,
+    pub streamline_mode: bool,
+    pub field_mode: bool,
+    pub q_mode: bool,
 }
 
 impl Graphics {
@@ -183,6 +185,9 @@ impl Graphics {
             kernel_graphics_streamline,
             kernel_graphics_q,
             t_last_rendered_frame: 0,
+            streamline_mode: true,
+            field_mode: false,
+            q_mode: false,
         }
     }
 
@@ -192,9 +197,9 @@ impl Graphics {
         unsafe {
             self.kernel_clear.enq().unwrap();
             //if visualisation mode
-            //self.kernel_graphics_streamline.enq().unwrap();
-            self.kernel_graphics_field.enq().unwrap();
-            //self.kernel_graphics_q.enq().unwrap();
+            if self.streamline_mode {self.kernel_graphics_streamline.enq().unwrap();}
+            if self.field_mode {self.kernel_graphics_field.enq().unwrap();}
+            if self.q_mode {self.kernel_graphics_q.enq().unwrap();}
 
             self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
             self.zbuffer.read(&mut self.zbuffer_host).enq().unwrap();
@@ -296,11 +301,6 @@ impl Lbm {
             };
             sim_tx
                 .send(SimState {
-                    s: SimSize { x: 1, y: 1 },
-                    visc: 1.0,
-                    diff: 1.0,
-                    dt: 1.0,
-                    dt_text: "()".to_string(),
                     step: 1,
                     paused: false,
                     save: state_save,
@@ -372,8 +372,8 @@ pub fn new_camera_params() -> Vec<f32> {
     let sinry = ry.sin();
     let cosry = ry.cos();
 
-    params[0] = 5400.0; //zoom
-    params[1] = 850.0; //distance from rotation center
+    params[0] = 3.0; //zoom
+    params[1] = 512.0; //distance from rotation center
     //2-4 is pos x y z
     //5-13 is a rotation matrix
     params[5] = cosrx;//Rxx
@@ -399,8 +399,8 @@ pub fn camera_params_rot(rx: f32, ry: f32) -> Vec<f32> {
     let sinry = ry.sin();
     let cosry = ry.cos();
 
-    params[0] = 5400.0; //zoom
-    params[1] = 850.0; //distance from rotation center
+    params[0] = 3.0; //zoom
+    params[1] = 512.0; //distance from rotation center
     //2-4 is pos x y z
     //5-13 is a rotation matrix
     params[5] = cosrx;//Rxx
