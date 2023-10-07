@@ -104,6 +104,7 @@ pub fn simloop(
                     if lbm_config.graphics_config.graphics {
                         test_lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
                     }
+                    thread::sleep(Duration::from_millis(33)) // about 30 FPS
                 }
                 
             }
