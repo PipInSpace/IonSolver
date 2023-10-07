@@ -128,15 +128,31 @@ int shading(const int c, const float3 p, const float3 normal, const float* camer
     const float br = max(1.5f*fabs(normal.x*dx+normal.y*dy+normal.z*dz)*rsqrt(nl2*dl2), 0.3f);
     return min((int)(br*cr), 255)<<16|min((int)(br*cg), 255)<<8|min((int)(br*cb), 255);
 }
-void draw(const int x, const int y, const float z, const int color, global int* bitmap, volatile global int* zbuffer, const int stereo) {
-	const int index=x+y*def_screen_width, iz=(int)(z*(2147483647.0f/10000.0f)); // use int z-buffer and atomic_max to minimize noise in image
-}
 bool is_off_screen(const int x, const int y, const int stereo) {
 	switch(stereo) {
 		default: return x<                 0||x>=def_screen_width  ||y<0||y>=def_screen_height; // entire screen
 		case -1: return x<                 0||x>=def_screen_width/2||y<0||y>=def_screen_height; // left half
 		case +1: return x<def_screen_width/2||x>=def_screen_width  ||y<0||y>=def_screen_height; // right half
 	}
+}
+void draw(const int x, const int y, const float z, const int color, global int* bitmap, volatile global int* zbuffer, const int stereo) {
+	const int index=x+y*def_screen_width, iz=(int)(z*(2147483647.0f/10000.0f)); // use int z-buffer and atomic_max to minimize noise in image
+	#ifndef GRAPHICS_TRANSPARENCY
+		if(!is_off_screen(x, y, stereo)&&iz>atomic_max(&zbuffer[index], iz)) bitmap[index] = color; // only draw if point is on screen and first in zbuffer
+	#else
+		if(!is_off_screen(x, y, stereo)) { // transparent rendering (not quite order-independent transparency, but elegant solution for order-reversible transparency which is good enough here)
+			const float transparency = GRAPHICS_TRANSPARENCY;
+			const uchar4 cc4=as_uchar4(color), cb4=as_uchar4(def_background_color);
+			const float3 fc = (float3)((float)cc4.x, (float)cc4.y, (float)cc4.z); // new pixel color that is behind topmost drawn pixel color
+			const float3 fb = (float3)((float)cb4.x, (float)cb4.y, (float)cb4.z); // background color
+			const bool is_front = iz>atomic_max(&zbuffer[index], iz);
+			const uchar4 cp4 = as_uchar4(bitmap[index]);
+			const float3 fp = (float3)((float)cp4.x, (float)cp4.y, (float)cp4.z); // current pixel color
+			const int draw_count = (int)cp4.w; // use alpha color value to store how often the pixel has been over-drawn already
+			const float3 fn = fp+(1.0f-transparency)*( is_front ? fc-fp : pown(transparency, draw_count)*(fc-fb)); // black magic: either over-draw colors back-to-front, or add back colors as correction terms
+			bitmap[index] = as_int((uchar4)((uchar)clamp(fn.x+0.5f, 0.0f, 255.0f), (uchar)clamp(fn.y+0.5f, 0.0f, 255.0f), (uchar)clamp(fn.z+0.5f, 0.0f, 255.0f), (uchar)min(draw_count+1, 255)));
+		}
+	#endif
 }
 bool convert(int* rx, int* ry, float* rz, const float3 p, const float* camera_cache, const int stereo) { // 3D -> 2D
 	const float zoom = camera_cache[0]; // fetch camera parameters (rotation matrix, camera position, etc.)
@@ -397,46 +413,6 @@ bool is_halo_q(const uint3 xyz) {
 ulong index_f(const uint n, const uint i) { // 64-bit indexing (maximum 2^32 lattice points (1624^3 lattice resolution, 225GB)
 	return (ulong)i*def_N+(ulong)n; // SoA (229% faster on GPU)
 }
-void store_f(const uint n, const float* fhn, global fpxx* fi, const uint* j, const ulong t) {
-	store(fi, index_f(n, 0u), fhn[0]); // Esoteric-Pull
-	for(uint i=1u; i<def_velocity_set; i+=2u) {
-		store(fi, index_f(j[i], t%2ul ? i+1u : i   ), fhn[i   ]);
-		store(fi, index_f(n   , t%2ul ? i    : i+1u), fhn[i+1u]);
-    }
-}
-void load_f(const uint n, float* fhn, const global fpxx* fi, const uint* j, const ulong t) {
-	fhn[0] = load(fi, index_f(n, 0u)); // Esoteric-Pull
-	for(uint i=1u; i<def_velocity_set; i+=2u) {
-		fhn[i   ] = load(fi, index_f(n   , t%2ul ? i    : i+1u));
-		fhn[i+1u] = load(fi, index_f(j[i], t%2ul ? i+1u : i   ));
-	}
-}
-void calculate_rho_u(const float* f, float* rhon, float* uxn, float* uyn, float* uzn) {
-    float rho=f[0], ux, uy, uz;
-    for(uint i=1u; i<def_velocity_set; i++) rho += f[i]; // calculate density from fi
-    rho += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fi (perturbation method / DDF-shifting)
-    #if defined(D2Q9)
-    ux = f[1]-f[2]+f[5]-f[6]+f[7]-f[8]; // calculate velocity from fi (alternating + and - for best accuracy)
-    uy = f[3]-f[4]+f[5]-f[6]+f[8]-f[7];
-    uz = 0.0f;
-    #elif defined(D3Q15)
-    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[11]-f[12]+f[14]-f[13]; // calculate velocity from fi (alternating + and - for best accuracy)
-    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[12]-f[11]+f[13]-f[14];
-    uz = f[ 5]-f[ 6]+f[ 7]-f[ 8]+f[10]-f[ 9]+f[11]-f[12]+f[13]-f[14];
-    #elif defined(D3Q19)
-    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[13]-f[14]+f[15]-f[16]; // calculate velocity from fi (alternating + and - for best accuracy)
-    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[11]-f[12]+f[14]-f[13]+f[17]-f[18];
-    uz = f[ 5]-f[ 6]+f[ 9]-f[10]+f[11]-f[12]+f[16]-f[15]+f[18]-f[17];
-    #elif defined(D3Q27)
-    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[13]-f[14]+f[15]-f[16]+f[19]-f[20]+f[21]-f[22]+f[23]-f[24]+f[26]-f[25]; // calculate velocity from fi (alternating + and - for best accuracy)
-    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[11]-f[12]+f[14]-f[13]+f[17]-f[18]+f[19]-f[20]+f[21]-f[22]+f[24]-f[23]+f[25]-f[26];
-    uz = f[ 5]-f[ 6]+f[ 9]-f[10]+f[11]-f[12]+f[16]-f[15]+f[18]-f[17]+f[19]-f[20]+f[22]-f[21]+f[23]-f[24]+f[25]-f[26];
-    #endif
-    *rhon = rho;
-    *uxn = ux/rho;
-    *uyn = uy/rho;
-    *uzn = uz/rho;
-} // calculate_rho_u
 void calculate_f_eq(const float rho, float ux, float uy, float uz, float* feq) {
     const float c3=-3.0f*(sq(ux)+sq(uy)+sq(uz)), rhom1=rho-1.0f; // c3 = -2*sq(u)/(2*sq(c)), rhom1 is arithmetic optimization to minimize digit extinction
     ux *= 3.0f;
@@ -489,6 +465,46 @@ void calculate_f_eq(const float rho, float ux, float uy, float uz, float* feq) {
     feq[23] = fma(rhoc, fma(0.5f, fma(u8, u8, c3), u8), rhom1c); feq[24] = fma(rhoc, fma(0.5f, fma(u8, u8, c3), -u8), rhom1c); // +-+ -+-
     feq[25] = fma(rhoc, fma(0.5f, fma(u9, u9, c3), u9), rhom1c); feq[26] = fma(rhoc, fma(0.5f, fma(u9, u9, c3), -u9), rhom1c); // -++ +--
     #endif
+}
+void calculate_rho_u(const float* f, float* rhon, float* uxn, float* uyn, float* uzn) {
+    float rho=f[0], ux, uy, uz;
+    for(uint i=1u; i<def_velocity_set; i++) rho += f[i]; // calculate density from fi
+    rho += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fi (perturbation method / DDF-shifting)
+    #if defined(D2Q9)
+    ux = f[1]-f[2]+f[5]-f[6]+f[7]-f[8]; // calculate velocity from fi (alternating + and - for best accuracy)
+    uy = f[3]-f[4]+f[5]-f[6]+f[8]-f[7];
+    uz = 0.0f;
+    #elif defined(D3Q15)
+    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[11]-f[12]+f[14]-f[13]; // calculate velocity from fi (alternating + and - for best accuracy)
+    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[12]-f[11]+f[13]-f[14];
+    uz = f[ 5]-f[ 6]+f[ 7]-f[ 8]+f[10]-f[ 9]+f[11]-f[12]+f[13]-f[14];
+    #elif defined(D3Q19)
+    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[13]-f[14]+f[15]-f[16]; // calculate velocity from fi (alternating + and - for best accuracy)
+    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[11]-f[12]+f[14]-f[13]+f[17]-f[18];
+    uz = f[ 5]-f[ 6]+f[ 9]-f[10]+f[11]-f[12]+f[16]-f[15]+f[18]-f[17];
+    #elif defined(D3Q27)
+    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[13]-f[14]+f[15]-f[16]+f[19]-f[20]+f[21]-f[22]+f[23]-f[24]+f[26]-f[25]; // calculate velocity from fi (alternating + and - for best accuracy)
+    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[11]-f[12]+f[14]-f[13]+f[17]-f[18]+f[19]-f[20]+f[21]-f[22]+f[24]-f[23]+f[25]-f[26];
+    uz = f[ 5]-f[ 6]+f[ 9]-f[10]+f[11]-f[12]+f[16]-f[15]+f[18]-f[17]+f[19]-f[20]+f[22]-f[21]+f[23]-f[24]+f[25]-f[26];
+    #endif
+    *rhon = rho;
+    *uxn = ux/rho;
+    *uyn = uy/rho;
+    *uzn = uz/rho;
+} // calculate_rho_u
+void load_f(const uint n, float* fhn, const global fpxx* fi, const uint* j, const ulong t) {
+	fhn[0] = load(fi, index_f(n, 0u)); // Esoteric-Pull
+	for(uint i=1u; i<def_velocity_set; i+=2u) {
+		fhn[i   ] = load(fi, index_f(n   , t%2ul ? i    : i+1u));
+		fhn[i+1u] = load(fi, index_f(j[i], t%2ul ? i+1u : i   ));
+	}
+}
+void store_f(const uint n, const float* fhn, global fpxx* fi, const uint* j, const ulong t) {
+	store(fi, index_f(n, 0u), fhn[0]); // Esoteric-Pull
+	for(uint i=1u; i<def_velocity_set; i+=2u) {
+		store(fi, index_f(j[i], t%2ul ? i+1u : i   ), fhn[i   ]);
+		store(fi, index_f(n   , t%2ul ? i    : i+1u), fhn[i+1u]);
+    }
 }
 void calculate_indices(const uint n, uint* x0, uint* xp, uint* xm, uint* y0, uint* yp, uint* ym, uint* z0, uint* zp, uint* zm) {
     const uint3 xyz = coordinates(n);
@@ -571,7 +587,7 @@ float calculate_Q(const uint n, const global float* u) { // Q-criterion
 	return calculate_Q_cached(load_u(j[0], u), load_u(j[1], u), load_u(j[2], u), load_u(j[3], u), load_u(j[4], u), load_u(j[5], u));
 } // calculate_Q()
 
-__kernel void stream_collide(global fpxx* fi, const global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
+__kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute stream_collide() on halo
     const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
@@ -606,6 +622,24 @@ __kernel void stream_collide(global fpxx* fi, const global float* rho, global fl
     uyn = clamp(uyn, -def_c, def_c); // force term: F*dt/(2*rho)
     uzn = clamp(uzn, -def_c, def_c);
     for(uint i=0u; i<def_velocity_set; i++) Fin[i] = 0.0f;
+
+	#ifndef EQUILIBRIUM_BOUNDARIES
+	#ifdef UPDATE_FIELDS
+		rho[               n] = rhon; // update density field
+		u[                 n] = uxn; // update velocity field
+		u[    def_N+(ulong)n] = uyn;
+		u[2ul*def_N+(ulong)n] = uzn;
+	#endif // UPDATE_FIELDS
+	#else // EQUILIBRIUM_BOUNDARIES
+	#ifdef UPDATE_FIELDS
+		if(flagsn_bo!=TYPE_E) { // only update fields for non-TYPE_E cells
+			rho[               n] = rhon; // update density field
+			u[                 n] = uxn; // update velocity field
+			u[    def_N+(ulong)n] = uyn;
+			u[2ul*def_N+(ulong)n] = uzn;
+		}
+	#endif // UPDATE_FIELDS
+	#endif // EQUILIBRIUM_BOUNDARIES
 
     float feq[def_velocity_set]; // equilibrium DDFs
     calculate_f_eq(rhon, uxn, uyn, uzn, feq); // calculate equilibrium DDFs

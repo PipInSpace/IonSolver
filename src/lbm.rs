@@ -231,6 +231,12 @@ impl Lbm {
         for d in 0..self.get_domain_numbers() {
             self.domains[d].queue.finish().unwrap();
         }
+        //for d in 0..self.get_domain_numbers() {
+        //    self.domains[d].enqueue_update_fields().unwrap();
+        //}
+        //for d in 0..self.get_domain_numbers() {
+        //    self.domains[d].queue.finish().unwrap();
+        //}
         for d in 0..self.get_domain_numbers() {
             self.domains[d].increment_timestep(1);
         }
@@ -279,7 +285,8 @@ pub struct LbmDomain {
     particles_n: u32,
     particles_rho: f32,
 
-    pub fi: VariableFloatBuffer,
+    pub fi32: Buffer<f32>,
+    pub fi16: Buffer<u16>,
     pub rho: Buffer<f32>,
     pub u: Buffer<f32>,
     pub flags: Buffer<u8>,
@@ -379,77 +386,98 @@ impl LbmDomain {
             .unwrap();
 
         // Initialize Buffers
-        let fi = match lbm_config.float_type {
-            FloatType::FP16S => VariableFloatBuffer::U16(
-                Buffer::<u16>::builder()
+        let fi32: Buffer<f32>;
+        let fi16: Buffer<u16>;
+        match lbm_config.float_type { // Initialise two fiBuffer variants for rust. Only one will be used.
+            FloatType::FP16S => {
+                fi16 = Buffer::<u16>::builder()
                     .queue(queue.clone())
-                    .len([n_x * velocity_set as u32, n_y, n_z])
+                    .len([n*velocity_set as u64])
                     .fill_val(0u16)
                     .build()
-                    .unwrap(),
-            ),
-            FloatType::FP16C => VariableFloatBuffer::U16(
-                Buffer::<u16>::builder()
+                    .unwrap();
+                    fi32 = Buffer::<f32>::builder()
                     .queue(queue.clone())
-                    .len([n_x * velocity_set as u32, n_y, n_z])
-                    .fill_val(0u16)
-                    .build()
-                    .unwrap(),
-            ),
-            FloatType::FP32 => VariableFloatBuffer::F32(
-                Buffer::<f32>::builder()
-                    .queue(queue.clone())
-                    .len([n_x * velocity_set as u32, n_y, n_z])
+                    .len(1)
                     .fill_val(0.0f32)
                     .build()
-                    .unwrap(),
-            ),
+                    .unwrap(); //Evil memory hack. Won't be used, but needs to be allocated for rust :)
+            },
+            FloatType::FP16C => {
+                fi16 = Buffer::<u16>::builder()
+                    .queue(queue.clone())
+                    .len([n*velocity_set as u64])
+                    .fill_val(0u16)
+                    .build()
+                    .unwrap();
+                fi32 = Buffer::<f32>::builder()
+                    .queue(queue.clone())
+                    .len(1)
+                    .fill_val(0.0f32)
+                    .build()
+                    .unwrap(); //Evil memory hack. Won't be used, but needs to be allocated for rust :)
+            },
+            FloatType::FP32 => {
+                fi16 = Buffer::<u16>::builder()
+                    .queue(queue.clone())
+                    .len([1])
+                    .fill_val(0u16)
+                    .build()
+                    .unwrap(); //Evil memory hack. Won't be used, but needs to be allocated for rust :)
+                fi32 = Buffer::<f32>::builder()
+                    .queue(queue.clone())
+                    .len([n*velocity_set as u64])
+                    .fill_val(0.0f32)
+                    .build()
+                    .unwrap();
+            },
         };
         let rho = Buffer::<f32>::builder()
             .queue(queue.clone())
-            .len([n_x, n_y, n_z])
+            .len([n])
             .fill_val(1.0f32)
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
         let u = Buffer::<f32>::builder()
             .queue(queue.clone())
-            .len([n_x * 3, n_y, n_z])
+            .len([n*3])
             .fill_val(0.0f32)
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
         let flags = Buffer::<u8>::builder()
             .queue(queue.clone())
-            .len([n_x, n_y, n_z])
+            .len([n])
+            .fill_val(0u8)
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
 
         // Initialize Kernels
         let kernel_initialize: Kernel;
-        match &fi {
+        match lbm_config.float_type {
             //Initialize initialize kernel
-            VariableFloatBuffer::U16(fi_u16) => {
+            FloatType::FP32 => {
                 kernel_initialize = Kernel::builder()
                     .program(&program)
                     .name("initialize")
                     .queue(queue.clone())
                     .global_work_size([n])
-                    .arg_named("fi", fi_u16)
+                    .arg_named("fi", &fi32)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
                     .arg_named("flags", &flags)
                     .build()
                     .unwrap();
             }
-            VariableFloatBuffer::F32(fi_f32) => {
+            _ => {
                 kernel_initialize = Kernel::builder()
                     .program(&program)
                     .name("initialize")
                     .queue(queue.clone())
                     .global_work_size([n])
-                    .arg_named("fi", fi_f32)
+                    .arg_named("fi", &fi16)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
                     .arg_named("flags", &flags)
@@ -458,15 +486,15 @@ impl LbmDomain {
             }
         }
         let kernel_stream_collide: Kernel;
-        match &fi {
+        match lbm_config.float_type {
             //Initialize stream_collide kernel
-            VariableFloatBuffer::U16(fi_u16) => {
+            FloatType::FP32 => {
                 kernel_stream_collide = Kernel::builder()
                     .program(&program)
                     .name("stream_collide")
                     .queue(queue.clone())
                     .global_work_size([n])
-                    .arg_named("fi", fi_u16)
+                    .arg_named("fi", &fi32)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
                     .arg_named("flags", &flags)
@@ -477,13 +505,13 @@ impl LbmDomain {
                     .build()
                     .unwrap();
             }
-            VariableFloatBuffer::F32(fi_f32) => {
+            _ => {
                 kernel_stream_collide = Kernel::builder()
                     .program(&program)
                     .name("stream_collide")
                     .queue(queue.clone())
                     .global_work_size([n])
-                    .arg_named("fi", fi_f32)
+                    .arg_named("fi", &fi16)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
                     .arg_named("flags", &flags)
@@ -496,15 +524,15 @@ impl LbmDomain {
             }
         }
         let kernel_update_fields: Kernel;
-        match &fi {
+        match lbm_config.float_type {
             //Initialize update_fields kernel
-            VariableFloatBuffer::U16(fi_u16) => {
+            FloatType::FP32 => {
                 kernel_update_fields = Kernel::builder()
                     .program(&program)
                     .name("update_fields")
                     .queue(queue.clone())
                     .global_work_size([n])
-                    .arg_named("fi", fi_u16)
+                    .arg_named("fi", &fi32)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
                     .arg_named("flags", &flags)
@@ -515,13 +543,13 @@ impl LbmDomain {
                     .build()
                     .unwrap();
             }
-            VariableFloatBuffer::F32(fi_f32) => {
+            _ => {
                 kernel_update_fields = Kernel::builder()
                     .program(&program)
                     .name("update_fields")
                     .queue(queue.clone())
                     .global_work_size([n])
-                    .arg_named("fi", fi_f32)
+                    .arg_named("fi", &fi16)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
                     .arg_named("flags", &flags)
@@ -573,7 +601,8 @@ impl LbmDomain {
             particles_n: lbm_config.particles_n,
             particles_rho: lbm_config.particles_rho,
 
-            fi,
+            fi32,
+            fi16,
             rho,
             u,
             flags,
@@ -689,7 +718,8 @@ impl LbmDomain {
             FloatType::FP16C => &fp16c,
             FloatType::FP32 => &fp32
         }
-        + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""};
+        + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
+        + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""};
         //Extensions
     }
 
@@ -711,6 +741,19 @@ impl LbmDomain {
             self.kernel_stream_collide.set_arg("fy", self.fy)?;
             self.kernel_stream_collide.set_arg("fz", self.fz)?;
             self.kernel_stream_collide
+                .cmd()
+                .enq()
+        }
+    }
+
+    fn enqueue_update_fields(&self) -> ocl::Result<()> {
+        //Enqueues Initialization kernel, arguments are already set
+        unsafe {
+            self.kernel_update_fields.set_arg("t", self.t)?;
+            self.kernel_update_fields.set_arg("fx", self.fx)?;
+            self.kernel_update_fields.set_arg("fy", self.fy)?;
+            self.kernel_update_fields.set_arg("fz", self.fz)?;
+            self.kernel_update_fields
                 .cmd()
                 .enq()
         }

@@ -193,7 +193,7 @@ impl Graphics {
             self.kernel_clear.enq().unwrap();
             //if visualisation mode
             self.kernel_graphics_streamline.enq().unwrap();
-            self.kernel_graphics_q.enq().unwrap();
+            //self.kernel_graphics_q.enq().unwrap();
 
             self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
             self.zbuffer.read(&mut self.zbuffer_host).enq().unwrap();
@@ -371,7 +371,7 @@ fn new_camera_params() -> Vec<f32> {
     let sinry = ry.sin();
     let cosry = ry.cos();
 
-    params[0] = 540.0; //zoom
+    params[0] = 5400.0; //zoom
     params[1] = 850.0; //distance from rotation center
     //2-4 is pos x y z
     //5-13 is a rotation matrix

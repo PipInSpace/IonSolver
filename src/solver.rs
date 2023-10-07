@@ -34,9 +34,9 @@ pub fn simloop(
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.domains[0].setup();
     test_lbm.initialize();
-    let mut test_vec:Vec<f32> = vec![0.0; 256*256*256];
-    test_lbm.domains[0].rho.read(&mut test_vec).enq().unwrap();
-    println!("rho at index 5000: {}", test_vec[5000]);
+    //let mut test_vec:Vec<f32> = vec![0.0; 256*256*256*3];
+    //test_lbm.domains[0].u.read(&mut test_vec).enq().unwrap();
+    //println!("u at index 5000: {}", test_vec[5000]);
 
     // get initial config from ui
     let recieve_result = ctrl_rx.try_recv();
@@ -65,8 +65,8 @@ pub fn simloop(
 
                 //Simulation commences here
                 test_lbm.do_time_step();
-                test_lbm.domains[0].rho.read(&mut test_vec).enq().unwrap();
-                println!("rho at index 5000: {}", test_vec[5000]);
+                //test_lbm.domains[0].u.read(&mut test_vec).enq().unwrap();
+                //println!("u at index 5000: {}", test_vec[5000]);
 
                 if i % state.frame_spacing == 0 {
                     println!("Step {}", i);

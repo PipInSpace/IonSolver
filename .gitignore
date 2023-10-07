@@ -16,5 +16,6 @@ Cargo.lock
 
 /target
 
-/.vscode
+/.vscode/**
 opencl-language-server.log
+.vscode/launch.json
