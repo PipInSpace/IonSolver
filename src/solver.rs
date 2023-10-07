@@ -80,7 +80,7 @@ pub fn simloop(
                 i += 1;
             }
         }
-        if state.paused && state.active && has_commenced {
+        if state.paused && state.active {
             let mut cached_rot = state.camera_rotation.clone();
             let mut cached_zoom = state.camera_zoom;
             loop {
@@ -93,7 +93,8 @@ pub fn simloop(
                     break;
                 }
 
-                if cached_rot[0] != state.camera_rotation[0] || cached_rot[1] != state.camera_rotation[1] || cached_zoom != state.camera_zoom {//only draw when camera updated
+                if cached_rot[0] != state.camera_rotation[0] || cached_rot[1] != state.camera_rotation[1] || cached_zoom != state.camera_zoom || !has_commenced{//only draw when camera updated
+                    has_commenced = true;
                     cached_rot = state.camera_rotation.clone();
                     cached_zoom = state.camera_zoom;
                     let mut params = graphics::camera_params_rot(state.camera_rotation[0] * (PI/180.0), state.camera_rotation[1] * (PI/180.0));
