@@ -28,11 +28,13 @@ pub fn simloop(
     let mut lbm_config = LbmConfig::new();
     lbm_config.n_x = 256;
     lbm_config.n_y = 256;
-    lbm_config.n_z = 156;
+    lbm_config.n_z = 128;
     lbm_config.nu = 0.01;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.domains[0].setup();
+    test_lbm.domains[0].graphics.streamline_mode = true;
+    test_lbm.domains[0].graphics.q_mode = false;
     test_lbm.initialize();
 
     // get initial config from ui

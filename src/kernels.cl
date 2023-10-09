@@ -99,7 +99,14 @@ float half_to_float_custom(const ushort x) { // custom 16-bit floating-point for
 	return as_float((x&0x8000)<<16 | (e!=0)*((e+112)<<23|m) | ((e==0)&(m!=0))*((v-37)<<23|((m<<(150-v))&0x007FF000))); // sign : normalized : denormalized
 }
 
+// Line3D OpenCL C version (c) Moritz Lehmann
 //Graphics Helper functions:
+// draw_point(...)    : draw 3D pixel
+// draw_circle(...)   : draw 3D circle
+// draw_line(...)     : draw 3D line
+// draw_triangle(...) : draw 3D triangle
+// iron_color(...)    : convert float in [0,255] to iron spectrum int color
+// graphics_clear()   : kernel to reset bitmap and zbuffer
 #ifdef GRAPHICS
 int color_average(const int c1, const int c2) { // (c1+c2)/s
 	const uchar4 cc1=as_uchar4(c1), cc2=as_uchar4(c2);
