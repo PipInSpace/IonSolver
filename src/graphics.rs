@@ -9,6 +9,7 @@ use crate::{
 };
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
+#[allow(unused)]
 pub struct Graphics {
     queue: Queue,
     kernel_clear: Kernel,

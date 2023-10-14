@@ -9,7 +9,7 @@ mod lbm;
 mod opencl;
 mod solver;
 use egui::style::Spacing;
-use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2, Event};
+use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2};
 use solver::*;
 use eframe::*;
 

@@ -45,15 +45,18 @@ pub fn simloop(
 
     // Clearing out folder if requested
     if state.save && state.clear_images {
-        fs::remove_dir_all("out").unwrap(); // TODO: make not bad
+        match fs::remove_dir_all("out") {
+            Ok(_) => (),
+            Err(_) => println!("Did not find out folder. Creating it.")
+        }
         fs::create_dir("out").unwrap();
     }
 
     let mut has_commenced = false; //has the simulation started
+    let mut cached_rot: Vec<f32> = vec![0.0; 2];
+    let mut cached_zoom = 0.0;
     loop {//This is the master loop, cannot be paused
         if !state.paused {
-            let mut cached_rot = state.camera_rotation.clone();
-            let mut cached_zoom = state.camera_zoom;
             has_commenced = true;
             loop {
                 //This is the loop of the simulation. Can be paused by receiving a control message
@@ -83,8 +86,8 @@ pub fn simloop(
             }
         }
         if state.paused && state.active {
-            let mut cached_rot = state.camera_rotation.clone();
-            let mut cached_zoom = state.camera_zoom;
+            let mut cached_rot: Vec<f32> = vec![0.0; 2];
+            let mut cached_zoom = 0.0;
             loop {
                 //This is the loop of the simulation if it is paused but active. useful for displaying the simulation
                 let recieve_result = ctrl_rx.try_iter().last();

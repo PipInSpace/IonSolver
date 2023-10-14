@@ -1,9 +1,9 @@
 use crate::{
     graphics::Graphics,
-    graphics::{Camera, GraphicsConfig},
+    graphics::GraphicsConfig,
     *,
 };
-use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue, CommandQueueProperties};
+use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -746,6 +746,8 @@ impl LbmDomain {
         }
     }
 
+    // Manually update fields. Is autmatically handled in stream-collide most of the time
+    #[allow(unused)]
     fn enqueue_update_fields(&self) -> ocl::Result<()> {
         //Enqueues Initialization kernel, arguments are already set
         unsafe {
