@@ -16,7 +16,7 @@ pub fn simloop(
     //sim_tx.send(sim) sends data to the main window loop
     let mut state = SimControlTx {
         paused: true,
-        save: true,
+        save: false,
         clear_images: true,
         frame_spacing: 10,
         active: true,
@@ -29,10 +29,11 @@ pub fn simloop(
     lbm_config.n_x = 256;
     lbm_config.n_y = 256;
     lbm_config.n_z = 128;
+    lbm_config.d_x = 2;
     lbm_config.nu = 0.01;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     let mut test_lbm = Lbm::init(lbm_config);
-    test_lbm.domains[0].setup();
+    test_lbm.setup();
     test_lbm.domains[0].graphics.streamline_mode = true;
     test_lbm.domains[0].graphics.q_mode = false;
     test_lbm.initialize();
@@ -73,7 +74,9 @@ pub fn simloop(
                 if cached_rot[0] != state.camera_rotation[0] || cached_rot[1] != state.camera_rotation[1] || cached_zoom != state.camera_zoom {//only update params when camera updated
                     let mut params = graphics::camera_params_rot(state.camera_rotation[0] * (PI/180.0), state.camera_rotation[1] * (PI/180.0));
                     params[0] = state.camera_zoom;
-                    test_lbm.domains[0].graphics.camera_params.write(&params).enq().unwrap();
+                    for d in &test_lbm.domains {
+                        d.graphics.camera_params.write(&params).enq().unwrap();
+                    }
                 }
 
                 if i % state.frame_spacing == 0 {
@@ -104,8 +107,9 @@ pub fn simloop(
                     cached_zoom = state.camera_zoom;
                     let mut params = graphics::camera_params_rot(state.camera_rotation[0] * (PI/180.0), state.camera_rotation[1] * (PI/180.0));
                     params[0] = state.camera_zoom;
-                    test_lbm.domains[0].graphics.camera_params.write(&params).enq().unwrap();
-
+                    for d in &test_lbm.domains {
+                        d.graphics.camera_params.write(&params).enq().unwrap();
+                    }
                     if lbm_config.graphics_config.graphics {
                         test_lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
                     }
@@ -125,13 +129,13 @@ pub fn simloop(
     }
 }
 
-impl LbmDomain {
+impl Lbm {
     pub fn setup(&mut self) {
         // 3D Taylor-Green vortices
         println!("Setting up Taylor-Green vorticies");
-        let nx = self.n_x;
-        let ny = self.n_y;
-        let nz = self.n_z;
+        let nx = self.config.n_x;
+        let ny = self.config.n_y;
+        let nz = self.config.n_z;
         let ntotal = nx as u64 * ny as u64 * nz as u64;
         let pif = std::f32::consts::PI;
         #[allow(non_snake_case)]
@@ -162,9 +166,49 @@ impl LbmDomain {
             vec_rho[n as usize] =
                 1.0 - (A * A) * 3.0 / 4.0 * (4.0 * pif * fx / a).cos() + (4.0 * pif * fy / b).cos();
         }
-        self.u.write(&vec_u).enq().unwrap();
-        self.rho.write(&vec_rho).enq().unwrap();
-        self.queue.finish().unwrap();
+        let domain_numbers: u32 = self.config.d_x * self.config.d_y * self.config.d_z;
+        for d in 0..domain_numbers {
+            let dx = self.config.d_x;
+            let dy = self.config.d_y;
+            println!("Initializing domain {}/{}", d + 1, domain_numbers);
+            let x = (d % (dx * dy)) % dx; // Domain coordinates
+            let y = (d % (dx * dy)) / dx;
+            let z = d / (dx * dy);
+            let dsx = nx as u64/self.config.d_x as u64; // Domain size on each axis
+            let dsy = ny as u64/self.config.d_y as u64;
+            let dsz = nz as u64/self.config.d_z as u64;
+            let dtotal = dsx*dsy*dsz;
+
+            let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx*dsy*dsz*3) as usize];
+            let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx*dsy*dsz) as usize];
+            for zi in 0..dsz as u64 { // iterates over every cell in the domain, loading the information from the precomputed all-domain-vector
+                for yi in 0..dsy as u64 {
+                    for xi in 0..dsx as u64 {
+                        let dn = (zi*dsx*dsy)+(yi*dsx)+xi; // Domain 1D index
+                        let n =  dn + (x as u64*dsx)+(y as u64*nx as u64*dsy)+(z as u64*nx as u64*ny as u64*dsz); // Domain 1D index offset by domain coordinates = LBM 1D index
+                        domain_vec_u[(dn) as usize] =            vec_u[(n) as usize];
+                        domain_vec_u[(dn + dtotal) as usize] =   vec_u[(n + ntotal) as usize];
+                        domain_vec_u[(dn + dtotal*2) as usize] = vec_u[(n + ntotal*2) as usize];
+                    }
+                }
+            }
+            for zi in 0..dsz as u64 { // iterates over every cell in the domain, loading the information from the precomputed all-domain-vector
+                for yi in 0..dsy as u64 {
+                    for xi in 0..dsx as u64 {
+                        let dn = (zi*dsx*dsy)+(yi*dsx)+xi; // Domain 1D index
+                        let n =  dn + (x as u64*dsx)+(y as u64*nx as u64*dsy)+(z as u64*nx as u64*ny as u64*dsz); // Domain 1D index offset by domain coordinates = LBM 1D index
+                        domain_vec_rho[(dn) as usize] = vec_rho[(n) as usize];
+                    }
+                }
+            }
+
+            self.domains[d as usize].u.write(&domain_vec_u).enq().unwrap();
+            self.domains[d as usize].rho.write(&domain_vec_rho).enq().unwrap();
+            self.domains[d as usize].queue.finish().unwrap();
+        }
+        //self.u.write(&vec_u).enq().unwrap();
+        //self.rho.write(&vec_rho).enq().unwrap();
+        //self.queue.finish().unwrap();
         println!("Finished setting up Taylor-Green vorticies");
     }
 }

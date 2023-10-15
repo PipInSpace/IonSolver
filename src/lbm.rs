@@ -246,6 +246,16 @@ impl Lbm {
         self.domains.len()
     }
 
+    pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
+        let t: u64 = n % (self.config.n_x as u64 * self.config.n_y as u64);
+        //x, y, z
+        (
+            (t % self.config.n_x as u64) as u32,
+            (t / self.config.n_x as u64) as u32,
+            (n / (self.config.n_x as u64 * self.config.n_y as u64)) as u32,
+        )
+    }
+
     //Helper functions:
 }
 
@@ -778,7 +788,7 @@ impl LbmDomain {
     }
 
     pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
-        let t: u64 = n % (self.lbm_config.n_x as u64 * self.lbm_config.n_y as u64);
+        let t: u64 = n % (self.n_x as u64 * self.n_y as u64);
         //x, y, z
         (
             (t % self.n_x as u64) as u32,
