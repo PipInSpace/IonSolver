@@ -264,28 +264,38 @@ impl Lbm {
     ) {
         let width = self.config.graphics_config.camera_width;
         let height = self.config.graphics_config.camera_height;
-        for d in 0..self.get_domain_numbers() {
+        let domain_numbers = self.get_domain_numbers();
+        let mut bitmap: Vec<i32> = vec![]; // Base bitmap
+        let mut zbuffer: Vec<i32> = vec![];
+        let mut bitmaps: Vec<Vec<i32>> = vec![]; // Holds later domain bitmaps
+        let mut zbuffers: Vec<Vec<i32>> = vec![];
+        for d in 0..domain_numbers {
             self.domains[d].graphics.enqueue_draw_frame();
         }
-        for d in 0..self.get_domain_numbers() {
+        for d in 0..domain_numbers {
             self.domains[d].queue.finish().unwrap();
-        }
-
-        let mut bitmap = self.domains[0].graphics.bitmap_host.clone();
-        let mut zbuffer = self.domains[0].graphics.zbuffer_host.clone();
-        for d in 1..self.get_domain_numbers() {
-            let bitmap_d = &self.domains[d].graphics.bitmap_host;
-            let zbuffer_d = &self.domains[d].graphics.zbuffer_host;
-            for i in 0..(width * height) as usize {
-                let zdi = zbuffer_d[i];
-                if zdi > zbuffer[i] {
-                    bitmap[i] = bitmap_d[i];
-                    zbuffer[i] = zbuffer_d[i];
-                }
+            if d == 0 {
+                bitmap = self.domains[d].graphics.bitmap_host.clone();
+                zbuffer = self.domains[d].graphics.zbuffer_host.clone();
+            } else {
+                bitmaps.push(self.domains[d].graphics.bitmap_host.clone());
+                zbuffers.push(self.domains[d].graphics.zbuffer_host.clone());
             }
         }
         thread::spawn(move || {
-            // Generating images needs own tread for performance reasons
+            // Generating images needs own thread for performance reasons
+            for d in 0..domain_numbers-1 {
+                let bitmap_d = &bitmaps[d];
+                let zbuffer_d = &zbuffers[d];
+                for i in 0..(width * height) as usize {
+                    let zdi = zbuffer_d[i];
+                    if zdi > zbuffer[i] {
+                        bitmap[i] = bitmap_d[i];
+                        zbuffer[i] = zbuffer_d[i];
+                    }
+                }
+            }
+        
             let mut save_buffer: Vec<u8> = vec![];
             let mut pixels: Vec<Color32> = vec![];
             for pixel in 0..bitmap.len() {
