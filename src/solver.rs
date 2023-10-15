@@ -151,7 +151,6 @@ impl Lbm {
         let nx = self.config.n_x;
         let ny = self.config.n_y;
         let nz = self.config.n_z;
-        let ntotal = nx as u64 * ny as u64 * nz as u64;
         let pif = std::f32::consts::PI;
         #[allow(non_snake_case)]
         let A = 0.25f32;
@@ -159,28 +158,6 @@ impl Lbm {
         let a = nx as f32 / periodicity as f32;
         let b = ny as f32 / periodicity as f32;
         let c = nz as f32 / periodicity as f32;
-        let mut vec_u: Vec<f32> = vec![0.0; (nx as u64 * ny as u64 * nz as u64 * 3) as usize];
-        let mut vec_rho: Vec<f32> = vec![0.0; (nx as u64 * ny as u64 * nz as u64) as usize];
-        for n in 0..(nx as u64 * ny as u64 * nz as u64) {
-            let (x, y, z) = self.get_coordinates(n);
-            let fx = x as f32 + 0.5 - 0.5 * nx as f32;
-            let fy = y as f32 + 0.5 - 0.5 * ny as f32;
-            let fz = z as f32 + 0.5 - 0.5 * nz as f32;
-            vec_u[(n) as usize] = A
-                * (2.0 * pif * fx / a).cos()
-                * (2.0 * pif * fy / b).sin()
-                * (2.0 * pif * fz / c).sin(); // x
-            vec_u[(n + ntotal) as usize] = -A
-                * (2.0 * pif * fx / a).sin()
-                * (2.0 * pif * fy / b).cos()
-                * (2.0 * pif * fz / c).sin(); // y
-            vec_u[(n + (ntotal * 2)) as usize] = A
-                * (2.0 * pif * fx / a).sin()
-                * (2.0 * pif * fy / b).sin()
-                * (2.0 * pif * fz / c).cos(); // z
-            vec_rho[n as usize] =
-                1.0 - (A * A) * 3.0 / 4.0 * (4.0 * pif * fx / a).cos() + (4.0 * pif * fy / b).cos();
-        }
         let domain_numbers: u32 = self.config.d_x * self.config.d_y * self.config.d_z;
         for d in 0..domain_numbers {
             let dx = self.config.d_x;
@@ -190,27 +167,49 @@ impl Lbm {
             let x = (d % (dx * dy)) % dx; // Domain coordinates
             let y = (d % (dx * dy)) / dx;
             let z = d / (dx * dy);
-            let dsx = nx as u64 / dx as u64 + (dx > 1u32) as u64*2; // Domain size on each axis
-            let dsy = ny as u64 / dy as u64 + (dy > 1u32) as u64*2; // Needs to account for halo offsets
-            let dsz = nz as u64 / dz as u64 + (dz > 1u32) as u64*2;
+            let dsx = nx as u64 / dx as u64 + (dx > 1u32) as u64 * 2; // Domain size on each axis
+            let dsy = ny as u64 / dy as u64 + (dy > 1u32) as u64 * 2; // Needs to account for halo offsets
+            let dsz = nz as u64 / dz as u64 + (dz > 1u32) as u64 * 2;
             let dtotal = dsx * dsy * dsz;
 
             let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx * dsy * dsz * 3) as usize];
             let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize];
             for zi in 0..dsz as u64 {
-                // iterates over every cell in the domain, loading the information from the precomputed all-domain-vector
+                // iterates over every cell in the domain, filling it with  Taylor-Green-vortex
                 for yi in 0..dsy as u64 {
                     for xi in 0..dsx as u64 {
-                        if !(((xi==0||xi==dsx-1) && dx > 1)||((yi==0||yi==dsy-1) && dy > 1)||((zi==0||zi==dsz-1) && dz > 1)){//do not set at halo offsets
+                        if !(((xi == 0 || xi == dsx - 1) && dx > 1)
+                            || ((yi == 0 || yi == dsy - 1) && dy > 1)
+                            || ((zi == 0 || zi == dsz - 1) && dz > 1))
+                        {
+                            //do not set at halo offsets
                             let dn = (zi * dsx * dsy) + (yi * dsx) + xi; // Domain 1D index
-                            let gx = xi - (dx > 1u32) as u64 + x as u64 * (dsx - (dx > 1u32) as u64*2);
-                            let gy = yi - (dy > 1u32) as u64 + y as u64 * (dsy - (dy > 1u32) as u64*2);
-                            let gz = zi - (dz > 1u32) as u64 + z as u64 * (dsz - (dz > 1u32) as u64*2);
-                            let gn = gx + (gy * nx as u64) + (gz * nx as u64 * ny as u64);
-                            domain_vec_u[(dn) as usize] = vec_u[(gn) as usize];
-                            domain_vec_u[(dn + dtotal) as usize] = vec_u[(gn + ntotal) as usize];
-                            domain_vec_u[(dn + dtotal * 2) as usize] = vec_u[(gn + ntotal * 2) as usize];
-                            domain_vec_rho[(dn) as usize] = vec_rho[(gn) as usize];
+                            let gx =
+                                xi - (dx > 1u32) as u64 + x as u64 * (dsx - (dx > 1u32) as u64 * 2); // Global coordinates
+                            let gy =
+                                yi - (dy > 1u32) as u64 + y as u64 * (dsy - (dy > 1u32) as u64 * 2);
+                            let gz =
+                                zi - (dz > 1u32) as u64 + z as u64 * (dsz - (dz > 1u32) as u64 * 2);
+
+                            let fx = gx as f32 + 0.5 - 0.5 * nx as f32;
+                            let fy = gy as f32 + 0.5 - 0.5 * ny as f32;
+                            let fz = gz as f32 + 0.5 - 0.5 * nz as f32;
+
+                            domain_vec_u[(dn) as usize] = A
+                                * (2.0 * pif * fx / a).cos()
+                                * (2.0 * pif * fy / b).sin()
+                                * (2.0 * pif * fz / c).sin(); // x
+                            domain_vec_u[(dn + dtotal) as usize] = -A
+                                * (2.0 * pif * fx / a).sin()
+                                * (2.0 * pif * fy / b).cos()
+                                * (2.0 * pif * fz / c).sin(); // y;
+                            domain_vec_u[(dn + dtotal * 2) as usize] = A
+                                * (2.0 * pif * fx / a).sin()
+                                * (2.0 * pif * fy / b).sin()
+                                * (2.0 * pif * fz / c).cos(); // z
+                            domain_vec_rho[(dn) as usize] = 1.0
+                                - (A * A) * 3.0 / 4.0 * (4.0 * pif * fx / a).cos()
+                                + (4.0 * pif * fy / b).cos();
                         }
                     }
                 }
@@ -228,9 +227,6 @@ impl Lbm {
                 .unwrap();
             self.domains[d as usize].queue.finish().unwrap();
         }
-        //self.u.write(&vec_u).enq().unwrap();
-        //self.rho.write(&vec_rho).enq().unwrap();
-        //self.queue.finish().unwrap();
         println!("Finished setting up Taylor-Green vorticies");
     }
 }
