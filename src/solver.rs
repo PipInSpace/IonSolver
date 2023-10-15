@@ -185,13 +185,14 @@ impl Lbm {
         for d in 0..domain_numbers {
             let dx = self.config.d_x;
             let dy = self.config.d_y;
+            let dz = self.config.d_z;
             println!("Initializing domain {}/{}", d + 1, domain_numbers);
             let x = (d % (dx * dy)) % dx; // Domain coordinates
             let y = (d % (dx * dy)) / dx;
             let z = d / (dx * dy);
-            let dsx = nx as u64 / self.config.d_x as u64; // Domain size on each axis
-            let dsy = ny as u64 / self.config.d_y as u64;
-            let dsz = nz as u64 / self.config.d_z as u64;
+            let dsx = nx as u64 / dx as u64 + (dx > 1u32) as u64*2; // Domain size on each axis
+            let dsy = ny as u64 / dy as u64 + (dy > 1u32) as u64*2; // Needs to account for halo offsets
+            let dsz = nz as u64 / dz as u64 + (dz > 1u32) as u64*2;
             let dtotal = dsx * dsy * dsz;
 
             let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx * dsy * dsz * 3) as usize];
@@ -200,27 +201,17 @@ impl Lbm {
                 // iterates over every cell in the domain, loading the information from the precomputed all-domain-vector
                 for yi in 0..dsy as u64 {
                     for xi in 0..dsx as u64 {
-                        let dn = (zi * dsx * dsy) + (yi * dsx) + xi; // Domain 1D index
-                        let n = dn
-                            + (x as u64 * dsx)
-                            + (y as u64 * nx as u64 * dsy)
-                            + (z as u64 * nx as u64 * ny as u64 * dsz); // Domain 1D index offset by domain coordinates = LBM 1D index
-                        domain_vec_u[(dn) as usize] = vec_u[(n) as usize];
-                        domain_vec_u[(dn + dtotal) as usize] = vec_u[(n + ntotal) as usize];
-                        domain_vec_u[(dn + dtotal * 2) as usize] = vec_u[(n + ntotal * 2) as usize];
-                    }
-                }
-            }
-            for zi in 0..dsz as u64 {
-                // iterates over every cell in the domain, loading the information from the precomputed all-domain-vector
-                for yi in 0..dsy as u64 {
-                    for xi in 0..dsx as u64 {
-                        let dn = (zi * dsx * dsy) + (yi * dsx) + xi; // Domain 1D index
-                        let n = dn
-                            + (x as u64 * dsx)
-                            + (y as u64 * nx as u64 * dsy)
-                            + (z as u64 * nx as u64 * ny as u64 * dsz); // Domain 1D index offset by domain coordinates = LBM 1D index
-                        domain_vec_rho[(dn) as usize] = vec_rho[(n) as usize];
+                        if !(((xi==0||xi==dsx-1) && dx > 1)||((yi==0||yi==dsy-1) && dy > 1)||((zi==0||zi==dsz-1) && dz > 1)){//do not set at halo offsets
+                            let dn = (zi * dsx * dsy) + (yi * dsx) + xi; // Domain 1D index
+                            let gx = xi - (dx > 1u32) as u64 + x as u64 * (dsx - (dx > 1u32) as u64*2);
+                            let gy = yi - (dy > 1u32) as u64 + y as u64 * (dsy - (dy > 1u32) as u64*2);
+                            let gz = zi - (dz > 1u32) as u64 + z as u64 * (dsz - (dz > 1u32) as u64*2);
+                            let gn = gx + (gy * nx as u64) + (gz * nx as u64 * ny as u64);
+                            domain_vec_u[(dn) as usize] = vec_u[(gn) as usize];
+                            domain_vec_u[(dn + dtotal) as usize] = vec_u[(gn + ntotal) as usize];
+                            domain_vec_u[(dn + dtotal * 2) as usize] = vec_u[(gn + ntotal * 2) as usize];
+                            domain_vec_rho[(dn) as usize] = vec_rho[(gn) as usize];
+                        }
                     }
                 }
             }
