@@ -58,6 +58,7 @@
 #define store(p,o,x) p[o]=float_to_half_custom(x)
 
 #define EQUILIBRIUM_BOUNDARIES
+#define VOLUME_FORCE
 
 #define GRAPHICS
 #define def_streamline_sparse 4u
@@ -568,7 +569,6 @@ void neighbors(const uint n, uint* j) {
     j[25] = xm+yp+zp; j[26] = xp+ym+zm; // -++ +--
     #endif
 } //neighbors
-
 float3 load_u(const uint n, const global float* u) {
 	return (float3)(u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n]);
 }
@@ -583,7 +583,6 @@ float calculate_Q_cached(const float3 u0, const float3 u1, const float3 u2, cons
 	const float s2 = 2.0f*(sq(s_xx2)+sq(s_yy2)+sq(s_zz2))+sq(s_xy)+sq(s_xz)+sq(s_yz); // ||s||_2^2
 	return 0.25f*(omega2-s2); // Q = 1/2*(||omega||_2^2-||s||_2^2), addidional factor 1/2 from cental finite differences of velocity
 } // calculate_Q_cached()
-
 float calculate_Q(const uint n, const global float* u) { // Q-criterion
 	uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
 	calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
@@ -593,8 +592,65 @@ float calculate_Q(const uint n, const global float* u) { // Q-criterion
 	j[4] = x0+y0+zp; j[5] = x0+y0+zm; // 00+ 00-
 	return calculate_Q_cached(load_u(j[0], u), load_u(j[1], u), load_u(j[2], u), load_u(j[3], u), load_u(j[4], u), load_u(j[5], u));
 } // calculate_Q()
+float c(const uint i) { // avoid constant keyword by encapsulating data in function which gets inlined by compiler
+	const float c[3u*def_velocity_set] = {
+	#if defined(D2Q9)
+		0, 1,-1, 0, 0, 1,-1, 1,-1, // x
+		0, 0, 0, 1,-1, 1,-1,-1, 1, // y
+		0, 0, 0, 0, 0, 0, 0, 0, 0  // z
+	#elif defined(D3Q15)
+		0, 1,-1, 0, 0, 0, 0, 1,-1, 1,-1, 1,-1,-1, 1, // x
+		0, 0, 0, 1,-1, 0, 0, 1,-1, 1,-1,-1, 1, 1,-1, // y
+		0, 0, 0, 0, 0, 1,-1, 1,-1,-1, 1, 1,-1, 1,-1  // z
+	#elif defined(D3Q19)
+		0, 1,-1, 0, 0, 0, 0, 1,-1, 1,-1, 0, 0, 1,-1, 1,-1, 0, 0, // x
+		0, 0, 0, 1,-1, 0, 0, 1,-1, 0, 0, 1,-1,-1, 1, 0, 0, 1,-1, // y
+		0, 0, 0, 0, 0, 1,-1, 0, 0, 1,-1, 1,-1, 0, 0,-1, 1,-1, 1  // z
+	#elif defined(D3Q27)
+		0, 1,-1, 0, 0, 0, 0, 1,-1, 1,-1, 0, 0, 1,-1, 1,-1, 0, 0, 1,-1, 1,-1, 1,-1,-1, 1, // x
+		0, 0, 0, 1,-1, 0, 0, 1,-1, 0, 0, 1,-1,-1, 1, 0, 0, 1,-1, 1,-1, 1,-1,-1, 1, 1,-1, // y
+		0, 0, 0, 0, 0, 1,-1, 0, 0, 1,-1, 1,-1, 0, 0,-1, 1,-1, 1, 1,-1,-1, 1, 1,-1, 1,-1  // z
+#endif // D3Q27
+	};
+	return c[i];
+}
+float w(const uint i) { // avoid constant keyword by encapsulating data in function which gets inlined by compiler
+	const float w[def_velocity_set] = { def_w0, // velocity set weights
+	#if defined(D2Q9)
+		def_ws, def_ws, def_ws, def_ws, def_we, def_we, def_we, def_we
+	#elif defined(D3Q15)
+		def_ws, def_ws, def_ws, def_ws, def_ws, def_ws,
+		def_wc, def_wc, def_wc, def_wc, def_wc, def_wc, def_wc, def_wc
+	#elif defined(D3Q19)
+		def_ws, def_ws, def_ws, def_ws, def_ws, def_ws,
+		def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we
+	#elif defined(D3Q27)
+		def_ws, def_ws, def_ws, def_ws, def_ws, def_ws,
+		def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we,
+		def_wc, def_wc, def_wc, def_wc, def_wc, def_wc, def_wc, def_wc
+	#endif
+	};
+	return w[i];
+}
+#ifdef VOLUME_FORCE
+void calculate_forcing_terms(const float ux, const float uy, const float uz, const float fx, const float fy, const float fz, float* Fin) { // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
+	#ifdef D2Q9
+		const float uF = -0.33333334f*fma(ux, fx, uy*fy); // 2D
+	#else
+		const float uF = -0.33333334f*fma(ux, fx, fma(uy, fy, uz*fz)); // 3D
+	#endif
+	Fin[0] = 9.0f*def_w0*uF ; // 000 (identical for all velocity sets)
+	for(uint i=1u; i<def_velocity_set; i++) { // loop is entirely unrolled by compiler, no unnecessary FLOPs are happening
+		Fin[i] = 9.0f*w(i)*fma(c(i)*fx+c(def_velocity_set+i)*fy+c(2u*def_velocity_set+i)*fz, c(i)*ux+c(def_velocity_set+i)*uy+c(2u*def_velocity_set+i)*uz+0.33333334f, uF);
+	}
+}
+#endif // VOLUME_FORCE
 
-__kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
+__kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz 
+#ifdef FORCE_FIELD
+, const global float* F 
+#endif
+) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute stream_collide() on halo
     const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
@@ -625,10 +681,26 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
     float Fin[def_velocity_set]; // forcing terms
 
-    uxn = clamp(uxn, -def_c, def_c); // limit velocity (for stability purposes)
-    uyn = clamp(uyn, -def_c, def_c); // force term: F*dt/(2*rho)
-    uzn = clamp(uzn, -def_c, def_c);
-    for(uint i=0u; i<def_velocity_set; i++) Fin[i] = 0.0f;
+	#ifdef FORCE_FIELD
+	{ // separate block to avoid variable name conflicts
+		fxn += F[                 n]; // apply force field
+		fyn += F[    def_N+(ulong)n];
+		fzn += F[2ul*def_N+(ulong)n];
+	}
+	#endif
+
+	#ifdef VOLUME_FORCE
+		const float rho2 = 0.5f/rhon; // apply external volume force (Guo forcing, Krueger p.233f)
+		uxn = clamp(fma(fxn, rho2, uxn), -def_c, def_c); // limit velocity (for stability purposes)
+		uyn = clamp(fma(fyn, rho2, uyn), -def_c, def_c); // force term: F*dt/(2*rho)
+		uzn = clamp(fma(fzn, rho2, uzn), -def_c, def_c);
+		calculate_forcing_terms(uxn, uyn, uzn, fxn, fyn, fzn, Fin); // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
+	#else // VOLUME_FORCE
+    	uxn = clamp(uxn, -def_c, def_c); // limit velocity (for stability purposes)
+    	uyn = clamp(uyn, -def_c, def_c); // force term: F*dt/(2*rho)
+    	uzn = clamp(uzn, -def_c, def_c);
+    	for(uint i=0u; i<def_velocity_set; i++) Fin[i] = 0.0f;
+	#endif // VOLUME_FORCE
 
 	#ifndef EQUILIBRIUM_BOUNDARIES
 	#ifdef UPDATE_FIELDS
@@ -653,14 +725,31 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     float w = def_w; // LBM relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
 
     #if defined(SRT) // SRT
+		#ifdef VOLUME_FORCE
+			const float c_tau = fma(w, -0.5f, 1.0f);
+			for(uint i=0u; i<def_velocity_set; i++) Fin[i] *= c_tau;
+		#endif // VOLUME_FORCE
+
         #ifndef EQUILIBRIUM_BOUNDARIES
             for(uint i=0u; i<def_velocity_set; i++) fhn[i] = fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
         #else
             for(uint i=0u; i<def_velocity_set; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
         #endif // EQUILIBRIUM_BOUNDARIES
+
     #elif defined(TRT) // TRT
         const float wp = w; // TRT: inverse of "+" relaxation time
         const float wm = 1.0f/(0.1875f/(1.0f/w-0.5f)+0.5f); // TRT: inverse of "-" relaxation time wm = 1.0f/(0.1875f/(3.0f*nu)+0.5f), nu = (1.0f/w-0.5f)/3.0f;
+
+		#ifdef VOLUME_FORCE
+			const float c_taup=fma(wp, -0.25f, 0.5f), c_taum=fma(wm, -0.25f, 0.5f); // source: https://arxiv.org/pdf/1901.08766.pdf
+			float Fib[def_velocity_set]; // F_bar
+			Fib[0] = Fin[0];
+			for(uint i=1u; i<def_velocity_set; i+=2u) {
+				Fib[i   ] = Fin[i+1u];
+				Fib[i+1u] = Fin[i   ];
+			}
+			for(uint i=0u; i<def_velocity_set; i++) Fin[i] = fma(c_taup, Fin[i]+Fib[i], c_taum*(Fin[i]-Fib[i]));
+		#endif // VOLUME_FORCE
 
         float fhb[def_velocity_set]; // fhn in inverse directions
         float feb[def_velocity_set]; // feq in inverse directions

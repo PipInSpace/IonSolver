@@ -84,6 +84,8 @@ pub struct LbmConfig {
     pub particles_rho: f32,
 
     pub ext_equilibrium_boudaries: bool, //Extensions
+    pub ext_volume_force: bool,
+    pub ext_force_field: bool, // Needs volume_force to work
 
     pub graphics_config: GraphicsConfig,
 }
@@ -112,6 +114,8 @@ impl LbmConfig {
             particles_rho: 0.0f32,
 
             ext_equilibrium_boudaries: false,
+            ext_volume_force: false,
+            ext_force_field: false,
 
             graphics_config: GraphicsConfig::new(),
         }
@@ -726,6 +730,8 @@ impl LbmDomain {
             FloatType::FP32 => &fp32
         }
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
+        + if lbm_config.ext_volume_force {"\n	#define VOLUME_FORCE"} else {""}
+        + if lbm_config.ext_force_field {"\n	#define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""};
         //Extensions
     }
