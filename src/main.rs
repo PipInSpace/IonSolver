@@ -325,7 +325,7 @@ fn main() {
     )
     .expect("unable to open window");
 
-    exit_ctrl_tx
+    _ = exit_ctrl_tx
         .send(SimControlTx {
             paused: true,
             save: false,
@@ -334,8 +334,7 @@ fn main() {
             active: false,
             camera_rotation: vec![0.0; 2],
             camera_zoom: 3.0,
-        })
-        .expect("Exit Channel cannot reach Simulation thread");
+        });
 
     handle.join().unwrap();
 

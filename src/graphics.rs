@@ -316,14 +316,13 @@ impl Lbm {
                 size: [width as usize, height as usize],
                 pixels,
             };
-            sim_tx
+            _ = sim_tx
                 .send(SimState {
                     step: 1,
                     paused: false,
                     save: state_save,
                     img: color_image,
-                })
-                .unwrap();
+                }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
             if state_save {
                 thread::spawn(move || {
                     //Saving needs own thread for performance reasons
