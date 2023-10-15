@@ -48,7 +48,7 @@ pub fn simloop(
     if state.save && state.clear_images {
         match fs::remove_dir_all("out") {
             Ok(_) => (),
-            Err(_) => println!("Did not find out folder. Creating it.")
+            Err(_) => println!("Did not find out folder. Creating it."),
         }
         fs::create_dir("out").unwrap();
     }
@@ -56,7 +56,8 @@ pub fn simloop(
     let mut has_commenced = false; //has the simulation started
     let mut cached_rot: Vec<f32> = vec![0.0; 2];
     let mut cached_zoom = 0.0;
-    loop {//This is the master loop, cannot be paused
+    loop {
+        //This is the master loop, cannot be paused
         if !state.paused {
             has_commenced = true;
             loop {
@@ -71,8 +72,15 @@ pub fn simloop(
 
                 //Simulation commences here
                 test_lbm.do_time_step();
-                if cached_rot[0] != state.camera_rotation[0] || cached_rot[1] != state.camera_rotation[1] || cached_zoom != state.camera_zoom {//only update params when camera updated
-                    let mut params = graphics::camera_params_rot(state.camera_rotation[0] * (PI/180.0), state.camera_rotation[1] * (PI/180.0));
+                if cached_rot[0] != state.camera_rotation[0]
+                    || cached_rot[1] != state.camera_rotation[1]
+                    || cached_zoom != state.camera_zoom
+                {
+                    //only update params when camera updated
+                    let mut params = graphics::camera_params_rot(
+                        state.camera_rotation[0] * (PI / 180.0),
+                        state.camera_rotation[1] * (PI / 180.0),
+                    );
                     params[0] = state.camera_zoom;
                     for d in &test_lbm.domains {
                         d.graphics.camera_params.write(&params).enq().unwrap();
@@ -101,11 +109,19 @@ pub fn simloop(
                     break;
                 }
 
-                if cached_rot[0] != state.camera_rotation[0] || cached_rot[1] != state.camera_rotation[1] || cached_zoom != state.camera_zoom || !has_commenced{//only draw when camera updated
+                if cached_rot[0] != state.camera_rotation[0]
+                    || cached_rot[1] != state.camera_rotation[1]
+                    || cached_zoom != state.camera_zoom
+                    || !has_commenced
+                {
+                    //only draw when camera updated
                     has_commenced = true;
                     cached_rot = state.camera_rotation.clone();
                     cached_zoom = state.camera_zoom;
-                    let mut params = graphics::camera_params_rot(state.camera_rotation[0] * (PI/180.0), state.camera_rotation[1] * (PI/180.0));
+                    let mut params = graphics::camera_params_rot(
+                        state.camera_rotation[0] * (PI / 180.0),
+                        state.camera_rotation[1] * (PI / 180.0),
+                    );
                     params[0] = state.camera_zoom;
                     for d in &test_lbm.domains {
                         d.graphics.camera_params.write(&params).enq().unwrap();
@@ -115,7 +131,6 @@ pub fn simloop(
                     }
                     thread::sleep(Duration::from_millis(33)) // about 30 FPS
                 }
-                
             }
         }
         if !state.active {
@@ -159,7 +174,7 @@ impl Lbm {
                 * (2.0 * pif * fx / a).sin()
                 * (2.0 * pif * fy / b).cos()
                 * (2.0 * pif * fz / c).sin(); // y
-            vec_u[(n + (ntotal*2)) as usize] = A
+            vec_u[(n + (ntotal * 2)) as usize] = A
                 * (2.0 * pif * fx / a).sin()
                 * (2.0 * pif * fy / b).sin()
                 * (2.0 * pif * fz / c).cos(); // z
@@ -174,36 +189,52 @@ impl Lbm {
             let x = (d % (dx * dy)) % dx; // Domain coordinates
             let y = (d % (dx * dy)) / dx;
             let z = d / (dx * dy);
-            let dsx = nx as u64/self.config.d_x as u64; // Domain size on each axis
-            let dsy = ny as u64/self.config.d_y as u64;
-            let dsz = nz as u64/self.config.d_z as u64;
-            let dtotal = dsx*dsy*dsz;
+            let dsx = nx as u64 / self.config.d_x as u64; // Domain size on each axis
+            let dsy = ny as u64 / self.config.d_y as u64;
+            let dsz = nz as u64 / self.config.d_z as u64;
+            let dtotal = dsx * dsy * dsz;
 
-            let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx*dsy*dsz*3) as usize];
-            let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx*dsy*dsz) as usize];
-            for zi in 0..dsz as u64 { // iterates over every cell in the domain, loading the information from the precomputed all-domain-vector
+            let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx * dsy * dsz * 3) as usize];
+            let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize];
+            for zi in 0..dsz as u64 {
+                // iterates over every cell in the domain, loading the information from the precomputed all-domain-vector
                 for yi in 0..dsy as u64 {
                     for xi in 0..dsx as u64 {
-                        let dn = (zi*dsx*dsy)+(yi*dsx)+xi; // Domain 1D index
-                        let n =  dn + (x as u64*dsx)+(y as u64*nx as u64*dsy)+(z as u64*nx as u64*ny as u64*dsz); // Domain 1D index offset by domain coordinates = LBM 1D index
-                        domain_vec_u[(dn) as usize] =            vec_u[(n) as usize];
-                        domain_vec_u[(dn + dtotal) as usize] =   vec_u[(n + ntotal) as usize];
-                        domain_vec_u[(dn + dtotal*2) as usize] = vec_u[(n + ntotal*2) as usize];
+                        let dn = (zi * dsx * dsy) + (yi * dsx) + xi; // Domain 1D index
+                        let n = dn
+                            + (x as u64 * dsx)
+                            + (y as u64 * nx as u64 * dsy)
+                            + (z as u64 * nx as u64 * ny as u64 * dsz); // Domain 1D index offset by domain coordinates = LBM 1D index
+                        domain_vec_u[(dn) as usize] = vec_u[(n) as usize];
+                        domain_vec_u[(dn + dtotal) as usize] = vec_u[(n + ntotal) as usize];
+                        domain_vec_u[(dn + dtotal * 2) as usize] = vec_u[(n + ntotal * 2) as usize];
                     }
                 }
             }
-            for zi in 0..dsz as u64 { // iterates over every cell in the domain, loading the information from the precomputed all-domain-vector
+            for zi in 0..dsz as u64 {
+                // iterates over every cell in the domain, loading the information from the precomputed all-domain-vector
                 for yi in 0..dsy as u64 {
                     for xi in 0..dsx as u64 {
-                        let dn = (zi*dsx*dsy)+(yi*dsx)+xi; // Domain 1D index
-                        let n =  dn + (x as u64*dsx)+(y as u64*nx as u64*dsy)+(z as u64*nx as u64*ny as u64*dsz); // Domain 1D index offset by domain coordinates = LBM 1D index
+                        let dn = (zi * dsx * dsy) + (yi * dsx) + xi; // Domain 1D index
+                        let n = dn
+                            + (x as u64 * dsx)
+                            + (y as u64 * nx as u64 * dsy)
+                            + (z as u64 * nx as u64 * ny as u64 * dsz); // Domain 1D index offset by domain coordinates = LBM 1D index
                         domain_vec_rho[(dn) as usize] = vec_rho[(n) as usize];
                     }
                 }
             }
 
-            self.domains[d as usize].u.write(&domain_vec_u).enq().unwrap();
-            self.domains[d as usize].rho.write(&domain_vec_rho).enq().unwrap();
+            self.domains[d as usize]
+                .u
+                .write(&domain_vec_u)
+                .enq()
+                .unwrap();
+            self.domains[d as usize]
+                .rho
+                .write(&domain_vec_rho)
+                .enq()
+                .unwrap();
             self.domains[d as usize].queue.finish().unwrap();
         }
         //self.u.write(&vec_u).enq().unwrap();

@@ -1,8 +1,4 @@
-use crate::{
-    graphics::Graphics,
-    graphics::GraphicsConfig,
-    *,
-};
+use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
 use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 #[allow(dead_code)]
@@ -398,25 +394,12 @@ impl LbmDomain {
         // Initialize Buffers
         let fi32: Buffer<f32>;
         let fi16: Buffer<u16>;
-        match lbm_config.float_type { // Initialise two fiBuffer variants for rust. Only one will be used.
+        match lbm_config.float_type {
+            // Initialise two fiBuffer variants for rust. Only one will be used.
             FloatType::FP16S => {
                 fi16 = Buffer::<u16>::builder()
                     .queue(queue.clone())
-                    .len([n*velocity_set as u64])
-                    .fill_val(0u16)
-                    .build()
-                    .unwrap();
-                    fi32 = Buffer::<f32>::builder()
-                    .queue(queue.clone())
-                    .len(1)
-                    .fill_val(0.0f32)
-                    .build()
-                    .unwrap(); //Evil memory hack. Won't be used, but needs to be allocated for rust :)
-            },
-            FloatType::FP16C => {
-                fi16 = Buffer::<u16>::builder()
-                    .queue(queue.clone())
-                    .len([n*velocity_set as u64])
+                    .len([n * velocity_set as u64])
                     .fill_val(0u16)
                     .build()
                     .unwrap();
@@ -426,7 +409,21 @@ impl LbmDomain {
                     .fill_val(0.0f32)
                     .build()
                     .unwrap(); //Evil memory hack. Won't be used, but needs to be allocated for rust :)
-            },
+            }
+            FloatType::FP16C => {
+                fi16 = Buffer::<u16>::builder()
+                    .queue(queue.clone())
+                    .len([n * velocity_set as u64])
+                    .fill_val(0u16)
+                    .build()
+                    .unwrap();
+                fi32 = Buffer::<f32>::builder()
+                    .queue(queue.clone())
+                    .len(1)
+                    .fill_val(0.0f32)
+                    .build()
+                    .unwrap(); //Evil memory hack. Won't be used, but needs to be allocated for rust :)
+            }
             FloatType::FP32 => {
                 fi16 = Buffer::<u16>::builder()
                     .queue(queue.clone())
@@ -436,11 +433,11 @@ impl LbmDomain {
                     .unwrap(); //Evil memory hack. Won't be used, but needs to be allocated for rust :)
                 fi32 = Buffer::<f32>::builder()
                     .queue(queue.clone())
-                    .len([n*velocity_set as u64])
+                    .len([n * velocity_set as u64])
                     .fill_val(0.0f32)
                     .build()
                     .unwrap();
-            },
+            }
         };
         let rho = Buffer::<f32>::builder()
             .queue(queue.clone())
@@ -451,7 +448,7 @@ impl LbmDomain {
             .unwrap();
         let u = Buffer::<f32>::builder()
             .queue(queue.clone())
-            .len([n*3])
+            .len([n * 3])
             .fill_val(0.0f32)
             .flags(flags::MEM_READ_WRITE)
             .build()
@@ -735,11 +732,7 @@ impl LbmDomain {
 
     fn enqueue_initialize(&self) -> ocl::Result<()> {
         //Enqueues Initialization kernel, arguments are already set
-        unsafe {
-            self.kernel_initialize
-                .cmd()
-                .enq()?
-        }
+        unsafe { self.kernel_initialize.cmd().enq()? }
         self.queue.finish()
     }
 
@@ -750,9 +743,7 @@ impl LbmDomain {
             self.kernel_stream_collide.set_arg("fx", self.fx)?;
             self.kernel_stream_collide.set_arg("fy", self.fy)?;
             self.kernel_stream_collide.set_arg("fz", self.fz)?;
-            self.kernel_stream_collide
-                .cmd()
-                .enq()
+            self.kernel_stream_collide.cmd().enq()
         }
     }
 
@@ -765,9 +756,7 @@ impl LbmDomain {
             self.kernel_update_fields.set_arg("fx", self.fx)?;
             self.kernel_update_fields.set_arg("fy", self.fy)?;
             self.kernel_update_fields.set_arg("fz", self.fz)?;
-            self.kernel_update_fields
-                .cmd()
-                .enq()
+            self.kernel_update_fields.cmd().enq()
         }
     }
 

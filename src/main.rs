@@ -8,10 +8,10 @@ mod info;
 mod lbm;
 mod opencl;
 mod solver;
+use eframe::*;
 use egui::style::Spacing;
 use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2};
 use solver::*;
-use eframe::*;
 
 #[allow(dead_code)]
 pub struct SimState {
@@ -235,7 +235,8 @@ impl App for SimControl {
                         if delta != Vec2::ZERO {
                             //TODO: send data to simulation thread for graphics
                             self.camera_rotation[0] += delta.x;
-                            self.camera_rotation[1] = (self.camera_rotation[1] - delta.y).clamp(-90.0, 90.0);
+                            self.camera_rotation[1] =
+                                (self.camera_rotation[1] - delta.y).clamp(-90.0, 90.0);
                             send_control = true;
                         }
                     }
@@ -246,13 +247,17 @@ impl App for SimControl {
             }
             ui.input(|i| {
                 if i.scroll_delta != Vec2::ZERO {
-                    self.camera_zoom = (self.camera_zoom + (self.camera_zoom * (i.scroll_delta.y*0.001))).max(0.01);
+                    self.camera_zoom = (self.camera_zoom
+                        + (self.camera_zoom * (i.scroll_delta.y * 0.001)))
+                        .max(0.01);
                     send_control = true;
                 }
             });
         });
 
-        if send_control {self.send_control()}
+        if send_control {
+            self.send_control()
+        }
 
         ctx.request_repaint_after(Duration::from_millis(100));
 

@@ -1,11 +1,12 @@
-use std::{sync::mpsc::Sender, thread, f32::consts::PI};
+use std::{f32::consts::PI, sync::mpsc::Sender, thread};
 
 use egui::{Color32, ColorImage};
 use image::{ImageBuffer, Rgb};
 use ocl::{flags, Buffer, Kernel, Program, Queue};
 
 use crate::{
-    lbm::{Lbm, LbmConfig, VelocitySet}, SimState,
+    lbm::{Lbm, LbmConfig, VelocitySet},
+    SimState,
 };
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
@@ -42,7 +43,7 @@ impl Graphics {
     ) -> Graphics {
         let width = lbm_config.graphics_config.camera_width;
         let height = lbm_config.graphics_config.camera_height;
-        let n = lbm_config.n_x as u64 * lbm_config.n_y as u64* lbm_config.n_z as u64; //TODO: use domain size
+        let n = lbm_config.n_x as u64 * lbm_config.n_y as u64 * lbm_config.n_z as u64; //TODO: use domain size
         let bitmap = Buffer::<i32>::builder()
             .queue(queue.clone())
             .len([width, height])
@@ -121,8 +122,8 @@ impl Graphics {
                 .name("graphics_streamline")
                 .queue(queue.clone())
                 .global_work_size([
-                    (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64*
-                    (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64
+                    (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64
+                        * (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64,
                 ])
                 .arg_named("flags", flags)
                 .arg_named("u", u)
@@ -140,9 +141,9 @@ impl Graphics {
                 .name("graphics_streamline")
                 .queue(queue.clone())
                 .global_work_size([
-                    (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64*
-                    (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64*
-                    (lbm_config.n_z / lbm_config.graphics_config.streamline_every) as u64
+                    (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64
+                        * (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64
+                        * (lbm_config.n_z / lbm_config.graphics_config.streamline_every) as u64,
                 ])
                 .arg_named("flags", flags)
                 .arg_named("u", u)
@@ -160,7 +161,7 @@ impl Graphics {
             .program(&program)
             .name("graphics_q")
             .queue(queue.clone())
-            .global_work_size([n])//TODO: this is incorrect, need own dimension size
+            .global_work_size([n]) //TODO: this is incorrect, need own dimension size
             .arg_named("flags", flags)
             .arg_named("u", u)
             .arg_named("camera_params", &camera_params)
@@ -168,7 +169,6 @@ impl Graphics {
             .arg_named("zbuffer", &zbuffer)
             .build()
             .unwrap();
-        
 
         Graphics {
             queue: queue.clone(),
@@ -198,9 +198,15 @@ impl Graphics {
         unsafe {
             self.kernel_clear.enq().unwrap();
             //if visualisation mode
-            if self.streamline_mode {self.kernel_graphics_streamline.enq().unwrap();}
-            if self.field_mode {self.kernel_graphics_field.enq().unwrap();}
-            if self.q_mode {self.kernel_graphics_q.enq().unwrap();}
+            if self.streamline_mode {
+                self.kernel_graphics_streamline.enq().unwrap();
+            }
+            if self.field_mode {
+                self.kernel_graphics_field.enq().unwrap();
+            }
+            if self.q_mode {
+                self.kernel_graphics_q.enq().unwrap();
+            }
 
             self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
             self.zbuffer.read(&mut self.zbuffer_host).enq().unwrap();
@@ -375,18 +381,18 @@ pub fn new_camera_params() -> Vec<f32> {
 
     params[0] = 3.0; //zoom
     params[1] = 512.0; //distance from rotation center
-    //2-4 is pos x y z
-    //5-13 is a rotation matrix
-    params[5] = cosrx;//Rxx
-    params[6] = sinrx;//Rxy
-    params[7] = 0.0;  //Rxz
-    params[8] = sinrx*sinry; //Ryx
-    params[9] = -cosrx*sinry;//Ryy
-    params[10]= cosry;       //Ryz
-    params[11]= -sinrx*cosry;//Rzx
-    params[12]= cosrx*cosry; //Rzy
-    params[13]= sinry;//Rzz
-    params[14]= ((false as u32)<<31|(false as u32)<<30|(0&0xFFFF)) as f32;
+                       //2-4 is pos x y z
+                       //5-13 is a rotation matrix
+    params[5] = cosrx; //Rxx
+    params[6] = sinrx; //Rxy
+    params[7] = 0.0; //Rxz
+    params[8] = sinrx * sinry; //Ryx
+    params[9] = -cosrx * sinry; //Ryy
+    params[10] = cosry; //Ryz
+    params[11] = -sinrx * cosry; //Rzx
+    params[12] = cosrx * cosry; //Rzy
+    params[13] = sinry; //Rzz
+    params[14] = ((false as u32) << 31 | (false as u32) << 30 | (0 & 0xFFFF)) as f32;
     params
 }
 
@@ -402,17 +408,17 @@ pub fn camera_params_rot(rx: f32, ry: f32) -> Vec<f32> {
 
     params[0] = 3.0; //zoom
     params[1] = 512.0; //distance from rotation center
-    //2-4 is pos x y z
-    //5-13 is a rotation matrix
-    params[5] = cosrx;//Rxx
-    params[6] = sinrx;//Rxy
-    params[7] = 0.0;  //Rxz
-    params[8] = sinrx*sinry; //Ryx
-    params[9] = -cosrx*sinry;//Ryy
-    params[10]= cosry;       //Ryz
-    params[11]= -sinrx*cosry;//Rzx
-    params[12]= cosrx*cosry; //Rzy
-    params[13]= sinry;//Rzz
-    params[14]= ((false as u32)<<31|(false as u32)<<30|(0&0xFFFF)) as f32;
+                       //2-4 is pos x y z
+                       //5-13 is a rotation matrix
+    params[5] = cosrx; //Rxx
+    params[6] = sinrx; //Rxy
+    params[7] = 0.0; //Rxz
+    params[8] = sinrx * sinry; //Ryx
+    params[9] = -cosrx * sinry; //Ryy
+    params[10] = cosry; //Ryz
+    params[11] = -sinrx * cosry; //Rzx
+    params[12] = cosrx * cosry; //Rzy
+    params[13] = sinry; //Rzz
+    params[14] = ((false as u32) << 31 | (false as u32) << 30 | (0 & 0xFFFF)) as f32;
     params
 }
