@@ -4,8 +4,8 @@ use crate::*;
 use ocl::ProQue;
 use std::f32::consts::PI;
 use std::io::Write;
-use std::{fs, io};
 use std::sync::mpsc;
+use std::{fs, io};
 
 #[allow(unused)]
 pub fn simloop(
@@ -178,7 +178,13 @@ impl Lbm {
             let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize];
             for zi in 0..dsz as u64 {
                 // iterates over every cell in the domain, filling it with  Taylor-Green-vortex
-                print!("\r{}", info::progressbar(((zi as f32 + 1.0)/dsz as f32)*(1.0/domain_numbers as f32)+((d as f32)/domain_numbers as f32)));
+                print!(
+                    "\r{}",
+                    info::progressbar(
+                        ((zi as f32 + 1.0) / dsz as f32) * (1.0 / domain_numbers as f32)
+                            + ((d as f32) / domain_numbers as f32)
+                    )
+                );
                 for yi in 0..dsy as u64 {
                     for xi in 0..dsx as u64 {
                         if !(((xi == 0 || xi == dsx - 1) && dx > 1)
@@ -233,43 +239,4 @@ impl Lbm {
         println!("");
         println!("Finished setting up Taylor-Green vorticies");
     }
-}
-
-#[allow(unused)]
-fn test_function() -> ocl::Result<()> {
-    let src = include_str!("kernels.cl");
-
-    let pro_que = ProQue::builder().src(src).dims([1 << 6, 1 << 6]).build()?;
-
-    let buffer_a = pro_que.create_buffer::<f32>()?;
-    let buffer_b = pro_que.create_buffer::<f32>()?;
-
-    let setup_kernel = pro_que
-        .kernel_builder("add")
-        .arg(&buffer_a)
-        .arg(1.0f32)
-        .build()?;
-
-    let gauss_seidel_step_kernel = pro_que
-        .kernel_builder("gauss_seidel_step")
-        .arg(&buffer_a)
-        .arg(&buffer_b)
-        .arg(4.096f32)
-        .arg(17.384f32)
-        .build()?;
-
-    unsafe {
-        setup_kernel.enq()?;
-        setup_kernel.set_arg(0, &buffer_b)?;
-        setup_kernel.enq()?;
-        for _i in 1..20 {
-            gauss_seidel_step_kernel.enq()?;
-        }
-    }
-
-    let mut vec = vec![0.0f32; buffer_a.len()];
-    buffer_a.read(&mut vec).enq()?;
-
-    println!("Gauss: The value at index [{}] is now '{}'!", 131, vec[131]);
-    Ok(())
 }

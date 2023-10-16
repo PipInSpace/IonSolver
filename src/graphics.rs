@@ -284,7 +284,7 @@ impl Lbm {
         }
         thread::spawn(move || {
             // Generating images needs own thread for performance reasons
-            for d in 0..domain_numbers-1 {
+            for d in 0..domain_numbers - 1 {
                 let bitmap_d = &bitmaps[d];
                 let zbuffer_d = &zbuffers[d];
                 for i in 0..(width * height) as usize {
@@ -295,7 +295,7 @@ impl Lbm {
                     }
                 }
             }
-        
+
             let mut save_buffer: Vec<u8> = vec![];
             let mut pixels: Vec<Color32> = vec![];
             for pixel in 0..bitmap.len() {
@@ -316,13 +316,12 @@ impl Lbm {
                 size: [width as usize, height as usize],
                 pixels,
             };
-            _ = sim_tx
-                .send(SimState {
-                    step: 1,
-                    paused: false,
-                    save: state_save,
-                    img: color_image,
-                }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
+            _ = sim_tx.send(SimState {
+                step: 1,
+                paused: false,
+                save: state_save,
+                img: color_image,
+            }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
             if state_save {
                 thread::spawn(move || {
                     //Saving needs own thread for performance reasons

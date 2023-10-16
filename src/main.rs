@@ -325,16 +325,15 @@ fn main() {
     )
     .expect("unable to open window");
 
-    _ = exit_ctrl_tx
-        .send(SimControlTx {
-            paused: true,
-            save: false,
-            clear_images: true,
-            frame_spacing: 10,
-            active: false,
-            camera_rotation: vec![0.0; 2],
-            camera_zoom: 3.0,
-        });
+    _ = exit_ctrl_tx.send(SimControlTx {
+        paused: true,
+        save: false,
+        clear_images: true,
+        frame_spacing: 10,
+        active: false,
+        camera_rotation: vec![0.0; 2],
+        camera_zoom: 3.0,
+    });
 
     handle.join().unwrap();
 

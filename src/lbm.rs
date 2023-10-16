@@ -4,10 +4,10 @@ use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue};
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum VelocitySet {
-    D2Q9,
-    D3Q15,
-    D3Q19,
-    D3Q27,
+    D2Q9,  // 2D
+    D3Q15, // 3D low precision
+    D3Q19, // 3D recommended
+    D3Q27, // 3D highest precision
 }
 
 impl Default for VelocitySet {
@@ -19,8 +19,8 @@ impl Default for VelocitySet {
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum RelaxationTime {
-    SRT,
-    TRT,
+    SRT, // Single relaxation time, more efficient
+    TRT, // Two-relaxation time, more precise
 }
 
 impl Default for RelaxationTime {
@@ -32,9 +32,9 @@ impl Default for RelaxationTime {
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum FloatType {
-    FP16S,
-    FP16C,
-    FP32,
+    FP16S, // Custom float type represented as a u16, recommended
+    FP16C, // Custom float type represented as a u16
+    FP32,  // Default float type
 }
 
 impl Default for FloatType {
@@ -46,7 +46,7 @@ impl Default for FloatType {
 #[allow(dead_code)]
 #[derive(Clone)]
 pub enum VariableFloatBuffer {
-    U16(Buffer<u16>),
+    U16(Buffer<u16>), // Buffers for variable float types
     F32(Buffer<f32>),
 }
 
@@ -61,6 +61,7 @@ pub enum VariableFloatBuffer {
 
 #[derive(Clone, Copy, Default)]
 pub struct LbmConfig {
+    // Holds init information about the simulation
     pub velocity_set: VelocitySet,
     pub relaxation_time: RelaxationTime,
     pub float_type: FloatType,
@@ -92,6 +93,7 @@ pub struct LbmConfig {
 
 impl LbmConfig {
     pub fn new() -> LbmConfig {
+        // provides a LbmConfig struct with default values
         LbmConfig {
             velocity_set: VelocitySet::D2Q9,
             relaxation_time: RelaxationTime::SRT,
@@ -123,6 +125,7 @@ impl LbmConfig {
 }
 
 pub struct Lbm {
+    // main simulation struct. Holds one or multiple subdomains
     pub domains: Vec<LbmDomain>,
     pub config: LbmConfig,
     initialized: bool,
@@ -247,6 +250,7 @@ impl Lbm {
     }
 
     pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
+        // disassembles 1D index into 3D index
         let t: u64 = n % (self.config.n_x as u64 * self.config.n_y as u64);
         //x, y, z
         (
@@ -255,14 +259,12 @@ impl Lbm {
             (n / (self.config.n_x as u64 * self.config.n_y as u64)) as u32,
         )
     }
-
-    //Helper functions:
 }
 
 #[allow(dead_code)]
 pub struct LbmDomain {
-    device: Device, //FluidX3D creates contexts/queues/programs for each device automatically through another struct
-    context: Context,
+    device: Device, // FluidX3D creates contexts/queues/programs for each device automatically through another class
+    context: Context, // IonSolver creates and saves this information directly.
     program: Program,
     pub queue: Queue,
     lbm_config: LbmConfig,
@@ -272,37 +274,37 @@ pub struct LbmDomain {
     kernel_stream_collide: Kernel,
     kernel_update_fields: Kernel,
 
-    pub n_x: u32, //Size
+    pub n_x: u32, // Domain size
     pub n_y: u32,
     pub n_z: u32,
 
-    d_x: u32, //Domain
+    d_x: u32, // Domain
     d_y: u32,
     d_z: u32,
 
-    o_x: i32, //Offset
+    o_x: i32, // Offset
     o_y: i32,
     o_z: i32,
 
-    nu: f32,
-    fx: f32,
+    nu: f32, // Kinematic shear viscosity
+    fx: f32, // Volume force
     fy: f32,
     fz: f32,
-    sigma: f32, //surface tension coefficient
+    sigma: f32, // surface tension coefficient
     alpha: f32,
     beta: f32,
 
-    particles_n: u32,
-    particles_rho: f32,
+    particles_n: u32,   // Number of particles
+    particles_rho: f32, // Particle mass
 
-    pub fi32: Buffer<f32>,
+    pub fi32: Buffer<f32>, // Buffers
     pub fi16: Buffer<u16>,
     pub rho: Buffer<f32>,
     pub u: Buffer<f32>,
     pub flags: Buffer<u8>,
-    pub t: u64,
+    pub t: u64, // Timestep
 
-    pub graphics: Graphics,
+    pub graphics: Graphics, // Graphics struct, handles rendering
 }
 
 impl LbmDomain {
@@ -316,8 +318,8 @@ impl LbmDomain {
         y: u32,
         z: u32,
     ) -> LbmDomain {
-        let n_x = lbm_config.n_x / lbm_config.d_x + 2u32 * h_x;
-        let n_y = lbm_config.n_y / lbm_config.d_y + 2u32 * h_y;
+        let n_x = lbm_config.n_x / lbm_config.d_x + 2u32 * h_x; // Size + Halo offsets
+        let n_y = lbm_config.n_y / lbm_config.d_y + 2u32 * h_y; // When multiple domains on axis -> add 2 cells of padding
         let n_z = lbm_config.n_z / lbm_config.d_z + 2u32 * h_z;
         let n = Self::get_n(n_x, n_y, n_z);
 
@@ -325,9 +327,9 @@ impl LbmDomain {
         let d_y = lbm_config.d_y;
         let d_z = lbm_config.d_z;
 
-        let o_x = (x * lbm_config.n_x / lbm_config.d_x) as i32 - h_x as i32;
-        let o_y = (y * lbm_config.n_y / lbm_config.d_y) as i32 - h_y as i32;
-        let o_z = (z * lbm_config.n_z / lbm_config.d_z) as i32 - h_z as i32;
+        let o_x = (x * n_x / d_x) as i32 - h_x as i32;
+        let o_y = (y * n_y / d_y) as i32 - h_y as i32;
+        let o_z = (z * n_z / d_z) as i32 - h_z as i32;
 
         let dimensions;
         let velocity_set;
@@ -743,7 +745,7 @@ impl LbmDomain {
     }
 
     fn enqueue_stream_collide(&self) -> ocl::Result<()> {
-        //Enqueues Initialization kernel, arguments are already set
+        //Enqueues Initialization kernel, some arguments are already set
         unsafe {
             self.kernel_stream_collide.set_arg("t", self.t)?;
             self.kernel_stream_collide.set_arg("fx", self.fx)?;
@@ -753,7 +755,7 @@ impl LbmDomain {
         }
     }
 
-    // Manually update fields. Is autmatically handled in stream-collide most of the time
+    // Manually update fields. Is autmatically handled in stream-collide if graphics are enabled
     #[allow(unused)]
     fn enqueue_update_fields(&self) -> ocl::Result<()> {
         //Enqueues Initialization kernel, arguments are already set

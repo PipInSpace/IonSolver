@@ -53,18 +53,19 @@ pub const LOGO: &str = "________________________________________________________
 _____________________________________________________________________________________________________________________________";
 
 pub fn progressbar(fill: f32) -> String {
-       let length: u32 = 20;
-       let fill_percent = (fill * 100.0) as u32;
-       let fill = fill.clamp(0.0, 1.0);
-       let mut string = "[".to_string();
-       let fill_length = (length as f32 * fill).round() as u32;
-       for _ in 0..fill_length {
-              string += "="
-       }
-       for _ in 0..(length-fill_length) {
-              string += " "
-       }
-       string += &format!("] {}%", fill_percent);
+    // Returns a "progress bar" string with the provided fill level
+    let length: u32 = 20;
+    let fill_percent = (fill * 100.0) as u32;
+    let fill = fill.clamp(0.0, 1.0);
+    let mut string = "[".to_string();
+    let fill_length = (length as f32 * fill).round() as u32;
+    for _ in 0..fill_length {
+        string += "="
+    }
+    for _ in 0..(length - fill_length) {
+        string += " "
+    }
+    string += &format!("] {}%", fill_percent);
 
-       string
+    string
 }
