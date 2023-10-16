@@ -3,7 +3,8 @@ use crate::lbm::*;
 use crate::*;
 use ocl::ProQue;
 use std::f32::consts::PI;
-use std::fs;
+use std::io::Write;
+use std::{fs, io};
 use std::sync::mpsc;
 
 #[allow(unused)]
@@ -26,11 +27,11 @@ pub fn simloop(
     let mut i = 0;
 
     let mut lbm_config = LbmConfig::new();
-    lbm_config.n_x = 256;
-    lbm_config.n_y = 256;
-    lbm_config.n_z = 128;
-    lbm_config.d_x = 2;
-    lbm_config.nu = 0.01;
+    lbm_config.n_x = 512;
+    lbm_config.n_y = 512;
+    lbm_config.n_z = 256;
+    lbm_config.d_x = 1;
+    lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     let mut test_lbm = Lbm::init(lbm_config);
     test_lbm.setup();
@@ -88,7 +89,8 @@ pub fn simloop(
                 }
 
                 if i % state.frame_spacing == 0 {
-                    println!("Step {}", i);
+                    print!("\rStep {}", i);
+                    io::stdout().flush().unwrap();
                     if lbm_config.graphics_config.graphics {
                         test_lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
                     }
@@ -134,7 +136,7 @@ pub fn simloop(
             }
         }
         if !state.active {
-            println!("Exiting Simulation Loop");
+            println!("\nExiting Simulation Loop");
             break;
         }
         let recieve_result = ctrl_rx.try_recv();
@@ -154,16 +156,16 @@ impl Lbm {
         let pif = std::f32::consts::PI;
         #[allow(non_snake_case)]
         let A = 0.25f32;
-        let periodicity = 1u32;
+        let periodicity = 2u32;
         let a = nx as f32 / periodicity as f32;
         let b = ny as f32 / periodicity as f32;
         let c = nz as f32 / periodicity as f32;
         let domain_numbers: u32 = self.config.d_x * self.config.d_y * self.config.d_z;
+        print!("");
         for d in 0..domain_numbers {
             let dx = self.config.d_x;
             let dy = self.config.d_y;
             let dz = self.config.d_z;
-            println!("Initializing domain {}/{}", d + 1, domain_numbers);
             let x = (d % (dx * dy)) % dx; // Domain coordinates
             let y = (d % (dx * dy)) / dx;
             let z = d / (dx * dy);
@@ -176,6 +178,7 @@ impl Lbm {
             let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize];
             for zi in 0..dsz as u64 {
                 // iterates over every cell in the domain, filling it with  Taylor-Green-vortex
+                print!("\r{}", info::progressbar(((zi as f32 + 1.0)/dsz as f32)*(1.0/domain_numbers as f32)+((d as f32)/domain_numbers as f32)));
                 for yi in 0..dsy as u64 {
                     for xi in 0..dsx as u64 {
                         if !(((xi == 0 || xi == dsx - 1) && dx > 1)
@@ -227,6 +230,7 @@ impl Lbm {
                 .unwrap();
             self.domains[d as usize].queue.finish().unwrap();
         }
+        println!("");
         println!("Finished setting up Taylor-Green vorticies");
     }
 }

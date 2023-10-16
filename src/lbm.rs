@@ -730,8 +730,8 @@ impl LbmDomain {
             FloatType::FP32 => &fp32
         }
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
-        + if lbm_config.ext_volume_force {"\n	#define VOLUME_FORCE"} else {""}
-        + if lbm_config.ext_force_field {"\n	#define FORCE_FIELD"} else {""}
+        + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
+        + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""};
         //Extensions
     }
