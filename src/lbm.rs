@@ -86,6 +86,7 @@ pub struct LbmConfig {
 
     pub ext_equilibrium_boudaries: bool, //Extensions
     pub ext_volume_force: bool,
+    pub electric_force: bool,
     pub ext_force_field: bool, // Needs volume_force to work
 
     pub graphics_config: GraphicsConfig,
@@ -117,6 +118,7 @@ impl LbmConfig {
 
             ext_equilibrium_boudaries: false,
             ext_volume_force: false,
+            electric_force: false,
             ext_force_field: false,
 
             graphics_config: GraphicsConfig::new(),
@@ -301,6 +303,7 @@ pub struct LbmDomain {
     pub fi16: Buffer<u16>,
     pub rho: Buffer<f32>,
     pub u: Buffer<f32>,
+    pub q: Buffer<f32>,
     pub flags: Buffer<u8>,
     pub t: u64, // Timestep
 
@@ -459,6 +462,13 @@ impl LbmDomain {
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
+        let q = Buffer::<f32>::builder()
+            .queue(queue.clone())
+            .len([n])
+            .fill_val(0.0f32)
+            .flags(flags::MEM_READ_WRITE)
+            .build()
+            .unwrap();
         let flags = Buffer::<u8>::builder()
             .queue(queue.clone())
             .len([n])
@@ -480,6 +490,7 @@ impl LbmDomain {
                     .arg_named("fi", &fi32)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
+                    .arg_named("q", &q)
                     .arg_named("flags", &flags)
                     .build()
                     .unwrap();
@@ -493,6 +504,7 @@ impl LbmDomain {
                     .arg_named("fi", &fi16)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
+                    .arg_named("q", &q)
                     .arg_named("flags", &flags)
                     .build()
                     .unwrap();
@@ -510,6 +522,7 @@ impl LbmDomain {
                     .arg_named("fi", &fi32)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
+                    .arg_named("q", &q)
                     .arg_named("flags", &flags)
                     .arg_named("t", &t)
                     .arg_named("fx", &lbm_config.fx)
@@ -527,6 +540,7 @@ impl LbmDomain {
                     .arg_named("fi", &fi16)
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
+                    .arg_named("q", &q)
                     .arg_named("flags", &flags)
                     .arg_named("t", &t)
                     .arg_named("fx", &lbm_config.fx)
@@ -618,6 +632,7 @@ impl LbmDomain {
             fi16,
             rho,
             u,
+            q,
             flags,
             t,
 
@@ -733,6 +748,7 @@ impl LbmDomain {
         }
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
+        + if lbm_config.electric_force {"\n	        #define ELECTRIC_FORCE"} else {""}
         + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""};
         //Extensions

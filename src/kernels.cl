@@ -60,6 +60,7 @@
 
 #define EQUILIBRIUM_BOUNDARIES
 #define VOLUME_FORCE
+#define ELECTRIC_FORCE
 
 #define GRAPHICS
 #define def_streamline_sparse 4u
@@ -99,6 +100,10 @@ float half_to_float_custom(const ushort x) { // custom 16-bit floating-point for
 	const uint m = (x&0x07FF)<<12; // mantissa
 	const uint v = as_uint((float)m)>>23; // evil log2 bit hack to count leading zeros in denormalized format
 	return as_float((x&0x8000)<<16 | (e!=0)*((e+112)<<23|m) | ((e==0)&(m!=0))*((v-37)<<23|((m<<(150-v))&0x007FF000))); // sign : normalized : denormalized
+}
+// cube of magnitude of v
+float cbmagnitude(uint3 v){
+	return sq(v.x) + sq(v.y) + sq(v.z);
 }
 
 // Line3D OpenCL C version (c) Moritz Lehmann
@@ -646,15 +651,13 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 	}
 }
 #endif // VOLUME_FORCE
-// cube of magnitude of v
-float cbmagnitude(uint3 v){
-	return sq(v.x) + sq(v.y) + sq(v.z);
-}
+
+#ifdef ELECTRIC_FORCE
 // we need to optimize this
 // n: cell id
 // q: float array for charges
 // E: electric field at n
-void calculate_E(const uint n, const float* q, float3* E) {// uses coulomb's law https://en.wikipedia.org/wiki/Coulomb%27s_law
+void calculate_E(const uint n, global float* q, float3* E) {// uses coulomb's law https://en.wikipedia.org/wiki/Coulomb%27s_law
 	const uint3 coord_n = coordinates(n);
 	for(uint i = 0; i < def_N; i++){
 		const uint3 coord_i = coordinates(i);
@@ -662,8 +665,9 @@ void calculate_E(const uint n, const float* q, float3* E) {// uses coulomb's law
 		*E += def_ke * convert_float3((coord_n - coord_i)) / cbmagnitude(coord_n - coord_i); // coulomb's law
 	}
 }
+#endif
 
-__kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz 
+__kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global float* q, global uchar* flags, const ulong t, const float fx, const float fy, const float fz 
 #ifdef FORCE_FIELD
 , const global float* F 
 #endif
@@ -696,6 +700,19 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     #endif // EQUILIBRIUM_BOUNDARIES
 
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
+
+	#ifdef ELECTRIC_FORCE
+	// what am i doing this maybe works
+	float3 E, Fe;
+	calculate_E(n, q, &E);
+	Fe = E * q[n];
+
+	fxn += Fe.x;
+	fyn += Fe.y;
+	fzn += Fe.z;
+
+	#endif// ELECTRIC_FORCE
+
     float Fin[def_velocity_set]; // forcing terms
 
 	#ifdef FORCE_FIELD
@@ -718,6 +735,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     	uzn = clamp(uzn, -def_c, def_c);
     	for(uint i=0u; i<def_velocity_set; i++) Fin[i] = 0.0f;
 	#endif // VOLUME_FORCE
+
 
 	#ifndef EQUILIBRIUM_BOUNDARIES
 	#ifdef UPDATE_FIELDS
@@ -841,6 +859,7 @@ kernel void update_fields(const global fpxx* fi, global float* rho, global float
     u[                 n] = uxn; // update velocity field
     u[    def_N+(ulong)n] = uyn;
     u[2ul*def_N+(ulong)n] = uzn;
+	// update charge field (later)
 
 
 }
