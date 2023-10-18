@@ -37,6 +37,7 @@
 #define def_w0 (1.0f/2.25f)
 #define def_ws (1.0f/9.0f)
 #define def_we (1.0f/36.0f)
+#define def_ke 8.9875517923E9f
 
 #define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
 #define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
@@ -645,6 +646,22 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 	}
 }
 #endif // VOLUME_FORCE
+// cube of magnitude of v
+float cbmagnitude(uint3 v){
+	return sq(v.x) + sq(v.y) + sq(v.z);
+}
+// we need to optimize this
+// n: cell id
+// q: float array for charges
+// E: electric field at n
+void calculate_E(const uint n, const float* q, float3* E) {// uses coulomb's law https://en.wikipedia.org/wiki/Coulomb%27s_law
+	const uint3 coord_n = coordinates(n);
+	for(uint i = 0; i < def_N; i++){
+		const uint3 coord_i = coordinates(i);
+		const float q_i = q[i];
+		*E += def_ke * convert_float3((coord_n - coord_i)) / cbmagnitude(coord_n - coord_i); // coulomb's law
+	}
+}
 
 __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz 
 #ifdef FORCE_FIELD
