@@ -447,6 +447,17 @@ impl LbmDomain {
             .build()
             .unwrap();
 
+        // Force field buffer
+        let f: Buffer<f32>;
+        if lbm_config.ext_force_field {
+            f = Buffer::<f32>::builder()
+                .queue(queue.clone())
+                .len([n * 3])
+                .fill_val(0.0f32)
+                .flags(flags::MEM_READ_WRITE)
+                .build()
+                .unwrap();
+        }
         // Electric charge buffer.
         let q: Buffer<f32>;
         if lbm_config.ext_electric_force {
