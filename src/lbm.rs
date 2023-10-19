@@ -1,5 +1,5 @@
 use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
-use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue};
+use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue, builders::KernelBuilder};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -412,6 +412,12 @@ impl LbmDomain {
                     .fill_val(0.0f32)
                     .build()
                     .unwrap();
+                fi16 = Buffer::<u16>::builder()
+                    .queue(queue.clone())
+                    .len([1])
+                    .fill_val(0u16)
+                    .build()
+                    .unwrap();
                 //Evil memory hack. fi16 won't be used, but needs to be allocated for rust :)
             }
             _ => {
@@ -420,6 +426,12 @@ impl LbmDomain {
                     .queue(queue.clone())
                     .len([n * velocity_set as u64])
                     .fill_val(0u16)
+                    .build()
+                    .unwrap();
+                fi32 = Buffer::<f32>::builder()
+                    .queue(queue.clone())
+                    .len([1])
+                    .fill_val(0.0f32)
                     .build()
                     .unwrap();
                 //Evil memory hack. fi32 won't be used, but needs to be allocated for rust :)
@@ -448,11 +460,20 @@ impl LbmDomain {
             .unwrap();
 
         // Force field buffer
+        #[allow(unused)]
         let f: Buffer<f32>;
         if lbm_config.ext_force_field {
             f = Buffer::<f32>::builder()
                 .queue(queue.clone())
                 .len([n * 3])
+                .fill_val(0.0f32)
+                .flags(flags::MEM_READ_WRITE)
+                .build()
+                .unwrap();
+        } else {
+            f = Buffer::<f32>::builder()
+                .queue(queue.clone())
+                .len([1])
                 .fill_val(0.0f32)
                 .flags(flags::MEM_READ_WRITE)
                 .build()
@@ -468,18 +489,28 @@ impl LbmDomain {
                 .flags(flags::MEM_READ_WRITE)
                 .build()
                 .unwrap();
+        } else {
+            q = Buffer::<f32>::builder()
+                .queue(queue.clone())
+                .len([1])
+                .fill_val(0.0f32)
+                .flags(flags::MEM_READ_WRITE)
+                .build()
+                .unwrap();
         }
 
         // Initialize Kernels
         let kernel_initialize: Kernel;
         let kernel_stream_collide: Kernel;
         let kernel_update_fields: Kernel;
+        let mut kernel_initialize_builder = Kernel::builder();
+        let mut kernel_stream_collide_builder = Kernel::builder();
+        let mut kernel_update_fields_builder = Kernel::builder();
         match lbm_config.float_type {
             //Initialize kernels. Different Float types need different arguments (Fi-Buffer specifically)
             FloatType::FP32 => {
                 // Float Type F32
-                kernel_initialize = Kernel::builder()
-                    .program(&program)
+                kernel_initialize_builder.program(&program)
                     .name("initialize")
                     .queue(queue.clone())
                     .global_work_size([n])
@@ -487,11 +518,11 @@ impl LbmDomain {
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
                     .arg_named("q", &q)
-                    .arg_named("flags", &flags)
-                    .build()
-                    .unwrap();
-                kernel_stream_collide = Kernel::builder()
-                    .program(&program)
+                    .arg_named("flags", &flags);
+
+               
+                    
+                kernel_stream_collide_builder.program(&program)
                     .name("stream_collide")
                     .queue(queue.clone())
                     .global_work_size([n])
@@ -503,11 +534,9 @@ impl LbmDomain {
                     .arg_named("t", &t)
                     .arg_named("fx", &lbm_config.fx)
                     .arg_named("fy", &lbm_config.fy)
-                    .arg_named("fz", &lbm_config.fz)
-                    .build()
-                    .unwrap();
-                kernel_update_fields = Kernel::builder()
-                    .program(&program)
+                    .arg_named("fz", &lbm_config.fz);
+
+                kernel_update_fields_builder.program(&program)
                     .name("update_fields")
                     .queue(queue.clone())
                     .global_work_size([n])
@@ -518,14 +547,15 @@ impl LbmDomain {
                     .arg_named("t", &t)
                     .arg_named("fx", &lbm_config.fx)
                     .arg_named("fy", &lbm_config.fy)
-                    .arg_named("fz", &lbm_config.fz)
-                    .build()
-                    .unwrap();
+                    .arg_named("fz", &lbm_config.fz);
+
+                kernel_initialize = kernel_initialize_builder.build().unwrap();
+                kernel_stream_collide = kernel_stream_collide_builder.build().unwrap();
+                kernel_update_fields = kernel_update_fields_builder.build().unwrap();
             }
             _ => {
                 // Float Type F16S/F16C
-                kernel_initialize = Kernel::builder()
-                    .program(&program)
+                kernel_initialize_builder.program(&program)
                     .name("initialize")
                     .queue(queue.clone())
                     .global_work_size([n])
@@ -533,11 +563,9 @@ impl LbmDomain {
                     .arg_named("rho", &rho)
                     .arg_named("u", &u)
                     .arg_named("q", &q)
-                    .arg_named("flags", &flags)
-                    .build()
-                    .unwrap();
-                kernel_stream_collide = Kernel::builder()
-                    .program(&program)
+                    .arg_named("flags", &flags);
+                
+                kernel_stream_collide_builder.program(&program)
                     .name("stream_collide")
                     .queue(queue.clone())
                     .global_work_size([n])
@@ -549,11 +577,9 @@ impl LbmDomain {
                     .arg_named("t", &t)
                     .arg_named("fx", &lbm_config.fx)
                     .arg_named("fy", &lbm_config.fy)
-                    .arg_named("fz", &lbm_config.fz)
-                    .build()
-                    .unwrap();
-                kernel_update_fields = Kernel::builder()
-                    .program(&program)
+                    .arg_named("fz", &lbm_config.fz);
+
+                kernel_update_fields_builder.program(&program)
                     .name("update_fields")
                     .queue(queue.clone())
                     .global_work_size([n])
@@ -564,9 +590,11 @@ impl LbmDomain {
                     .arg_named("t", &t)
                     .arg_named("fx", &lbm_config.fx)
                     .arg_named("fy", &lbm_config.fy)
-                    .arg_named("fz", &lbm_config.fz)
-                    .build()
-                    .unwrap();
+                    .arg_named("fz", &lbm_config.fz);
+
+                kernel_initialize = kernel_initialize_builder.build().unwrap();
+                kernel_stream_collide = kernel_stream_collide_builder.build().unwrap();
+                kernel_update_fields = kernel_update_fields_builder.build().unwrap();
             }
         }
         println!("Kernels for domain compiled.");
