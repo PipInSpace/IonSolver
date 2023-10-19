@@ -43,7 +43,7 @@ impl Default for FloatType {
     }
 }
 
-#[allow(dead_code)]
+//#[allow(dead_code)]
 #[derive(Clone)]
 pub enum VariableFloatBuffer {
     U16(Buffer<u16>), // Buffers for variable float types
@@ -86,8 +86,8 @@ pub struct LbmConfig {
 
     pub ext_equilibrium_boudaries: bool, //Extensions
     pub ext_volume_force: bool,
-    pub electric_force: bool,
     pub ext_force_field: bool, // Needs volume_force to work
+    pub ext_electric_force: bool, // Needs force_field to work
 
     pub graphics_config: GraphicsConfig,
 }
@@ -118,7 +118,7 @@ impl LbmConfig {
 
             ext_equilibrium_boudaries: false,
             ext_volume_force: false,
-            electric_force: false,
+            ext_electric_force: false,
             ext_force_field: false,
 
             graphics_config: GraphicsConfig::new(),
@@ -263,7 +263,6 @@ impl Lbm {
     }
 }
 
-#[allow(dead_code)]
 pub struct LbmDomain {
     device: Device, // FluidX3D creates contexts/queues/programs for each device automatically through another class
     context: Context, // IonSolver creates and saves this information directly.
@@ -407,18 +406,13 @@ impl LbmDomain {
             // Initialise two fiBuffer variants for rust. Only one will be used.
             FloatType::FP32 => {
                 // Float Type F32
-                fi16 = Buffer::<u16>::builder()
-                    .queue(queue.clone())
-                    .len([1])
-                    .fill_val(0u16)
-                    .build()
-                    .unwrap(); //Evil memory hack. Won't be used, but needs to be allocated for rust :)
                 fi32 = Buffer::<f32>::builder()
                     .queue(queue.clone())
                     .len([n * velocity_set as u64])
                     .fill_val(0.0f32)
                     .build()
                     .unwrap();
+                //Evil memory hack. fi16 won't be used, but needs to be allocated for rust :)
             }
             _ => {
                 // Float Type F16S/F16C
@@ -428,12 +422,7 @@ impl LbmDomain {
                     .fill_val(0u16)
                     .build()
                     .unwrap();
-                fi32 = Buffer::<f32>::builder()
-                    .queue(queue.clone())
-                    .len(1)
-                    .fill_val(0.0f32)
-                    .build()
-                    .unwrap(); //Evil memory hack. Won't be used, but needs to be allocated for rust :)
+                //Evil memory hack. fi32 won't be used, but needs to be allocated for rust :)
             }
         };
         let rho = Buffer::<f32>::builder()
@@ -450,13 +439,6 @@ impl LbmDomain {
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
-        let q = Buffer::<f32>::builder()
-            .queue(queue.clone())
-            .len([n])
-            .fill_val(0.0f32)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
         let flags = Buffer::<u8>::builder()
             .queue(queue.clone())
             .len([n])
@@ -464,6 +446,18 @@ impl LbmDomain {
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
+
+        // Electric charge buffer.
+        let q: Buffer<f32>;
+        if lbm_config.ext_electric_force {
+            q = Buffer::<f32>::builder()
+                .queue(queue.clone())
+                .len([n])
+                .fill_val(0.0f32)
+                .flags(flags::MEM_READ_WRITE)
+                .build()
+                .unwrap();
+        }
 
         // Initialize Kernels
         let kernel_initialize: Kernel;
@@ -724,7 +718,7 @@ impl LbmDomain {
         }
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
-        + if lbm_config.electric_force {"\n	        #define ELECTRIC_FORCE"} else {""}
+        + if lbm_config.ext_electric_force {"\n	        #define ELECTRIC_FORCE"} else {""}
         + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""};
         //Extensions
