@@ -153,6 +153,7 @@ impl Lbm {
         let nx = self.config.n_x;
         let ny = self.config.n_y;
         let nz = self.config.n_z;
+
         let pif = std::f32::consts::PI;
         #[allow(non_snake_case)]
         let A = 0.25f32;
@@ -160,19 +161,21 @@ impl Lbm {
         let a = nx as f32 / periodicity as f32;
         let b = ny as f32 / periodicity as f32;
         let c = nz as f32 / periodicity as f32;
+
         let domain_numbers: u32 = self.config.d_x * self.config.d_y * self.config.d_z;
+        let dx = self.config.d_x;
+        let dy = self.config.d_y;
+        let dz = self.config.d_z;
+        let dsx = nx as u64 / dx as u64 + (dx > 1u32) as u64 * 2; // Domain size on each axis
+        let dsy = ny as u64 / dy as u64 + (dy > 1u32) as u64 * 2; // Needs to account for halo offsets
+        let dsz = nz as u64 / dz as u64 + (dz > 1u32) as u64 * 2;
+        let dtotal = dsx * dsy * dsz;
+
         print!("");
         for d in 0..domain_numbers {
-            let dx = self.config.d_x;
-            let dy = self.config.d_y;
-            let dz = self.config.d_z;
-            let x = (d % (dx * dy)) % dx; // Domain coordinates
+            let x = (d % (dx * dy)) % dx; // Current Domain coordinates
             let y = (d % (dx * dy)) / dx;
             let z = d / (dx * dy);
-            let dsx = nx as u64 / dx as u64 + (dx > 1u32) as u64 * 2; // Domain size on each axis
-            let dsy = ny as u64 / dy as u64 + (dy > 1u32) as u64 * 2; // Needs to account for halo offsets
-            let dsz = nz as u64 / dz as u64 + (dz > 1u32) as u64 * 2;
-            let dtotal = dsx * dsy * dsz;
 
             let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx * dsy * dsz * 3) as usize];
             let mut domain_vec_q: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize]; // temporary q (all 0)
