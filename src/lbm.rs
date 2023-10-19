@@ -519,8 +519,6 @@ impl LbmDomain {
                     .arg_named("u", &u)
                     .arg_named("q", &q)
                     .arg_named("flags", &flags);
-
-               
                     
                 kernel_stream_collide_builder.program(&program)
                     .name("stream_collide")
