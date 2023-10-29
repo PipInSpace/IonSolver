@@ -593,10 +593,11 @@ impl LbmDomain {
                     .build()
                     .unwrap();
         }
+        // use size of 1 if invalid
         return Buffer::<f32>::builder()
                     .queue(queue.clone())
                     .len([1])
-                    .fill_val(0.0f32)
+                    .fill_val(start_value)
                     .flags(flags::MEM_READ_WRITE)
                     .build()
                     .unwrap();
