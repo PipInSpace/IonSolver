@@ -77,12 +77,6 @@ pub struct LbmConfig {
     pub fx: f32,
     pub fy: f32,
     pub fz: f32,
-    pub sigma: f32,
-    pub alpha: f32,
-    pub beta: f32,
-
-    pub particles_n: u32,
-    pub particles_rho: f32,
 
     pub ext_equilibrium_boudaries: bool, //Extensions
     pub ext_volume_force: bool,
@@ -109,12 +103,6 @@ impl LbmConfig {
             fx: 0.0f32,
             fy: 0.0f32,
             fz: 0.0f32,
-            sigma: 0.0f32,
-            alpha: 0.0f32,
-            beta: 0.0f32,
-
-            particles_n: 0,
-            particles_rho: 0.0f32,
 
             ext_equilibrium_boudaries: false,
             ext_volume_force: false,
@@ -251,6 +239,7 @@ impl Lbm {
         self.domains.len()
     }
 
+    #[allow(unused)]
     pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
         // disassembles 1D index into 3D index
         let t: u64 = n % (self.config.n_x as u64 * self.config.n_y as u64);
@@ -264,12 +253,12 @@ impl Lbm {
 }
 
 pub struct LbmDomain {
-    device: Device, // FluidX3D creates contexts/queues/programs for each device automatically through another class
-    context: Context, // IonSolver creates and saves this information directly.
-    program: Program,
+    //device: Device, // FluidX3D creates contexts/queues/programs for each device automatically through another class
+    //context: Context, // IonSolver creates and saves this information directly.
+    //program: Program,
     pub queue: Queue,
     lbm_config: LbmConfig,
-    ocl_code: String,
+    //ocl_code: String,
 
     kernel_initialize: Kernel, // Basic Kernels
     kernel_stream_collide: Kernel,
@@ -291,12 +280,14 @@ pub struct LbmDomain {
     fx: f32, // Volume force
     fy: f32,
     fz: f32,
+    /*
     sigma: f32, // surface tension coefficient
     alpha: f32,
     beta: f32,
-
+    
     particles_n: u32,   // Number of particles
     particles_rho: f32, // Particle mass
+    */
 
     pub fi32: Buffer<f32>, // Buffers
     pub fi16: Buffer<u16>,
@@ -406,12 +397,7 @@ impl LbmDomain {
             // Initialise two fiBuffer variants for rust. Only one will be used.
             FloatType::FP32 => {
                 // Float Type F32
-                fi32 = Buffer::<f32>::builder()
-                    .queue(queue.clone())
-                    .len([n * velocity_set as u64])
-                    .fill_val(0.0f32)
-                    .build()
-                    .unwrap();
+                fi32 = LbmDomain::create_buffer_f32(&queue, n * velocity_set as u64, 0f32);
                 fi16 = Buffer::<u16>::builder()
                     .queue(queue.clone())
                     .len([1])
@@ -428,29 +414,12 @@ impl LbmDomain {
                     .fill_val(0u16)
                     .build()
                     .unwrap();
-                fi32 = Buffer::<f32>::builder()
-                    .queue(queue.clone())
-                    .len([1])
-                    .fill_val(0.0f32)
-                    .build()
-                    .unwrap();
+                fi32 = LbmDomain::create_buffer_f32(&queue, 1, 0f32);
                 //Evil memory hack. fi32 won't be used, but needs to be allocated for rust :)
             }
         };
-        let rho = Buffer::<f32>::builder()
-            .queue(queue.clone())
-            .len([n])
-            .fill_val(1.0f32)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
-        let u = Buffer::<f32>::builder()
-            .queue(queue.clone())
-            .len([n * 3])
-            .fill_val(0.0f32)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
+        let rho = LbmDomain::create_buffer_f32(&queue, n, 1.0f32);
+        let u = LbmDomain::create_buffer_f32(&queue, n * 3, 0f32);
         let flags = Buffer::<u8>::builder()
             .queue(queue.clone())
             .len([n])
@@ -463,40 +432,16 @@ impl LbmDomain {
         #[allow(unused)]
         let f: Buffer<f32>;
         if lbm_config.ext_force_field {
-            f = Buffer::<f32>::builder()
-                .queue(queue.clone())
-                .len([n * 3])
-                .fill_val(0.0f32)
-                .flags(flags::MEM_READ_WRITE)
-                .build()
-                .unwrap();
+            f = LbmDomain::create_buffer_f32(&queue, n * 3, 0f32);
         } else {
-            f = Buffer::<f32>::builder()
-                .queue(queue.clone())
-                .len([1])
-                .fill_val(0.0f32)
-                .flags(flags::MEM_READ_WRITE)
-                .build()
-                .unwrap();
+            f = LbmDomain::create_buffer_f32(&queue, 1, 0f32);
         }
         // Electric charge buffer.
         let q: Buffer<f32>;
         if lbm_config.ext_electric_force {
-            q = Buffer::<f32>::builder()
-                .queue(queue.clone())
-                .len([n])
-                .fill_val(0.0f32)
-                .flags(flags::MEM_READ_WRITE)
-                .build()
-                .unwrap();
+            q = LbmDomain::create_buffer_f32(&queue, n, 0f32);
         } else {
-            q = Buffer::<f32>::builder()
-                .queue(queue.clone())
-                .len([1])
-                .fill_val(0.0f32)
-                .flags(flags::MEM_READ_WRITE)
-                .build()
-                .unwrap();
+            q = LbmDomain::create_buffer_f32(&queue, 1, 0f32);
         }
 
         // Initialize Kernels
@@ -601,11 +546,7 @@ impl LbmDomain {
         let graphics = Graphics::new(lbm_config.clone(), &program, &queue, &flags, &u);
 
         let domain = LbmDomain {
-            device,
-            context,
             queue,
-            program,
-            ocl_code,
             lbm_config,
 
             kernel_initialize,
@@ -628,12 +569,6 @@ impl LbmDomain {
             fx: lbm_config.fx,
             fy: lbm_config.fy,
             fz: lbm_config.fz,
-            sigma: lbm_config.sigma,
-            alpha: lbm_config.alpha,
-            beta: lbm_config.beta,
-
-            particles_n: lbm_config.particles_n,
-            particles_rho: lbm_config.particles_rho,
 
             fi32,
             fi16,
@@ -646,6 +581,25 @@ impl LbmDomain {
             graphics,
         };
         domain //Returns initialised domain
+    }
+
+    fn create_buffer_f32(queue : &Queue, size : u64, start_value : f32) -> Buffer<f32> {
+        if size >= 1 {
+            return Buffer::<f32>::builder()
+                    .queue(queue.clone())
+                    .len([size])
+                    .fill_val(start_value)
+                    .flags(flags::MEM_READ_WRITE)
+                    .build()
+                    .unwrap();
+        }
+        return Buffer::<f32>::builder()
+                    .queue(queue.clone())
+                    .len([1])
+                    .fill_val(0.0f32)
+                    .flags(flags::MEM_READ_WRITE)
+                    .build()
+                    .unwrap();
     }
 
     fn get_device_defines(
