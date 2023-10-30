@@ -180,7 +180,7 @@ impl Lbm {
             #[allow(unused_mut)]
             let mut domain_vec_q: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize]; // temporary q (all 0)
             let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize];
-            for zi in 0..dsz as u64 {
+            for zi in 0..dsz {
                 // iterates over every cell in the domain, filling it with  Taylor-Green-vortex
                 print!(
                     "\r{}",
@@ -189,8 +189,8 @@ impl Lbm {
                             + ((d as f32) / domain_numbers as f32)
                     )
                 );
-                for yi in 0..dsy as u64 {
-                    for xi in 0..dsx as u64 {
+                for yi in 0..dsy {
+                    for xi in 0..dsx {
                         if !(((xi == 0 || xi == dsx - 1) && dx > 1)
                             || ((yi == 0 || yi == dsy - 1) && dy > 1)
                             || ((zi == 0 || zi == dsz - 1) && dz > 1))
@@ -251,7 +251,7 @@ impl Lbm {
             }
             self.domains[d as usize].queue.finish().unwrap();
         }
-        println!("");
+        println!();
         println!("Finished setting up Taylor-Green vorticies");
     }
 }

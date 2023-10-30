@@ -19,13 +19,13 @@ impl Default for VelocitySet {
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum RelaxationTime {
-    SRT, // Single relaxation time, more efficient
-    TRT, // Two-relaxation time, more precise
+    Srt, // Single relaxation time, more efficient
+    Trt, // Two-relaxation time, more precise
 }
 
 impl Default for RelaxationTime {
     fn default() -> Self {
-        RelaxationTime::SRT
+        RelaxationTime::Srt
     }
 }
 
@@ -91,7 +91,7 @@ impl LbmConfig {
         // provides a LbmConfig struct with default values
         LbmConfig {
             velocity_set: VelocitySet::D2Q9,
-            relaxation_time: RelaxationTime::SRT,
+            relaxation_time: RelaxationTime::Srt,
             float_type: FloatType::FP16S,
             n_x: 1,
             n_y: 1,
@@ -172,12 +172,12 @@ impl Lbm {
         }
         println!("All domains initialized.");
 
-        let lbm = Lbm {
+        
+        Lbm {
             domains: lbm_domains,
             config: lbm_config,
             initialized: false,
-        };
-        lbm
+        }
     }
 
     pub fn initialize(&mut self) {
@@ -370,7 +370,7 @@ impl LbmDomain {
         let platform = Platform::default();
         let context = Context::builder()
             .platform(platform)
-            .devices(device.clone())
+            .devices(device)
             .build()
             .unwrap();
         let queue = Queue::new(&context, device, None).unwrap();
@@ -382,24 +382,23 @@ impl LbmDomain {
             .unwrap();
 
         // Initialize Buffers
-        let fi: VariableFloatBuffer;
-        match lbm_config.float_type {
+        let fi: VariableFloatBuffer = match lbm_config.float_type {
             // Initialise two fiBuffer variants for rust. Only one will be used.
             FloatType::FP32 => {
                 // Float Type F32
-                fi = VariableFloatBuffer::F32(opencl::create_buffer(
+                VariableFloatBuffer::F32(opencl::create_buffer(
                     &queue,
                     [n * velocity_set as u64],
                     0.0f32,
-                ));
+                ))
             }
             _ => {
                 // Float Type F16S/F16C
-                fi = VariableFloatBuffer::U16(opencl::create_buffer(
+                VariableFloatBuffer::U16(opencl::create_buffer(
                     &queue,
                     [n * velocity_set as u64],
                     0u16,
-                ));
+                ))
             }
         };
         let rho = opencl::create_buffer(&queue, [n], 1.0f32);
@@ -464,18 +463,18 @@ impl LbmDomain {
             .arg_named("rho", &rho)
             .arg_named("u", &u)
             .arg_named("flags", &flags)
-            .arg_named("t", &t)
-            .arg_named("fx", &lbm_config.fx)
-            .arg_named("fy", &lbm_config.fy)
-            .arg_named("fz", &lbm_config.fz);
+            .arg_named("t", t)
+            .arg_named("fx", lbm_config.fx)
+            .arg_named("fy", lbm_config.fy)
+            .arg_named("fz", lbm_config.fz);
         kernel_update_fields_builder
             .arg_named("rho", &rho)
             .arg_named("u", &u)
             .arg_named("flags", &flags)
-            .arg_named("t", &t)
-            .arg_named("fx", &lbm_config.fx)
-            .arg_named("fy", &lbm_config.fy)
-            .arg_named("fz", &lbm_config.fz);
+            .arg_named("t", t)
+            .arg_named("fx", lbm_config.fx)
+            .arg_named("fy", lbm_config.fy)
+            .arg_named("fz", lbm_config.fz);
         // Conditional arguments. Place at end of kernel functions
         if lbm_config.ext_force_field {
             kernel_stream_collide_builder
@@ -492,9 +491,10 @@ impl LbmDomain {
         println!("Kernels for domain compiled.");
         //TODO: allocate transfer buffers
 
-        let graphics = Graphics::new(lbm_config.clone(), &program, &queue, &flags, &u);
+        let graphics = Graphics::new(lbm_config, &program, &queue, &flags, &u);
 
-        let domain = LbmDomain {
+        
+        LbmDomain {
             queue,
             lbm_config,
 
@@ -523,8 +523,7 @@ impl LbmDomain {
             t,
 
             graphics,
-        };
-        domain //Returns initialised domain
+        } //Returns initialised domain
     }
 
     fn get_device_defines(
@@ -609,8 +608,8 @@ impl LbmDomain {
             VelocitySet::D3Q27 => &d3q27
         }
         + match lbm_config.relaxation_time {
-            RelaxationTime::SRT => srt,
-            RelaxationTime::TRT => trt
+            RelaxationTime::Srt => srt,
+            RelaxationTime::Trt => trt
         }
         +"\n	#define TYPE_S 0x01" // 0b00000001 // (stationary or moving) solid boundary
         +"\n	#define TYPE_E 0x02" // 0b00000010 // equilibrium boundary (inflow/outflow)

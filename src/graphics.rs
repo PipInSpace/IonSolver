@@ -2,7 +2,7 @@ use std::{f32::consts::PI, sync::mpsc::Sender, thread};
 
 use egui::{Color32, ColorImage};
 use image::{ImageBuffer, Rgb};
-use ocl::{flags, Buffer, Kernel, Program, Queue};
+use ocl::{Buffer, Kernel, Program, Queue};
 
 use crate::{
     lbm::{Lbm, LbmConfig, VelocitySet},
@@ -44,14 +44,13 @@ impl Graphics {
         let width = lbm_config.graphics_config.camera_width;
         let height = lbm_config.graphics_config.camera_height;
         let n = lbm_config.n_x as u64 * lbm_config.n_y as u64 * lbm_config.n_z as u64; //TODO: use domain size
-        let bitmap = opencl::create_buffer(&queue, [width, height], 0i32);
-        let zbuffer = opencl::create_buffer(&queue, [width, height], 0i32);
-        let camera_params = opencl::create_buffer(&queue, 15, 0.0f32);
-        println!("{:?}", zbuffer.len());
+        let bitmap = opencl::create_buffer(queue, [width, height], 0i32);
+        let zbuffer = opencl::create_buffer(queue, [width, height], 0i32);
+        let camera_params = opencl::create_buffer(queue, 15, 0.0f32);
         camera_params.write(&new_camera_params()).enq().unwrap();
 
         let kernel_clear = Kernel::builder()
-            .program(&program)
+            .program(program)
             .name("graphics_clear")
             .queue(queue.clone())
             .global_work_size(bitmap.len())
@@ -62,7 +61,7 @@ impl Graphics {
 
         //Basic graphics kernels:
         let kernel_graphics_flags = Kernel::builder()
-            .program(&program)
+            .program(program)
             .name("graphics_flags")
             .queue(queue.clone())
             .global_work_size([n])
@@ -73,7 +72,7 @@ impl Graphics {
             .build()
             .unwrap();
         let kernel_graphics_flags_mc = Kernel::builder()
-            .program(&program)
+            .program(program)
             .name("graphics_flags_mc")
             .queue(queue.clone())
             .global_work_size([n])
@@ -84,7 +83,7 @@ impl Graphics {
             .build()
             .unwrap();
         let kernel_graphics_field = Kernel::builder()
-            .program(&program)
+            .program(program)
             .name("graphics_field")
             .queue(queue.clone())
             .global_work_size([n])
@@ -101,7 +100,7 @@ impl Graphics {
             .unwrap();
         let kernel_graphics_streamline = match lbm_config.velocity_set {
             VelocitySet::D2Q9 => Kernel::builder()
-                .program(&program)
+                .program(program)
                 .name("graphics_streamline")
                 .queue(queue.clone())
                 .global_work_size([
@@ -120,7 +119,7 @@ impl Graphics {
                 .build()
                 .unwrap(),
             _ => Kernel::builder()
-                .program(&program)
+                .program(program)
                 .name("graphics_streamline")
                 .queue(queue.clone())
                 .global_work_size([
@@ -141,7 +140,7 @@ impl Graphics {
                 .unwrap(),
         };
         let kernel_graphics_q = Kernel::builder()
-            .program(&program)
+            .program(program)
             .name("graphics_q")
             .queue(queue.clone())
             .global_work_size([n]) //TODO: this is incorrect, need own dimension size
@@ -281,8 +280,8 @@ impl Lbm {
 
             let mut save_buffer: Vec<u8> = vec![];
             let mut pixels: Vec<Color32> = vec![];
-            for pixel in 0..bitmap.len() {
-                let color = bitmap[pixel] & 0xFFFFFF;
+            for pixel in &bitmap {
+                let color = pixel & 0xFFFFFF;
                 pixels.push(Color32::from_rgb(
                     ((color >> 16) & 0xFF) as u8,
                     ((color >> 8) & 0xFF) as u8,

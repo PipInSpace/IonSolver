@@ -7,20 +7,18 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
     let mut device_infos: Vec<Device> = vec![devices[0]; domains as usize]; // Is completely overwritten
                                                                             //Device auto-selection
     let mut device_type_ids: Vec<Vec<Device>> = vec![];
-    for i in 0..devices.len() {
-        let name_i = devices[i]
-            .name()
-            .expect("Unable to get device name in auto-selection");
+    for d in devices {
+        let name_1 = d.name().expect("Unable to get device name in auto-selection");
         let mut already_exists = false;
-        for j in 0..device_type_ids.len() {
-            let name_j = device_type_ids[j][0].name().unwrap();
-            if name_i == name_j {
-                device_type_ids[j].push(devices[i]);
+        for d_comp in &mut device_type_ids {
+            let name_2 = d_comp[0].name().unwrap();
+            if name_1 == name_2 {
+                d_comp.push(d);
                 already_exists = true;
             }
         }
         if !already_exists {
-            device_type_ids.push(vec![devices[i]]);
+            device_type_ids.push(vec![d]);
         }
     }
 
@@ -28,7 +26,7 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
     let mut best_j = -1i32;
     for j in 0..device_type_ids.len() {
         let value = get_tflops(device_type_ids[j][0]); //TODO: Better algorithm
-        if device_type_ids.len() >= (domains as u32).try_into().unwrap() && value > best_value {
+        if device_type_ids.len() >= domains.try_into().unwrap() && value > best_value {
             best_value = value;
             best_j = j as i32;
         }
@@ -43,20 +41,20 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
             device_infos[d] = get_device_with_most_flops();
         }
     }
-    return device_infos;
+    device_infos
 }
 
 pub fn get_devices() -> Vec<Device> {
     let platform = Platform::default();
-    let devices = Device::list_all(platform).expect("Cannot find devices");
-    devices
+    
+    Device::list_all(platform).expect("Cannot find devices")
 }
 
 pub fn get_opencl_code() -> String {
     let string: Vec<&str> = include_str!("kernels.cl")
         .split("EndTempDefines%")
         .collect();
-    return string[1].to_string(); // Removes embedded default defines needed for syntax highlighting etc.
+    string[1].to_string() // Removes embedded default defines needed for syntax highlighting etc.
 }
 
 pub fn create_buffer<T: ocl::OclPrm, I: Into<ocl::SpatialDims> + Clone>(
@@ -64,7 +62,6 @@ pub fn create_buffer<T: ocl::OclPrm, I: Into<ocl::SpatialDims> + Clone>(
     size: I,
     fill_value: T,
 ) -> Buffer<T> {
-    println!("{:?}", (size.clone().into() as ocl::SpatialDims).to_len());
     if (size.clone().into() as ocl::SpatialDims).to_len() >= 1 {
         return Buffer::<T>::builder()
             .queue(queue.clone())
@@ -105,9 +102,9 @@ fn get_device_with_most_flops() -> Device {
     let devices = get_devices();
     let mut best_value = 0;
     let mut best_i = -1i32;
-    for i in 0..devices.len() {
+    for (i, &device) in devices.iter().enumerate() {
         if get_tflops(devices[i]) > best_value {
-            best_value = get_tflops(devices[i]);
+            best_value = get_tflops(device);
             best_i = i as i32;
         }
     }

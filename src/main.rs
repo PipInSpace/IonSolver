@@ -9,7 +9,6 @@ mod lbm;
 mod opencl;
 mod solver;
 use eframe::*;
-use egui::style::Spacing;
 use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2};
 use solver::*;
 
@@ -42,6 +41,12 @@ impl SimState {
     pub fn update_sim(&mut self) {
         println!("Step {}", self.step);
         self.step += 1;
+    }
+}
+
+impl Default for SimState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -99,7 +104,7 @@ impl App for SimControl {
         let recieve_result = self.sim_rx.try_iter().last();
         if let Some(recieve) = recieve_result {
             //self.display_img = Some(ctx.load_texture("sim", ColorImage::from_rgb([1920, 1080], &recieve.img), Default::default()));
-            if self.display_img == None {
+            if self.display_img.is_none() {
                 self.display_img =
                     Some(ctx.load_texture("sim", recieve.img.clone(), Default::default()))
             }
@@ -124,10 +129,7 @@ impl App for SimControl {
             top: 1.0,
             bottom: -1.0,
         };
-        let mut frame = egui::Frame::default();
-        frame.fill = Color32::WHITE;
-        frame.inner_margin = small_left_margin;
-        frame.outer_margin = zeromargin;
+        let mut frame = egui::Frame { fill: Color32::WHITE, inner_margin: small_left_margin, outer_margin: zeromargin, ..Default::default() };
 
         let transparent_stroke = Stroke {
             width: 0.0,
@@ -139,8 +141,7 @@ impl App for SimControl {
             .frame(frame)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    let mut spacing = Spacing::default();
-                    spacing.item_spacing = egui::Vec2 { x: 0., y: 0. };
+                    let spacing = egui::style::Spacing { item_spacing: egui::Vec2 { x: 0., y: 0. }, ..Default::default() };
                     ui.style_mut().spacing = spacing;
                     ui.style_mut().visuals.widgets.hovered.expansion = 0.0;
                     ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
@@ -265,7 +266,7 @@ impl App for SimControl {
     }
 }
 
-pub fn load_icon(icon_bytes: &Vec<u8>) -> Option<eframe::IconData> {
+pub fn load_icon(icon_bytes: &[u8]) -> Option<eframe::IconData> {
     if let Ok(image) = image::load_from_memory(icon_bytes) {
         let image = image.to_rgba8();
         let (width, height) = image.dimensions();
@@ -280,7 +281,7 @@ pub fn load_icon(icon_bytes: &Vec<u8>) -> Option<eframe::IconData> {
 }
 
 fn main() {
-    println!("{}", info::LOGO_COLOR.to_string());
+    println!("{}", info::LOGO_COLOR);
 
     // UI params
     let icon_bytes = include_bytes!("../icons/IonSolver.png");
@@ -288,7 +289,7 @@ fn main() {
         initial_window_size: Some(egui::vec2(1000.0, 650.0)),
         follow_system_theme: false,
         default_theme: Theme::Light,
-        icon_data: load_icon(&icon_bytes.to_vec()),
+        icon_data: load_icon(icon_bytes.as_ref()),
         ..Default::default()
     };
 
@@ -336,6 +337,4 @@ fn main() {
     });
 
     handle.join().unwrap();
-
-    return;
 }
