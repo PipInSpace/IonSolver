@@ -228,16 +228,10 @@ impl Lbm {
                 }
             }
 
+            // Write to domain buffers
             self.domains[d as usize]
                 .u
                 .write(&domain_vec_u)
-                .enq()
-                .unwrap();
-            self.domains[d as usize]
-                .q
-                .as_mut()
-                .expect("q buffer used but not initialized")
-                .write(&domain_vec_q)
                 .enq()
                 .unwrap();
             self.domains[d as usize]
@@ -245,6 +239,16 @@ impl Lbm {
                 .write(&domain_vec_rho)
                 .enq()
                 .unwrap();
+            if self.config.ext_electric_force {
+                // Only write to buffer if it is needed/initialized
+                self.domains[d as usize]
+                    .q
+                    .as_mut()
+                    .expect("q buffer used but not initialized")
+                    .write(&domain_vec_q)
+                    .enq()
+                    .unwrap();
+            }
             self.domains[d as usize].queue.finish().unwrap();
         }
         println!("");

@@ -1,5 +1,7 @@
 use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
-use ocl::{flags, Buffer, Context, Device, Kernel, Platform, Program, Queue, builders::KernelBuilder};
+use ocl::{
+    builders::KernelBuilder, flags, Buffer, Context, Device, Kernel, Platform, Program, Queue,
+};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -80,7 +82,7 @@ pub struct LbmConfig {
 
     pub ext_equilibrium_boudaries: bool, //Extensions
     pub ext_volume_force: bool,
-    pub ext_force_field: bool, // Needs volume_force to work
+    pub ext_force_field: bool,    // Needs volume_force to work
     pub ext_electric_force: bool, // Needs force_field to work
 
     pub graphics_config: GraphicsConfig,
@@ -230,8 +232,12 @@ impl Lbm {
         //for d in 0..self.get_domain_numbers() {
         //    self.domains[d].queue.finish().unwrap();
         //}
-        for d in 0..self.get_domain_numbers() {
-            self.domains[d].increment_timestep(1);
+        self.increment_timestep(1);
+    }
+
+    pub fn increment_timestep(&mut self, steps: u32) {
+        for d in 0..self.domains.len() {
+            self.domains[d].increment_timestep(steps)
         }
     }
 
@@ -388,15 +394,23 @@ impl LbmDomain {
             // Initialise two fiBuffer variants for rust. Only one will be used.
             FloatType::FP32 => {
                 // Float Type F32
-                fi = VariableFloatBuffer::F32(LbmDomain::create_buffer_f32(&queue, n * velocity_set as u64, 0f32));
+                fi = VariableFloatBuffer::F32(opencl::create_buffer_f32(
+                    &queue,
+                    n * velocity_set as u64,
+                    0f32,
+                ));
             }
             _ => {
                 // Float Type F16S/F16C
-                fi = VariableFloatBuffer::U16(LbmDomain::create_buffer_u16(&queue, n * velocity_set as u64, 0u16));
+                fi = VariableFloatBuffer::U16(opencl::create_buffer_u16(
+                    &queue,
+                    n * velocity_set as u64,
+                    0u16,
+                ));
             }
         };
-        let rho = LbmDomain::create_buffer_f32(&queue, n, 1.0f32);
-        let u = LbmDomain::create_buffer_f32(&queue, n * 3, 0f32);
+        let rho = opencl::create_buffer_f32(&queue, n, 1.0f32);
+        let u = opencl::create_buffer_f32(&queue, n * 3, 0f32);
         let flags = Buffer::<u8>::builder()
             .queue(queue.clone())
             .len([n])
@@ -408,13 +422,13 @@ impl LbmDomain {
         // Force field buffer
         #[allow(unused)]
         let f: Option<Buffer<f32>> = if lbm_config.ext_force_field {
-            Some(LbmDomain::create_buffer_f32(&queue, n * 3, 0f32))
+            Some(opencl::create_buffer_f32(&queue, n * 3, 0f32))
         } else {
             None
         };
         // Electric charge buffer.
         let q: Option<Buffer<f32>> = if lbm_config.ext_electric_force {
-            Some(LbmDomain::create_buffer_f32(&queue, n, 0f32))
+            Some(opencl::create_buffer_f32(&queue, n, 0f32))
         } else {
             None
         };
@@ -426,15 +440,18 @@ impl LbmDomain {
         let mut kernel_initialize_builder = Kernel::builder();
         let mut kernel_stream_collide_builder = Kernel::builder();
         let mut kernel_update_fields_builder = Kernel::builder();
-        kernel_initialize_builder.program(&program)
+        kernel_initialize_builder
+            .program(&program)
             .name("initialize")
             .queue(queue.clone())
             .global_work_size([n]);
-        kernel_stream_collide_builder.program(&program)
+        kernel_stream_collide_builder
+            .program(&program)
             .name("stream_collide")
             .queue(queue.clone())
             .global_work_size([n]);
-        kernel_update_fields_builder.program(&program)
+        kernel_update_fields_builder
+            .program(&program)
             .name("update_fields")
             .queue(queue.clone())
             .global_work_size([n]);
@@ -453,17 +470,20 @@ impl LbmDomain {
                 kernel_update_fields_builder.arg_named("fi", fiu16);
             }
         }
-        kernel_initialize_builder.arg_named("rho", &rho)
+        kernel_initialize_builder
+            .arg_named("rho", &rho)
             .arg_named("u", &u)
             .arg_named("flags", &flags);
-        kernel_stream_collide_builder.arg_named("rho", &rho)
+        kernel_stream_collide_builder
+            .arg_named("rho", &rho)
             .arg_named("u", &u)
             .arg_named("flags", &flags)
             .arg_named("t", &t)
             .arg_named("fx", &lbm_config.fx)
             .arg_named("fy", &lbm_config.fy)
             .arg_named("fz", &lbm_config.fz);
-        kernel_update_fields_builder.arg_named("rho", &rho)
+        kernel_update_fields_builder
+            .arg_named("rho", &rho)
             .arg_named("u", &u)
             .arg_named("flags", &flags)
             .arg_named("t", &t)
@@ -514,46 +534,6 @@ impl LbmDomain {
             graphics,
         };
         domain //Returns initialised domain
-    }
-
-    fn create_buffer_f32(queue : &Queue, size : u64, start_value : f32) -> Buffer<f32> {
-        if size >= 1 {
-            return Buffer::<f32>::builder()
-                    .queue(queue.clone())
-                    .len([size])
-                    .fill_val(start_value)
-                    .flags(flags::MEM_READ_WRITE)
-                    .build()
-                    .unwrap();
-        }
-        // use size of 1 if invalid
-        return Buffer::<f32>::builder()
-                    .queue(queue.clone())
-                    .len([1])
-                    .fill_val(start_value)
-                    .flags(flags::MEM_READ_WRITE)
-                    .build()
-                    .unwrap();
-    }
-
-    fn create_buffer_u16(queue : &Queue, size : u64, start_value : u16) -> Buffer<u16> {
-        if size >= 1 {
-            return Buffer::<u16>::builder()
-                    .queue(queue.clone())
-                    .len([size])
-                    .fill_val(start_value)
-                    .flags(flags::MEM_READ_WRITE)
-                    .build()
-                    .unwrap();
-        }
-        // use size of 1 if invalid
-        return Buffer::<u16>::builder()
-                    .queue(queue.clone())
-                    .len([1])
-                    .fill_val(start_value)
-                    .flags(flags::MEM_READ_WRITE)
-                    .build()
-                    .unwrap();
     }
 
     fn get_device_defines(

@@ -1,5 +1,5 @@
 // OpenCL functions
-use ocl::{Device, Platform};
+use ocl::{flags, Buffer, Device, Platform, Queue};
 
 pub fn device_selection(domains: u32) -> Vec<Device> {
     let devices = get_devices();
@@ -57,6 +57,46 @@ pub fn get_opencl_code() -> String {
         .split("EndTempDefines%")
         .collect();
     return string[1].to_string(); // Removes embedded default defines needed for syntax highlighting etc.
+}
+
+pub fn create_buffer_f32(queue: &Queue, size: u64, start_value: f32) -> Buffer<f32> {
+    if size >= 1 {
+        return Buffer::<f32>::builder()
+            .queue(queue.clone())
+            .len([size])
+            .fill_val(start_value)
+            .flags(flags::MEM_READ_WRITE)
+            .build()
+            .unwrap();
+    }
+    // use size of 1 if invalid
+    return Buffer::<f32>::builder()
+        .queue(queue.clone())
+        .len([1])
+        .fill_val(start_value)
+        .flags(flags::MEM_READ_WRITE)
+        .build()
+        .unwrap();
+}
+
+pub fn create_buffer_u16(queue: &Queue, size: u64, start_value: u16) -> Buffer<u16> {
+    if size >= 1 {
+        return Buffer::<u16>::builder()
+            .queue(queue.clone())
+            .len([size])
+            .fill_val(start_value)
+            .flags(flags::MEM_READ_WRITE)
+            .build()
+            .unwrap();
+    }
+    // use size of 1 if invalid
+    return Buffer::<u16>::builder()
+        .queue(queue.clone())
+        .len([1])
+        .fill_val(start_value)
+        .flags(flags::MEM_READ_WRITE)
+        .build()
+        .unwrap();
 }
 
 fn get_tflops(device: Device) -> i32 {
