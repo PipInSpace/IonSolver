@@ -47,6 +47,7 @@ impl Graphics {
         let bitmap = opencl::create_buffer(&queue, [width, height], 0i32);
         let zbuffer = opencl::create_buffer(&queue, [width, height], 0i32);
         let camera_params = opencl::create_buffer(&queue, 15, 0.0f32);
+        println!("{:?}", zbuffer.len());
         camera_params.write(&new_camera_params()).enq().unwrap();
 
         let kernel_clear = Kernel::builder()

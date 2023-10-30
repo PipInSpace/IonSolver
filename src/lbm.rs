@@ -390,7 +390,7 @@ impl LbmDomain {
                 fi = VariableFloatBuffer::F32(opencl::create_buffer(
                     &queue,
                     [n * velocity_set as u64],
-                    0f32,
+                    0.0f32,
                 ));
             }
             _ => {
@@ -404,7 +404,7 @@ impl LbmDomain {
         };
         let rho = opencl::create_buffer(&queue, [n], 1.0f32);
         let u = opencl::create_buffer(&queue, [n * 3], 0f32);
-        let flags = opencl::create_buffer(&queue, [n], 1u8);
+        let flags = opencl::create_buffer(&queue, [n], 0u8);
 
         // Force field buffer
         let f: Option<Buffer<f32>> = if lbm_config.ext_force_field {
