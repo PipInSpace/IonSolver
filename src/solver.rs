@@ -235,6 +235,8 @@ impl Lbm {
                 .unwrap();
             self.domains[d as usize]
                 .q
+                .as_mut()
+                .expect("q buffer used but not initialized")
                 .write(&domain_vec_q)
                 .enq()
                 .unwrap();
