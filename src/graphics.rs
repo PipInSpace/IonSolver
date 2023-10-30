@@ -6,7 +6,7 @@ use ocl::{flags, Buffer, Kernel, Program, Queue};
 
 use crate::{
     lbm::{Lbm, LbmConfig, VelocitySet},
-    SimState, opencl,
+    opencl, SimState,
 };
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.

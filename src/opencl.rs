@@ -59,7 +59,12 @@ pub fn get_opencl_code() -> String {
     return string[1].to_string(); // Removes embedded default defines needed for syntax highlighting etc.
 }
 
-pub fn create_buffer<T: ocl::OclPrm, I: Into<ocl::SpatialDims> + Clone>(queue: &Queue, size: I, fill_value: T) -> Buffer<T> {
+pub fn create_buffer<T: ocl::OclPrm, I: Into<ocl::SpatialDims> + Clone>(
+    queue: &Queue,
+    size: I,
+    fill_value: T,
+) -> Buffer<T> {
+    println!("{:?}", (size.clone().into() as ocl::SpatialDims).to_len());
     if (size.clone().into() as ocl::SpatialDims).to_len() >= 1 {
         return Buffer::<T>::builder()
             .queue(queue.clone())
