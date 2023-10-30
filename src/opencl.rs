@@ -59,41 +59,21 @@ pub fn get_opencl_code() -> String {
     return string[1].to_string(); // Removes embedded default defines needed for syntax highlighting etc.
 }
 
-pub fn create_buffer_f32(queue: &Queue, size: u64, start_value: f32) -> Buffer<f32> {
-    if size >= 1 {
-        return Buffer::<f32>::builder()
+pub fn create_buffer<T: ocl::OclPrm, I: Into<ocl::SpatialDims> + Clone>(queue: &Queue, size: I, fill_value: T) -> Buffer<T> {
+    if (size.clone().into() as ocl::SpatialDims).to_len() >= 1 {
+        return Buffer::<T>::builder()
             .queue(queue.clone())
-            .len([size])
-            .fill_val(start_value)
+            .len(size)
+            .fill_val(fill_value)
             .flags(flags::MEM_READ_WRITE)
             .build()
             .unwrap();
     }
     // use size of 1 if invalid
-    return Buffer::<f32>::builder()
+    return Buffer::<T>::builder()
         .queue(queue.clone())
         .len([1])
-        .fill_val(start_value)
-        .flags(flags::MEM_READ_WRITE)
-        .build()
-        .unwrap();
-}
-
-pub fn create_buffer_u16(queue: &Queue, size: u64, start_value: u16) -> Buffer<u16> {
-    if size >= 1 {
-        return Buffer::<u16>::builder()
-            .queue(queue.clone())
-            .len([size])
-            .fill_val(start_value)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
-    }
-    // use size of 1 if invalid
-    return Buffer::<u16>::builder()
-        .queue(queue.clone())
-        .len([1])
-        .fill_val(start_value)
+        .fill_val(fill_value)
         .flags(flags::MEM_READ_WRITE)
         .build()
         .unwrap();

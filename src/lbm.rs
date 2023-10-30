@@ -1,7 +1,5 @@
 use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
-use ocl::{
-    flags, Buffer, Context, Device, Kernel, Platform, Program, Queue,
-};
+use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -389,41 +387,34 @@ impl LbmDomain {
             // Initialise two fiBuffer variants for rust. Only one will be used.
             FloatType::FP32 => {
                 // Float Type F32
-                fi = VariableFloatBuffer::F32(opencl::create_buffer_f32(
+                fi = VariableFloatBuffer::F32(opencl::create_buffer(
                     &queue,
-                    n * velocity_set as u64,
+                    [n * velocity_set as u64],
                     0f32,
                 ));
             }
             _ => {
                 // Float Type F16S/F16C
-                fi = VariableFloatBuffer::U16(opencl::create_buffer_u16(
+                fi = VariableFloatBuffer::U16(opencl::create_buffer(
                     &queue,
-                    n * velocity_set as u64,
+                    [n * velocity_set as u64],
                     0u16,
                 ));
             }
         };
-        let rho = opencl::create_buffer_f32(&queue, n, 1.0f32);
-        let u = opencl::create_buffer_f32(&queue, n * 3, 0f32);
-        let flags = Buffer::<u8>::builder()
-            .queue(queue.clone())
-            .len([n])
-            .fill_val(0u8)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
+        let rho = opencl::create_buffer(&queue, [n], 1.0f32);
+        let u = opencl::create_buffer(&queue, [n * 3], 0f32);
+        let flags = opencl::create_buffer(&queue, [n], 1u8);
 
         // Force field buffer
-        #[allow(unused)]
         let f: Option<Buffer<f32>> = if lbm_config.ext_force_field {
-            Some(opencl::create_buffer_f32(&queue, n * 3, 0f32))
+            Some(opencl::create_buffer(&queue, [n * 3], 0f32))
         } else {
             None
         };
         // Electric charge buffer.
         let q: Option<Buffer<f32>> = if lbm_config.ext_electric_force {
-            Some(opencl::create_buffer_f32(&queue, n, 0f32))
+            Some(opencl::create_buffer(&queue, [n], 0f32))
         } else {
             None
         };
@@ -487,10 +478,12 @@ impl LbmDomain {
             .arg_named("fz", &lbm_config.fz);
         // Conditional arguments. Place at end of kernel functions
         if lbm_config.ext_force_field {
-            kernel_stream_collide_builder.arg_named("F", f.as_ref().expect("f buffer used but not initialized"));
+            kernel_stream_collide_builder
+                .arg_named("F", f.as_ref().expect("f buffer used but not initialized"));
         }
         if lbm_config.ext_electric_force {
-            kernel_stream_collide_builder.arg_named("q", q.as_ref().expect("q buffer used but not initialized"));
+            kernel_stream_collide_builder
+                .arg_named("q", q.as_ref().expect("q buffer used but not initialized"));
         }
 
         kernel_initialize = kernel_initialize_builder.build().unwrap();

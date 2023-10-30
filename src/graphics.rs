@@ -6,7 +6,7 @@ use ocl::{flags, Buffer, Kernel, Program, Queue};
 
 use crate::{
     lbm::{Lbm, LbmConfig, VelocitySet},
-    SimState,
+    SimState, opencl,
 };
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
@@ -44,27 +44,9 @@ impl Graphics {
         let width = lbm_config.graphics_config.camera_width;
         let height = lbm_config.graphics_config.camera_height;
         let n = lbm_config.n_x as u64 * lbm_config.n_y as u64 * lbm_config.n_z as u64; //TODO: use domain size
-        let bitmap = Buffer::<i32>::builder()
-            .queue(queue.clone())
-            .len([width, height])
-            .fill_val(0)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
-        let zbuffer = Buffer::<i32>::builder()
-            .queue(queue.clone())
-            .len([width, height])
-            .fill_val(0)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
-        let camera_params = Buffer::<f32>::builder()
-            .queue(queue.clone())
-            .len(15)
-            .fill_val(0.0)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
+        let bitmap = opencl::create_buffer(&queue, [width, height], 0i32);
+        let zbuffer = opencl::create_buffer(&queue, [width, height], 0i32);
+        let camera_params = opencl::create_buffer(&queue, 15, 0.0f32);
         camera_params.write(&new_camera_params()).enq().unwrap();
 
         let kernel_clear = Kernel::builder()
