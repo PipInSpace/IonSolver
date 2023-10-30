@@ -1,6 +1,6 @@
 use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
 use ocl::{
-    builders::KernelBuilder, flags, Buffer, Context, Device, Kernel, Platform, Program, Queue,
+    flags, Buffer, Context, Device, Kernel, Platform, Program, Queue,
 };
 
 #[allow(dead_code)]
@@ -258,6 +258,7 @@ impl Lbm {
     }
 }
 
+#[allow(unused)]
 pub struct LbmDomain {
     //device: Device, // FluidX3D creates contexts/queues/programs for each device automatically through another class
     //context: Context, // IonSolver creates and saves this information directly.
@@ -277,11 +278,6 @@ pub struct LbmDomain {
     d_y: u32,
     d_z: u32,
 
-    o_x: i32, // Offset
-    o_y: i32,
-    o_z: i32,
-
-    nu: f32, // Kinematic shear viscosity
     fx: f32, // Volume force
     fy: f32,
     fz: f32,
@@ -388,8 +384,6 @@ impl LbmDomain {
 
         // Initialize Buffers
         let fi: VariableFloatBuffer;
-        let fi32: Buffer<f32>;
-        let fi16: Buffer<u16>;
         match lbm_config.float_type {
             // Initialise two fiBuffer variants for rust. Only one will be used.
             FloatType::FP32 => {
@@ -515,11 +509,6 @@ impl LbmDomain {
             d_y,
             d_z,
 
-            o_x,
-            o_y,
-            o_z,
-
-            nu: lbm_config.nu,
             fx: lbm_config.fx,
             fy: lbm_config.fy,
             fz: lbm_config.fz,
@@ -691,10 +680,12 @@ impl LbmDomain {
         n_x as u64 * n_y as u64 * n_z as u64
     }
 
+    #[allow(unused)]
     fn self_get_n(&self) -> u64 {
         self.lbm_config.n_x as u64 * self.lbm_config.n_y as u64 * self.lbm_config.n_z as u64
     }
 
+    #[allow(unused)]
     pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
         let t: u64 = n % (self.n_x as u64 * self.n_y as u64);
         //x, y, z

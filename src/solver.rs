@@ -1,7 +1,6 @@
 extern crate ocl;
 use crate::lbm::*;
 use crate::*;
-use ocl::ProQue;
 use std::f32::consts::PI;
 use std::io::Write;
 use std::sync::mpsc;
@@ -178,6 +177,7 @@ impl Lbm {
             let z = d / (dx * dy);
 
             let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx * dsy * dsz * 3) as usize];
+            #[allow(unused_mut)]
             let mut domain_vec_q: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize]; // temporary q (all 0)
             let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize];
             for zi in 0..dsz as u64 {
