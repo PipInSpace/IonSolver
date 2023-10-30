@@ -124,7 +124,7 @@ pub struct Lbm {
 }
 
 impl Lbm {
-    pub fn init(mut lbm_config: LbmConfig) -> Lbm {
+    pub fn new(mut lbm_config: LbmConfig) -> Lbm {
         //Returns new Lbm from config struct. Domain setup handled automatically.
         //Configures Domains
         let n_d_x: u32 = (lbm_config.n_x / lbm_config.d_x) * lbm_config.d_x;
@@ -161,7 +161,7 @@ impl Lbm {
                 device_infos[d as usize].name().unwrap(),
                 d + 1
             );
-            lbm_domains.push(LbmDomain::init(
+            lbm_domains.push(LbmDomain::new(
                 lbm_config,
                 device_infos[d as usize],
                 h_x,
@@ -223,16 +223,18 @@ impl Lbm {
             self.domains[d].enqueue_stream_collide().unwrap();
         }
         //communicate_fi
-        for d in 0..self.get_domain_numbers() {
-            self.domains[d].queue.finish().unwrap();
-        }
+        self.finish_queues();
         //for d in 0..self.get_domain_numbers() {
         //    self.domains[d].enqueue_update_fields().unwrap();
         //}
-        //for d in 0..self.get_domain_numbers() {
-        //    self.domains[d].queue.finish().unwrap();
-        //}
+        //self.finish_queues();
         self.increment_timestep(1);
+    }
+
+    pub fn finish_queues(&self) {
+        for d in 0..self.domains.len() {
+            self.domains[d].queue.finish().unwrap();
+        }
     }
 
     pub fn increment_timestep(&mut self, steps: u32) {
@@ -260,9 +262,7 @@ impl Lbm {
 
 #[allow(unused)]
 pub struct LbmDomain {
-    //device: Device, // FluidX3D creates contexts/queues/programs for each device automatically through another class
-    //context: Context, // IonSolver creates and saves this information directly.
-    //program: Program,
+    // FluidX3D creates contexts/queues/programs for each device automatically through another class
     pub queue: Queue,
     lbm_config: LbmConfig,
 
@@ -286,6 +286,7 @@ pub struct LbmDomain {
     pub rho: Buffer<f32>,
     pub u: Buffer<f32>,
     pub q: Option<Buffer<f32>>, // Optional Buffers
+    pub f: Option<Buffer<f32>>,
     pub flags: Buffer<u8>,
     pub t: u64, // Timestep
 
@@ -293,7 +294,7 @@ pub struct LbmDomain {
 }
 
 impl LbmDomain {
-    pub fn init(
+    pub fn new(
         lbm_config: LbmConfig,
         device: Device,
         h_x: u32,
@@ -484,6 +485,13 @@ impl LbmDomain {
             .arg_named("fx", &lbm_config.fx)
             .arg_named("fy", &lbm_config.fy)
             .arg_named("fz", &lbm_config.fz);
+        // Conditional arguments. Place at end of kernel functions
+        if lbm_config.ext_force_field {
+            kernel_stream_collide_builder.arg_named("F", f.as_ref().expect("f buffer used but not initialized"));
+        }
+        if lbm_config.ext_electric_force {
+            kernel_stream_collide_builder.arg_named("q", q.as_ref().expect("q buffer used but not initialized"));
+        }
 
         kernel_initialize = kernel_initialize_builder.build().unwrap();
         kernel_stream_collide = kernel_stream_collide_builder.build().unwrap();
@@ -517,6 +525,7 @@ impl LbmDomain {
             rho,
             u,
             q,
+            f,
             flags,
             t,
 

@@ -32,7 +32,7 @@ pub fn simloop(
     lbm_config.d_x = 1;
     lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
-    let mut test_lbm = Lbm::init(lbm_config);
+    let mut test_lbm = Lbm::new(lbm_config);
     test_lbm.setup();
     test_lbm.domains[0].graphics.streamline_mode = true;
     test_lbm.domains[0].graphics.q_mode = false;

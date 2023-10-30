@@ -667,13 +667,12 @@ void calculate_E(const uint n, global float* q, float3* E) {// uses coulomb's la
 }
 #endif
 
-__kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, 
-#ifdef ELECTRIC_FORCE
-global float* q, 
-#endif
-global uchar* flags, const ulong t, const float fx, const float fy, const float fz 
+__kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz 
 #ifdef FORCE_FIELD
 , const global float* F 
+#endif
+#ifdef ELECTRIC_FORCE
+, global float* q
 #endif
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
