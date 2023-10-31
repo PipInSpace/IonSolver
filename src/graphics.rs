@@ -318,45 +318,28 @@ impl Lbm {
     }
 }
 
+#[rustfmt::skip]
 pub fn get_graphics_defines(graphics_config: GraphicsConfig) -> String {
     "\n	#define GRAPHICS".to_owned()
-        + "\n	#define def_background_color "
-        + &graphics_config.background_color.to_string()
-        + ""
-        + "\n	#define def_screen_width "
-        + &graphics_config.camera_width.to_string()
-        + "u"
-        + "\n	#define def_screen_height "
-        + &graphics_config.camera_height.to_string()
-        + "u"
-        + "\n	#define def_scale_u "
-        + &(1.0f32 / (0.57735027f32 * graphics_config.u_max)).to_string()
-        + "f"
-        + "\n	#define def_scale_Q_min "
-        + &graphics_config.q_min.to_string()
-        + "f"
-        + "\n	#define def_scale_F "
-        + &(1.0f32 / graphics_config.f_max).to_string()
-        + "f"
-        + "\n	#define def_streamline_sparse "
-        + &graphics_config.streamline_every.to_string()
-        + "u"
-        + "\n	#define def_streamline_length "
-        + &graphics_config.stream_line_lenght.to_string()
-        + "u"
-        + "\n	#define def_n "
-        + &(1.333f32).to_string()
-        + "f"
-        + "\n	#define COLOR_S (127<<16|127<<8|127)"
-        + "\n	#define COLOR_E (  0<<16|255<<8|  0)"
-        + "\n	#define COLOR_M (255<<16|  0<<8|255)"
-        + "\n	#define COLOR_T (255<<16|  0<<8|  0)"
-        + "\n	#define COLOR_F (  0<<16|  0<<8|255)"
-        + "\n	#define COLOR_I (  0<<16|255<<8|255)"
-        + "\n	#define COLOR_0 (127<<16|127<<8|127)"
-        + "\n	#define COLOR_X (255<<16|127<<8|  0)"
-        + "\n	#define COLOR_Y (255<<16|255<<8|  0)"
-        + "\n	#define COLOR_P (255<<16|255<<8|191)"
+    +"\n	#define def_background_color "+ &graphics_config.background_color.to_string()
+    +"\n	#define def_screen_width "+ &graphics_config.camera_width.to_string()+"u"
+    +"\n	#define def_screen_height "+ &graphics_config.camera_height.to_string()+"u"
+    +"\n	#define def_scale_u "+ &(1.0f32 / (0.57735027f32 * graphics_config.u_max)).to_string()+"f"
+    +"\n	#define def_scale_Q_min "+ &graphics_config.q_min.to_string()+"f"
+    +"\n	#define def_scale_F "+ &(1.0f32 / graphics_config.f_max).to_string()+"f"
+    +"\n	#define def_streamline_sparse "+ &graphics_config.streamline_every.to_string()+"u"
+    +"\n	#define def_streamline_length "+ &graphics_config.stream_line_lenght.to_string()+"u"
+    +"\n	#define def_n "+ &(1.333f32).to_string()+"f"
+    +"\n	#define COLOR_S (127<<16|127<<8|127)"
+    +"\n	#define COLOR_E (  0<<16|255<<8|  0)"
+    +"\n	#define COLOR_M (255<<16|  0<<8|255)"
+    +"\n	#define COLOR_T (255<<16|  0<<8|  0)"
+    +"\n	#define COLOR_F (  0<<16|  0<<8|255)"
+    +"\n	#define COLOR_I (  0<<16|255<<8|255)"
+    +"\n	#define COLOR_0 (127<<16|127<<8|127)"
+    +"\n	#define COLOR_X (255<<16|127<<8|  0)"
+    +"\n	#define COLOR_Y (255<<16|255<<8|  0)"
+    +"\n	#define COLOR_P (255<<16|255<<8|191)"
 }
 
 pub fn new_camera_params() -> Vec<f32> {

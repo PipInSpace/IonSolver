@@ -662,7 +662,7 @@ void calculate_E(const uint n, const global float* q, global float* E) {// uses 
 	for(uint i = 0; i < def_N; i++){
 		const float3 coord_i = convert_float3(coordinates(i));
 		//const float3 e_i = def_ke * convert_float3((coord_n - coord_i)) / cbmagnitude(coord_n - coord_i); // coulomb's law
-		const float3 e_i = ((def_ke * q[i]) / distance(coord_n, coord_i)) * normalize(coord_n - coord_i);
+		const float3 e_i = ((def_ke * q[i]) / sq(distance(coord_n, coord_i))) * normalize(coord_n - coord_i);
 		E[n                 ] += e_i.x;
 		E[(ulong)n+def_N    ] += e_i.y;
 		E[(ulong)n+def_N*2ul] += e_i.z;
