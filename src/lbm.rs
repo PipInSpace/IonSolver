@@ -1,4 +1,5 @@
 use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
+use crate::units::Units;
 use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 /// Velocity discretizations in 2D and 3D.
@@ -111,6 +112,7 @@ pub struct LbmConfig {
     pub velocity_set: VelocitySet,
     pub relaxation_time: RelaxationTime,
     pub float_type: FloatType,
+    pub units: Units,
     pub n_x: u32, //Size
     pub n_y: u32,
     pub n_z: u32,
@@ -139,6 +141,7 @@ impl LbmConfig {
             velocity_set: VelocitySet::D2Q9,
             relaxation_time: RelaxationTime::Srt,
             float_type: FloatType::FP16S,
+            units: Units::new(),
             n_x: 1,
             n_y: 1,
             n_z: 1,
