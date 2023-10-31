@@ -319,7 +319,7 @@ impl Lbm {
 }
 
 /// The `LbmDomain` struct holds all information to run a LBM-Simulation on one OpenCL Device.
-/// It is initialized like:
+/// It is initialized with:
 /// ```
 /// LbmDomain::new(lbm_config: LbmConfig, device: Device, x: u32, y: u32, z: u32)
 /// ```
@@ -352,6 +352,7 @@ pub struct LbmDomain {
     pub u: Buffer<f32>,
     pub flags: Buffer<u8>,
     pub q: Option<Buffer<f32>>, // Optional Buffers
+    pub e: Option<Buffer<f32>>,
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
 
@@ -545,8 +546,11 @@ impl LbmDomain {
                 .arg_named("F", f.as_ref().expect("f buffer used but not initialized"));
         }
         if lbm_config.ext_electric_force {
+            kernel_initialize_builder
+                .arg_named("q", q.as_ref().expect("q buffer used but not initialized"))
+                .arg_named("E", e.as_ref().expect("e buffer used but not initialized"));
             kernel_stream_collide_builder
-                .arg_named("q", q.as_ref().expect("q buffer used but not initialized"));
+                .arg_named("E", e.as_ref().expect("e buffer used but not initialized"));
         }
 
         let kernel_initialize: Kernel = kernel_initialize_builder.build().unwrap();
@@ -582,6 +586,7 @@ impl LbmDomain {
             u,
             flags,
             q,
+            e,
             f,
             t,
 
