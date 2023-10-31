@@ -446,7 +446,6 @@ impl LbmDomain {
 
         // Initialize Buffers
         let fi: VariableFloatBuffer = match lbm_config.float_type {
-            // Initialise two fiBuffer variants for rust. Only one will be used.
             FloatType::FP32 => {
                 // Float Type F32
                 VariableFloatBuffer::F32(opencl::create_buffer(
@@ -468,7 +467,7 @@ impl LbmDomain {
         let u = opencl::create_buffer(&queue, [n * 3], 0f32);
         let flags = opencl::create_buffer(&queue, [n], 0u8);
 
-        // Force field buffer
+        // Force field buffer as 3D Vectors
         let f: Option<Buffer<f32>> = if lbm_config.ext_force_field {
             Some(opencl::create_buffer(&queue, [n * 3], 0f32))
         } else {
@@ -480,6 +479,7 @@ impl LbmDomain {
         } else {
             None
         };
+        // Electric field buffer as 3D Vectors
         let e: Option<Buffer<f32>> = if lbm_config.ext_electric_force {
             Some(opencl::create_buffer(&queue, [n * 3], 0f32))
         } else {
