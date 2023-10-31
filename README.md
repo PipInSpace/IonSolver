@@ -17,6 +17,7 @@ IonSolver orients itself along the License of its base project FluidX3D. It is h
 
 - [OpenCL-Headers](https://github.com/KhronosGroup/OpenCL-Headers) for GPU parallelization ([Khronos Group](https://www.khronos.org/opencl/))
 - [marching-cubes tables](http://paulbourke.net/geometry/polygonise/) for isosurface generation on GPU ([Paul Bourke](http://paulbourke.net/geometry/))
+- [crate::ocl](https://github.com/cogciprocate/ocl) for high-level OpenCL bindings
 - [crate::egui](https://github.com/emilk/egui) for immediate mode ui rendering
 - [crate::image](https://github.com/image-rs/image) for image saving
 
