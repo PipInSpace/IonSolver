@@ -9,7 +9,7 @@ pub struct Units {
     /// coulomb
     pub c: f32,
     /// Newton
-    pub f: f32,
+    pub N : f32,
     /// coulomb's constant
     pub ke: f32,
 }
@@ -17,12 +17,12 @@ pub struct Units {
 impl Units {
     pub fn new() -> Units {
         Units {
-            m: 1.0,
-            kg: 1.0,
-            s: 1.0,
-            c: 1.0,
-            f: 1.0,
-            ke: 1.0,
+            m : 1.0,
+            kg : 1.0,
+            s : 1.0,
+            c : 1.0,
+            N : 1.0,
+            ke : 1.0,
         }
     }
 
@@ -42,7 +42,7 @@ impl Units {
         self.s = u / si_u * self.m;
         self.c = si_c / c;
 
-        self.f = self.kg * self.m / (self.s * self.s);
-        self.ke = self.f * self.m * self.m / (self.c * self.c);
+        self.N = self.kg * self.m / (self.s * self.s);
+        self.ke = self.N * self.m * self.m / (self.c * self.c);
     }
 }
