@@ -1,30 +1,6 @@
-extern crate ocl;
-use crate::lbm::*;
-use crate::*;
-use std::f32::consts::PI;
-use std::io::Write;
-use std::sync::mpsc;
-use std::{fs, io};
+use crate::{lbm::Lbm, *};
 
-#[allow(unused)]
-pub fn simloop(
-    sim: SimState,
-    sim_tx: mpsc::Sender<SimState>,
-    ctrl_rx: mpsc::Receiver<SimControlTx>,
-) {
-    //TODO: Simulation here
-    //sim_tx.send(sim) sends data to the main window loop
-    let mut state = SimControlTx {
-        paused: true,
-        save: false,
-        clear_images: true,
-        frame_spacing: 10,
-        active: true,
-        camera_rotation: vec![0.0; 2],
-        camera_zoom: 3.0,
-    };
-    let mut i = 0;
-
+pub fn setup() -> (Lbm, LbmConfig) {
     let mut lbm_config = LbmConfig::new();
     lbm_config.n_x = 256;
     lbm_config.n_y = 256;
@@ -34,117 +10,12 @@ pub fn simloop(
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.ext_volume_force = true;
     lbm_config.fx = 0.0001;
-    let mut test_lbm = Lbm::new(lbm_config);
-    test_lbm.setup_taylor_green();
-    test_lbm.domains[0].graphics.streamline_mode = true;
-    test_lbm.domains[0].graphics.q_mode = true;
-    test_lbm.initialize();
-
-    // get initial config from ui
-    let recieve_result = ctrl_rx.try_recv();
-    if let Ok(recieve) = recieve_result {
-        state = recieve;
-    }
-
-    // Clearing out folder if requested
-    if state.save && state.clear_images {
-        match fs::remove_dir_all("out") {
-            Ok(_) => (),
-            Err(_) => println!("Did not find out folder. Creating it."),
-        }
-        fs::create_dir("out").unwrap();
-    }
-
-    let mut has_commenced = false; //has the simulation started
-    let mut cached_rot: Vec<f32> = vec![0.0; 2];
-    let mut cached_zoom = 0.0;
-    loop {
-        //This is the master loop, cannot be paused
-        if !state.paused {
-            has_commenced = true;
-            loop {
-                //This is the loop of the simulation. Can be paused by receiving a control message
-                let recieve_result = ctrl_rx.try_iter().last();
-                if let Some(recieve) = recieve_result {
-                    state = recieve;
-                }
-                if state.paused || !state.active {
-                    break;
-                }
-
-                //Simulation commences here
-                test_lbm.do_time_step();
-                if cached_rot[0] != state.camera_rotation[0]
-                    || cached_rot[1] != state.camera_rotation[1]
-                    || cached_zoom != state.camera_zoom
-                {
-                    //only update params when camera updated
-                    let mut params = graphics::camera_params_rot(
-                        state.camera_rotation[0] * (PI / 180.0),
-                        state.camera_rotation[1] * (PI / 180.0),
-                    );
-                    params[0] = state.camera_zoom;
-                    for d in &test_lbm.domains {
-                        d.graphics.camera_params.write(&params).enq().unwrap();
-                    }
-                }
-
-                if i % state.frame_spacing == 0 {
-                    print!("\rStep {}", i);
-                    io::stdout().flush().unwrap();
-                    if lbm_config.graphics_config.graphics {
-                        test_lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
-                    }
-                }
-                i += 1;
-            }
-        }
-        if state.paused && state.active {
-            let mut cached_rot: Vec<f32> = vec![0.0; 2];
-            let mut cached_zoom = 0.0;
-            loop {
-                //This is the loop of the simulation if it is paused but active. useful for displaying the simulation
-                let recieve_result = ctrl_rx.try_iter().last();
-                if let Some(recieve) = recieve_result {
-                    state = recieve;
-                }
-                if !state.paused || !state.active {
-                    break;
-                }
-
-                if cached_rot[0] != state.camera_rotation[0]
-                    || cached_rot[1] != state.camera_rotation[1]
-                    || cached_zoom != state.camera_zoom
-                    || !has_commenced
-                {
-                    //only draw when camera updated
-                    has_commenced = true;
-                    cached_rot = state.camera_rotation.clone();
-                    cached_zoom = state.camera_zoom;
-                    let mut params = graphics::camera_params_rot(
-                        state.camera_rotation[0] * (PI / 180.0),
-                        state.camera_rotation[1] * (PI / 180.0),
-                    );
-                    params[0] = state.camera_zoom;
-                    for d in &test_lbm.domains {
-                        d.graphics.camera_params.write(&params).enq().unwrap();
-                    }
-                    if lbm_config.graphics_config.graphics {
-                        test_lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
-                    }
-                    thread::sleep(Duration::from_millis(33)) // about 30 FPS
-                }
-            }
-        }
-        if !state.active {
-            println!("\nExiting Simulation Loop");
-            break;
-        }
-        let recieve_result = ctrl_rx.try_recv();
-        if let Ok(recieve) = recieve_result {
-            state = recieve;
-        }
-    }
+    let mut lbm = Lbm::new(lbm_config);
+    lbm.setup_taylor_green();
+    lbm.domains[0].graphics.streamline_mode = true;
+    lbm.domains[0].graphics.q_mode = true;
+    lbm.initialize();
+    (lbm, lbm_config)
 }
 
 impl Lbm {
