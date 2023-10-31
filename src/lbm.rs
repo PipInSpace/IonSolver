@@ -141,10 +141,6 @@ impl Lbm {
 
         let domain_numbers: u32 = lbm_config.d_x * lbm_config.d_y * lbm_config.d_z;
 
-        let h_x = (lbm_config.d_x > 1u32) as u32; // Halo offsets
-        let h_y = (lbm_config.d_y > 1u32) as u32;
-        let h_z = (lbm_config.d_z > 1u32) as u32;
-
         let device_infos = opencl::device_selection(domain_numbers);
         //TODO: sanity check
 
@@ -162,9 +158,6 @@ impl Lbm {
             lbm_domains.push(LbmDomain::new(
                 lbm_config,
                 device_infos[d as usize],
-                h_x,
-                h_y,
-                h_z,
                 x,
                 y,
                 z,
@@ -172,7 +165,6 @@ impl Lbm {
         }
         println!("All domains initialized.");
 
-        
         Lbm {
             domains: lbm_domains,
             config: lbm_config,
@@ -181,22 +173,16 @@ impl Lbm {
     }
 
     pub fn initialize(&mut self) {
-        for d in 0..self.get_domain_numbers() {
-            // the communicate calls at initialization need an odd time step
-            self.domains[d].increment_timestep(1);
-        }
+        // the communicate calls at initialization need an odd time step
+        self.increment_timestep(1);
         //communicate_rho_u_flags
         for d in 0..self.get_domain_numbers() {
             self.domains[d].enqueue_initialize().unwrap();
         }
         //communicate_rho_u_flags
         //communicate_fi
-        for d in 0..self.get_domain_numbers() {
-            self.domains[d].queue.finish().unwrap();
-        }
-        for d in 0..self.get_domain_numbers() {
-            self.domains[d].reset_timestep();
-        }
+        self.finish_queues();
+        self.reset_timestep();
         self.initialized = true;
     }
 
@@ -237,7 +223,13 @@ impl Lbm {
 
     pub fn increment_timestep(&mut self, steps: u32) {
         for d in 0..self.domains.len() {
-            self.domains[d].increment_timestep(steps)
+            self.domains[d].t += steps as u64;
+        }
+    }
+
+    pub fn reset_timestep(&mut self) {
+        for d in 0..self.domains.len() {
+            self.domains[d].t = 0;
         }
     }
 
@@ -283,37 +275,28 @@ pub struct LbmDomain {
     pub fi: VariableFloatBuffer, // Buffers
     pub rho: Buffer<f32>,
     pub u: Buffer<f32>,
+    pub flags: Buffer<u8>,
     pub q: Option<Buffer<f32>>, // Optional Buffers
     pub f: Option<Buffer<f32>>,
-    pub flags: Buffer<u8>,
     pub t: u64, // Timestep
 
     pub graphics: Graphics, // Graphics struct, handles rendering
 }
 
 impl LbmDomain {
-    pub fn new(
-        lbm_config: LbmConfig,
-        device: Device,
-        h_x: u32,
-        h_y: u32,
-        h_z: u32,
-        x: u32,
-        y: u32,
-        z: u32,
-    ) -> LbmDomain {
-        let n_x = lbm_config.n_x / lbm_config.d_x + 2u32 * h_x; // Size + Halo offsets
-        let n_y = lbm_config.n_y / lbm_config.d_y + 2u32 * h_y; // When multiple domains on axis -> add 2 cells of padding
-        let n_z = lbm_config.n_z / lbm_config.d_z + 2u32 * h_z;
+    pub fn new(lbm_config: LbmConfig, device: Device, x: u32, y: u32, z: u32) -> LbmDomain {
+        let n_x = lbm_config.n_x / lbm_config.d_x + 2u32 * (lbm_config.d_x > 1u32) as u32; // Size + Halo offsets
+        let n_y = lbm_config.n_y / lbm_config.d_y + 2u32 * (lbm_config.d_y > 1u32) as u32; // When multiple domains on axis -> add 2 cells of padding
+        let n_z = lbm_config.n_z / lbm_config.d_z + 2u32 * (lbm_config.d_z > 1u32) as u32;
         let n = Self::get_n(n_x, n_y, n_z);
 
         let d_x = lbm_config.d_x;
         let d_y = lbm_config.d_y;
         let d_z = lbm_config.d_z;
 
-        let o_x = (x * n_x / d_x) as i32 - h_x as i32;
-        let o_y = (y * n_y / d_y) as i32 - h_y as i32;
-        let o_z = (z * n_z / d_z) as i32 - h_z as i32;
+        let o_x = (x * n_x / d_x) as i32 - (lbm_config.d_x > 1u32) as i32;
+        let o_y = (y * n_y / d_y) as i32 - (lbm_config.d_y > 1u32) as i32;
+        let o_z = (z * n_z / d_z) as i32 - (lbm_config.d_z > 1u32) as i32;
 
         let dimensions;
         let velocity_set;
@@ -419,9 +402,6 @@ impl LbmDomain {
         };
 
         // Initialize Kernels
-        let kernel_initialize: Kernel;
-        let kernel_stream_collide: Kernel;
-        let kernel_update_fields: Kernel;
         let mut kernel_initialize_builder = Kernel::builder();
         let mut kernel_stream_collide_builder = Kernel::builder();
         let mut kernel_update_fields_builder = Kernel::builder();
@@ -485,15 +465,14 @@ impl LbmDomain {
                 .arg_named("q", q.as_ref().expect("q buffer used but not initialized"));
         }
 
-        kernel_initialize = kernel_initialize_builder.build().unwrap();
-        kernel_stream_collide = kernel_stream_collide_builder.build().unwrap();
-        kernel_update_fields = kernel_update_fields_builder.build().unwrap();
+        let kernel_initialize: Kernel = kernel_initialize_builder.build().unwrap();
+        let kernel_stream_collide: Kernel = kernel_stream_collide_builder.build().unwrap();
+        let kernel_update_fields: Kernel = kernel_update_fields_builder.build().unwrap();
         println!("Kernels for domain compiled.");
         //TODO: allocate transfer buffers
 
         let graphics = Graphics::new(lbm_config, &program, &queue, &flags, &u);
 
-        
         LbmDomain {
             queue,
             lbm_config,
@@ -517,9 +496,9 @@ impl LbmDomain {
             fi,
             rho,
             u,
+            flags,
             q,
             f,
-            flags,
             t,
 
             graphics,
@@ -669,21 +648,8 @@ impl LbmDomain {
         }
     }
 
-    fn increment_timestep(&mut self, steps: u32) {
-        self.t += steps as u64;
-    }
-
-    fn reset_timestep(&mut self) {
-        self.t = 0;
-    }
-
     fn get_n(n_x: u32, n_y: u32, n_z: u32) -> u64 {
         n_x as u64 * n_y as u64 * n_z as u64
-    }
-
-    #[allow(unused)]
-    fn self_get_n(&self) -> u64 {
-        self.lbm_config.n_x as u64 * self.lbm_config.n_y as u64 * self.lbm_config.n_z as u64
     }
 
     #[allow(unused)]

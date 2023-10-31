@@ -70,7 +70,6 @@ struct SimControl {
     frame_spacing: u32,
     frame_spacing_str: String,
     display_img: Option<egui::TextureHandle>,
-    mouse_locked: bool,
     camera_rotation: Vec<f32>,
     camera_zoom: f32,
 
@@ -129,7 +128,12 @@ impl App for SimControl {
             top: 1.0,
             bottom: -1.0,
         };
-        let mut frame = egui::Frame { fill: Color32::WHITE, inner_margin: small_left_margin, outer_margin: zeromargin, ..Default::default() };
+        let mut frame = egui::Frame {
+            fill: Color32::WHITE,
+            inner_margin: small_left_margin,
+            outer_margin: zeromargin,
+            ..Default::default()
+        };
 
         let transparent_stroke = Stroke {
             width: 0.0,
@@ -141,7 +145,10 @@ impl App for SimControl {
             .frame(frame)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    let spacing = egui::style::Spacing { item_spacing: egui::Vec2 { x: 0., y: 0. }, ..Default::default() };
+                    let spacing = egui::style::Spacing {
+                        item_spacing: egui::Vec2 { x: 0., y: 0. },
+                        ..Default::default()
+                    };
                     ui.style_mut().spacing = spacing;
                     ui.style_mut().visuals.widgets.hovered.expansion = 0.0;
                     ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
@@ -311,7 +318,6 @@ fn main() {
         frame_spacing: 100,
         frame_spacing_str: "100".to_string(),
         display_img: None,
-        mouse_locked: false,
         camera_rotation: vec![0.0; 2],
         camera_zoom: 3.0,
         ctrl_tx,

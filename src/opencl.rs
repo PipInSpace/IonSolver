@@ -8,7 +8,9 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
                                                                             //Device auto-selection
     let mut device_type_ids: Vec<Vec<Device>> = vec![];
     for d in devices {
-        let name_1 = d.name().expect("Unable to get device name in auto-selection");
+        let name_1 = d
+            .name()
+            .expect("Unable to get device name in auto-selection");
         let mut already_exists = false;
         for d_comp in &mut device_type_ids {
             let name_2 = d_comp[0].name().unwrap();
@@ -46,7 +48,7 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
 
 pub fn get_devices() -> Vec<Device> {
     let platform = Platform::default();
-    
+
     Device::list_all(platform).expect("Cannot find devices")
 }
 
