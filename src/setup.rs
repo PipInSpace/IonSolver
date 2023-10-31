@@ -3,6 +3,7 @@ use crate::{lbm::Lbm, *};
 /// `setup()` is called at simulation start. Edit this function to change simulation parameters
 pub fn setup() -> (Lbm, LbmConfig) {
     let mut lbm_config = LbmConfig::new();
+    lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
     lbm_config.n_x = 256;
     lbm_config.n_y = 256;
     lbm_config.n_z = 256;
