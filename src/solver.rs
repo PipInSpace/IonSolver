@@ -35,7 +35,7 @@ pub fn simloop(
     lbm_config.ext_volume_force = true;
     lbm_config.fx = 0.0001;
     let mut test_lbm = Lbm::new(lbm_config);
-    test_lbm.setup();
+    test_lbm.setup_taylor_green();
     test_lbm.domains[0].graphics.streamline_mode = true;
     test_lbm.domains[0].graphics.q_mode = true;
     test_lbm.initialize();
@@ -148,8 +148,8 @@ pub fn simloop(
 }
 
 impl Lbm {
-    pub fn setup(&mut self) {
-        // 3D Taylor-Green vortices
+    /// 3D Taylor-Green vorticies setup.
+    pub fn setup_taylor_green(&mut self) {
         println!("Setting up Taylor-Green vorticies");
         let nx = self.config.n_x;
         let ny = self.config.n_y;

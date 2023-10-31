@@ -479,6 +479,11 @@ impl LbmDomain {
         } else {
             None
         };
+        let e: Option<Buffer<f32>> = if lbm_config.ext_electric_force {
+            Some(opencl::create_buffer(&queue, [n * 3], 0f32))
+        } else {
+            None
+        };
 
         // Initialize Kernels
         let mut kernel_initialize_builder = Kernel::builder();
@@ -694,7 +699,10 @@ impl LbmDomain {
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
         + if lbm_config.ext_electric_force {"\n	        #define ELECTRIC_FORCE"} else {""}
-        + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
+        + &if lbm_config.ext_force_field {
+        "\n	        #define FORCE_FIELD".to_owned()
+        +"\n    #define def_ke "+ &format!("{:.5}", 8.9875517923E9 * lbm_config.n_x as f32 / 1.0)
+        } else {"".to_string()}
         + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""};
         //Extensions
     }

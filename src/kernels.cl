@@ -616,7 +616,7 @@ float c(const uint i) { // avoid constant keyword by encapsulating data in funct
 		0, 1,-1, 0, 0, 0, 0, 1,-1, 1,-1, 0, 0, 1,-1, 1,-1, 0, 0, 1,-1, 1,-1, 1,-1,-1, 1, // x
 		0, 0, 0, 1,-1, 0, 0, 1,-1, 0, 0, 1,-1,-1, 1, 0, 0, 1,-1, 1,-1, 1,-1,-1, 1, 1,-1, // y
 		0, 0, 0, 0, 0, 1,-1, 0, 0, 1,-1, 1,-1, 0, 0,-1, 1,-1, 1, 1,-1,-1, 1, 1,-1, 1,-1  // z
-#endif // D3Q27
+	#endif // D3Q27
 	};
 	return c[i];
 }
@@ -657,12 +657,15 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 // n: cell id
 // q: float array for charges
 // E: electric field at n
-void calculate_E(const uint n, global float* q, float3* E) {// uses coulomb's law https://en.wikipedia.org/wiki/Coulomb%27s_law
-	const uint3 coord_n = coordinates(n);
+void calculate_E(const uint n, const global float* q, global float* E) {// uses coulomb's law https://en.wikipedia.org/wiki/Coulomb%27s_law
+	const float3 coord_n = convert_float3(coordinates(n));
 	for(uint i = 0; i < def_N; i++){
-		const uint3 coord_i = coordinates(i);
-		const float q_i = q[i];
-		*E += def_ke * convert_float3((coord_n - coord_i)) / cbmagnitude(coord_n - coord_i); // coulomb's law
+		const float3 coord_i = convert_float3(coordinates(i));
+		//const float3 e_i = def_ke * convert_float3((coord_n - coord_i)) / cbmagnitude(coord_n - coord_i); // coulomb's law
+		const float3 e_i = ((def_ke * q[i]) / distance(coord_n, coord_i)) * normalize(coord_n - coord_i);
+		E[n                 ] += e_i.x;
+		E[(ulong)n+def_N    ] += e_i.y;
+		E[(ulong)n+def_N*2ul] += e_i.z;
 	}
 }
 #endif
@@ -672,7 +675,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , const global float* F 
 #endif
 #ifdef ELECTRIC_FORCE
-, global float* q
+, global float* E
 #endif
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -705,14 +708,14 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
 
 	#ifdef ELECTRIC_FORCE
-	// what am i doing this maybe works
-	float3 E, Fe;
-	calculate_E(n, q, &E);
-	Fe = E * q[n];
+	//// what am i doing this maybe works
+	//float3 E, Fe;
+	//calculate_E(n, q, &E);
+	//Fe = E * q[n];
 
-	fxn += Fe.x;
-	fyn += Fe.y;
-	fzn += Fe.z;
+	//fxn += Fe.x;
+	//fyn += Fe.y;
+	//fzn += Fe.z;
 
 	#endif// ELECTRIC_FORCE
 
@@ -809,7 +812,11 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     store_f(n, fhn, fi, j, t); // perform streaming (part 1)
 } // stream_collide()
 
-__kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags) {
+__kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags
+#ifdef ELECTRIC_FORCE
+, global float* q, global float* E
+#endif
+) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute initialize() on halo
     uchar flagsn = flags[n];
@@ -835,6 +842,9 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
     float feq[def_velocity_set]; // f_equilibrium
     calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
+	#ifdef ELECTRIC_FORCE
+	calculate_E(n, q, E);
+	#endif
 } // initialize()
 
 kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
