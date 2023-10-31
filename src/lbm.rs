@@ -1,6 +1,15 @@
 use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
 use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
+/// Velocity discretizations in 2D and 3D.
+/// ```
+/// pub enum VelocitySet {
+///    D2Q9,  // 2D
+///    D3Q15, // 3D low precision
+///    D3Q19, // 3D recommended
+///    D3Q27, // 3D highest precision
+///}
+/// ```
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum VelocitySet {
@@ -16,6 +25,13 @@ impl Default for VelocitySet {
     }
 }
 
+/// LBM relaxation time type.
+/// ```
+/// pub enum RelaxationTime {
+///    Srt, // Single relaxation time type, more efficient
+///    Trt, // Two-relaxation time type, more precise
+///}
+/// ```
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum RelaxationTime {
@@ -29,6 +45,16 @@ impl Default for RelaxationTime {
     }
 }
 
+/// Enum for different floating-point number types used in the simulation.
+///
+/// Types: `FP32`,`FP16S`,`FP16C`
+///
+/// `FP32` represents the normal floating-point number type `f32`. It takes the most memory.
+///
+/// `FP16S` and `FP16C` are custom floating-point number types, represented as `u16`. They take less memory.
+/// `FP16S` is recommended for best precision/memory footprint.
+///
+/// [Learn more at this paper about custom float types.](https://www.researchgate.net/publication/362275548_Accuracy_and_performance_of_the_lattice_Boltzmann_method_with_64-bit_32-bit_and_customized_16-bit_number_formats)
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
 pub enum FloatType {
@@ -43,22 +69,42 @@ impl Default for FloatType {
     }
 }
 
-//#[allow(dead_code)]
+/// Enum representing a buffer of variable [`FloatType`]
+///
+/// [`FloatType`]: crate::lbm::FloatType
 #[derive(Clone)]
 pub enum VariableFloatBuffer {
     U16(Buffer<u16>), // Buffers for variable float types
     F32(Buffer<f32>),
 }
 
-// ############################################# Code Structure #############################################
-// To start a LBM simulation, one needs to initialise an Lbm struct using the Lbm::init() function.
-// The init() function takes in another struct, the LbmConfig, which contains all necessary arguments.
-// LbmConfig needs to be configured beforehand, then the init() function takes care of Lbm initialisation.
-// The Lbm struct contains one or multiple LbmDomain structs.
-// The Simulation is actually run on these LbmDomain structs, each Domain corresponding to an OpenCL device.
-// The simulation can be split up into multiple domains. This enables multi-device parallelization.
-// LbmDomain initialisation is handled automatically in Lbm::init() using LbmDomain::init()
-
+/// Struct used to bundle arguments for LBM simulation setup.
+/// ```
+/// LbmConfig {
+///    pub velocity_set: VelocitySet, // Velocity discretization
+///    pub relaxation_time: RelaxationTime, // Sim relaxation time
+///    pub float_type: FloatType, // Float type for memory compression
+///    pub n_x: u32, // Size on each axis
+///    pub n_y: u32,
+///    pub n_z: u32,
+///
+///    pub d_x: u32, // Domains on each axis
+///    pub d_y: u32,
+///    pub d_z: u32,
+///
+///    pub nu: f32, // Kinematic shear viscosity
+///    pub fx: f32, // Volume force on each axis
+///    pub fy: f32,
+///    pub fz: f32,
+///
+///    pub ext_equilibrium_boudaries: bool, // Extensions, provide additional functionality
+///    pub ext_volume_force: bool,
+///    pub ext_force_field: bool,    // Needs volume_force to work
+///    pub ext_electric_force: bool, // Needs force_field to work
+///
+///    pub graphics_config: GraphicsConfig, // Grapics config struct
+///}
+/// ```
 #[derive(Clone, Copy, Default)]
 pub struct LbmConfig {
     // Holds init information about the simulation
@@ -87,8 +133,8 @@ pub struct LbmConfig {
 }
 
 impl LbmConfig {
+    /// Returns `LbmConfig` with default values
     pub fn new() -> LbmConfig {
-        // provides a LbmConfig struct with default values
         LbmConfig {
             velocity_set: VelocitySet::D2Q9,
             relaxation_time: RelaxationTime::Srt,
@@ -114,17 +160,30 @@ impl LbmConfig {
     }
 }
 
+/// To start a LBM simulation, initialise an Lbm struct:
+/// ```
+/// Lbm::new(lbm_config: LbmConfig)
+/// ```
+/// The `new()` function takes in another struct, the [`LbmConfig`], which contains all necessary arguments.
+/// [`LbmConfig`] needs to be configured beforehand.
+///
+/// The Lbm struct contains one or multiple [`LbmDomain`] structs.
+/// The Simulation is actually run on these [`LbmDomain`] structs, each Domain corresponding to an OpenCL device,
+/// enabling multi-device parallelization.
+/// [`LbmDomain`] initialisation is handled automatically in `Lbm::new()` using `LbmDomain::new()`
+///
+/// [`LbmConfig`]: crate::lbm::LbmConfig
+/// [`LbmDomain`]: crate::lbm::LbmDomain
 pub struct Lbm {
-    // main simulation struct. Holds one or multiple subdomains
     pub domains: Vec<LbmDomain>,
     pub config: LbmConfig,
     initialized: bool,
 }
 
 impl Lbm {
+    /// Returns new `Lbm` struct from pre-configured `LbmConfig` struct. `LbmDomain` setup is handled automatically.
+    /// Configures Domains
     pub fn new(mut lbm_config: LbmConfig) -> Lbm {
-        //Returns new Lbm from config struct. Domain setup handled automatically.
-        //Configures Domains
         let n_d_x: u32 = (lbm_config.n_x / lbm_config.d_x) * lbm_config.d_x;
         let n_d_y: u32 = (lbm_config.n_y / lbm_config.d_y) * lbm_config.d_y;
         let n_d_z: u32 = (lbm_config.n_z / lbm_config.d_z) * lbm_config.d_z;
@@ -172,6 +231,8 @@ impl Lbm {
         }
     }
 
+    /// Readies the LBM Simulation to be run.
+    /// Executes `kernel_initialize` Kernels for every `LbmDomain` and fills domain transfer buffers.
     pub fn initialize(&mut self) {
         // the communicate calls at initialization need an odd time step
         self.increment_timestep(1);
@@ -186,6 +247,7 @@ impl Lbm {
         self.initialized = true;
     }
 
+    /// Runs Simulations for `steps`
     #[allow(unused)]
     pub fn run(&mut self, steps: u64) {
         //Initialize, then run simulation for steps
@@ -201,6 +263,8 @@ impl Lbm {
         }
     }
 
+    /// Executes one LBM time step.
+    /// Executes `kernel_stream_collide` Kernels for every `LbmDomain` and updates domain transfer buffers.
     pub fn do_time_step(&mut self) {
         // call kernel stream_collide to perform one LBM time step
         for d in 0..self.get_domain_numbers() {
@@ -215,18 +279,21 @@ impl Lbm {
         self.increment_timestep(1);
     }
 
+    /// Blocks execution until all `LbmDomain` OpenCL queues have finished.
     pub fn finish_queues(&self) {
         for d in 0..self.domains.len() {
             self.domains[d].queue.finish().unwrap();
         }
     }
 
+    /// Increments time steps variable for every `LbmDomain`
     pub fn increment_timestep(&mut self, steps: u32) {
         for d in 0..self.domains.len() {
             self.domains[d].t += steps as u64;
         }
     }
 
+    /// Resets tims steps variable for every `LbmDomain`
     pub fn reset_timestep(&mut self) {
         for d in 0..self.domains.len() {
             self.domains[d].t = 0;
@@ -237,6 +304,7 @@ impl Lbm {
         self.domains.len()
     }
 
+    /// Get `x, y, z` coordinates from 1D index `n`.
     #[allow(unused)]
     pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
         // disassembles 1D index into 3D index
@@ -250,6 +318,13 @@ impl Lbm {
     }
 }
 
+/// The `LbmDomain` struct holds all information to run a LBM-Simulation on one OpenCL Device.
+/// It is initialized like:
+/// ```
+/// LbmDomain::new(lbm_config: LbmConfig, device: Device, x: u32, y: u32, z: u32)
+/// ```
+/// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function.
+/// This ensures all arguments are correctly set.
 #[allow(unused)]
 pub struct LbmDomain {
     // FluidX3D creates contexts/queues/programs for each device automatically through another class
@@ -284,6 +359,10 @@ pub struct LbmDomain {
 }
 
 impl LbmDomain {
+    /// Returns new `LbmDomain` from provided arguments.
+    ///
+    /// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function.
+    /// This ensures all arguments are correctly set.
     pub fn new(lbm_config: LbmConfig, device: Device, x: u32, y: u32, z: u32) -> LbmDomain {
         let n_x = lbm_config.n_x / lbm_config.d_x + 2u32 * (lbm_config.d_x > 1u32) as u32; // Size + Halo offsets
         let n_y = lbm_config.n_y / lbm_config.d_y + 2u32 * (lbm_config.d_y > 1u32) as u32; // When multiple domains on axis -> add 2 cells of padding
@@ -505,6 +584,8 @@ impl LbmDomain {
         } //Returns initialised domain
     }
 
+    /// Returns a string of OpenCL C `#define`s from the provided arguments that are appended to the base OpenCl code at runtime.
+    /// These are unique for every domain.
     fn get_device_defines(
         n_x: u32,
         n_y: u32,
@@ -618,12 +699,14 @@ impl LbmDomain {
         //Extensions
     }
 
+    /// Enqueues the `kernel_intialize` Kernel. Needs to be called after first setup to ready the simulation.
     fn enqueue_initialize(&self) -> ocl::Result<()> {
         //Enqueues Initialization kernel, arguments are already set
         unsafe { self.kernel_initialize.cmd().enq()? }
         self.queue.finish()
     }
 
+    /// Enqueues the `kernel_stream_collide` Kernel. This is the main simulation kernel and is executed every time step.
     fn enqueue_stream_collide(&self) -> ocl::Result<()> {
         //Enqueues Initialization kernel, some arguments are already set
         unsafe {
@@ -635,7 +718,7 @@ impl LbmDomain {
         }
     }
 
-    // Manually update fields. Is autmatically handled in stream-collide if graphics are enabled
+    /// Enqueues the `kernel_update_fields` Kernel. This functionality is automatically handled in the stream_collide Kernel if graphics are enabled.
     #[allow(unused)]
     fn enqueue_update_fields(&self) -> ocl::Result<()> {
         //Enqueues Initialization kernel, arguments are already set
@@ -648,10 +731,12 @@ impl LbmDomain {
         }
     }
 
+    /// Get total simulation size.
     fn get_n(n_x: u32, n_y: u32, n_z: u32) -> u64 {
         n_x as u64 * n_y as u64 * n_z as u64
     }
 
+    /// Get `x, y, z` coordinates from 1D index `n`.
     #[allow(unused)]
     pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
         let t: u64 = n % (self.n_x as u64 * self.n_y as u64);
