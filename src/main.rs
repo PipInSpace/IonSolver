@@ -6,6 +6,7 @@ use std::{sync::mpsc, thread};
 mod graphics;
 mod info;
 mod lbm;
+mod units;
 mod opencl;
 mod solver;
 use eframe::*;
