@@ -307,8 +307,7 @@ fn main() {
     // Start Simulation loop
     let handle = thread::spawn(move || {
         //TODO: Setup mpsc messaging for data transmission
-        let sim = SimState::new();
-        simloop(sim, sim_tx, ctrl_rx);
+        simloop(sim_tx, ctrl_rx);
     });
 
     // setup simcontrol struc to pass params and channels to GUI
@@ -346,13 +345,12 @@ fn main() {
     handle.join().unwrap();
 }
 
+/// Runs the simulation and it's control logic in a different thread
 fn simloop(
-    sim: SimState,
     sim_tx: mpsc::Sender<SimState>,
     ctrl_rx: mpsc::Receiver<SimControlTx>,
 ) {
-    //TODO: Simulation here
-    //sim_tx.send(sim) sends data to the main window loop
+    //sim_tx.send(state) sends data to the main window loop
     let mut state = SimControlTx {
         paused: true,
         save: false,
