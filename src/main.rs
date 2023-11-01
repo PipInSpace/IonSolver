@@ -390,7 +390,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
             loop {
                 thread::sleep(Duration::from_millis(33));
                 if !state.active {
-                    println!("\nExiting Graphics Loop");
+                    println!("Exiting Graphics Loop");
                     break;
                 }
 
@@ -417,9 +417,12 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
         });
     }
 
+    let mn = (lbm_config.n_x as u64 * lbm_config.n_y as u64 * lbm_config.n_z as u64) / 1000000;
     loop {
         //This is the master loop, cannot be paused
         if !state.paused {
+            let mut j = 1;
+            let jnow = std::time::Instant::now();
             loop {
                 //This is the loop of the simulation. Can be paused by receiving a control message
                 let recieve_result = ctrl_rx.try_iter().last();
@@ -430,20 +433,19 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     break;
                 }
 
-                //Simulation commences here
                 lbm.do_time_step();
 
-                if i % state.frame_spacing == 0 {
-                    print!("\rStep {}", i);
-                    io::stdout().flush().unwrap();
-                }
+                let time_per_step = (jnow.elapsed().as_micros()/j) as u32;
+                print!("\rStep {}, Steps/s: {}, MLUP/s: {}", i, 1000000/time_per_step, mn*(1000000/time_per_step) as u64);
                 i += 1;
+                j += 1;
             }
         }
         if !state.active {
             println!("\nExiting Simulation Loop");
             break;
         }
+        print!("\rStep {}, Steps/s: {}, MLUP/s: {}", i, 0, 0);
         let recieve_result = ctrl_rx.try_recv();
         if let Ok(recieve) = recieve_result {
             state = recieve;

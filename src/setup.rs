@@ -21,12 +21,12 @@ pub fn setup() -> (Lbm, LbmConfig) {
     lbm_config.d_x = 1;
     lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
-    lbm_config.graphics_config.graphics = false;
+    lbm_config.graphics_config.graphics = true;
     //lbm_config.ext_volume_force = true;
     //lbm_config.fx = 0.0001;
     let mut lbm = Lbm::new(lbm_config);
     lbm.setup_taylor_green();
-    //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").streamline_mode = true;
+    lbm.domains[0].graphics.as_mut().expect("grapics not enabled").streamline_mode = true;
     //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").q_mode = true;
     lbm.initialize();
     (lbm, lbm_config)
