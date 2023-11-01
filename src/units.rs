@@ -11,7 +11,7 @@ pub struct Units {
     /// coulomb
     pub c: f32,
     /// Newton
-    pub N : f32,
+    pub N: f32,
     /// coulomb's constant
     pub ke: f32,
 }
@@ -19,12 +19,12 @@ pub struct Units {
 impl Units {
     pub fn new() -> Units {
         Units {
-            m : 1.0,
-            kg : 1.0,
-            s : 1.0,
-            c : 1.0,
-            N : 1.0,
-            ke : 1.0,
+            m: 1.0,
+            kg: 1.0,
+            s: 1.0,
+            c: 1.0,
+            N: 1.0,
+            ke: 1.0,
         }
     }
 

@@ -1,16 +1,16 @@
 use crate::{lbm::Lbm, *};
 
 /// `setup()` is called at simulation start. Edit this function to change simulation parameters.
-/// 
+///
 /// Usage:
-/// 
+///
 /// Start by requesting a new `LbmConfig` with `LbmConfig::new()`.
 /// You can then set individual arguments by setting fields of the `LbmConfig`.
 /// If you are doing something that requires real-world units/scales, you can define them using `your_lbm_config.units.set()` and pass in your desired units.
-/// 
+///
 /// After setting your config struct, request a new `Lbm` struct with `Lbm::new(your_lbm_config)`.
 /// Domain setup is handled automatically, you might now directly set specific cells in your domains, for an example look at `setup_taylor_green()`.
-/// 
+///
 /// Run `your_lbm.initialize()` and return it with the config.
 pub fn setup() -> (Lbm, LbmConfig) {
     let mut lbm_config = LbmConfig::new();

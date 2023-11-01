@@ -11,7 +11,7 @@ mod units;
 mod setup;
 use eframe::*;
 use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2};
-use lbm::{LbmConfig, VelocitySet};
+use lbm::{Lbm, LbmConfig, VelocitySet};
 
 #[allow(dead_code)]
 pub struct SimState {
@@ -379,6 +379,44 @@ fn simloop(
         fs::create_dir("out").unwrap();
     }
 
+    // Create graphics thread with evil pointer hacks
+    let lbm_ptr = &lbm as *const _ as usize;
+    let state_ptr = &state as *const _ as usize;
+    let sim_tx_g = sim_tx.clone();
+    thread::spawn(move || {
+        let lbm = unsafe {&*(lbm_ptr as *const Lbm)};
+        let state = unsafe {&*(state_ptr as *const SimControlTx)};
+        let mut cached_rot: Vec<f32> = vec![0.0; 2];
+        let mut cached_zoom = 0.0;
+
+        loop {
+            thread::sleep(Duration::from_millis(33));
+            if !state.active {
+                println!("\nExiting Graphics Loop");
+                break;
+            }
+            if cached_rot[0] != state.camera_rotation[0]
+                    || cached_rot[1] != state.camera_rotation[1]
+                    || cached_zoom != state.camera_zoom
+                {
+                    //only draw when camera updated
+                    cached_rot = state.camera_rotation.clone();
+                    cached_zoom = state.camera_zoom;
+                    let mut params = graphics::camera_params_rot(
+                        state.camera_rotation[0] * (PI / 180.0),
+                        state.camera_rotation[1] * (PI / 180.0),
+                    );
+                    params[0] = state.camera_zoom;
+                    for d in &lbm.domains {
+                        d.graphics.camera_params.write(&params).enq().unwrap();
+                    }
+                    if lbm_config.graphics_config.graphics {
+                        lbm.draw_frame(state.save, state.frame_spacing, sim_tx_g.clone(), i);
+                    }
+                }
+        }
+    });
+
     let mut has_commenced = false; //has the simulation started
     let cached_rot: Vec<f32> = vec![0.0; 2];
     let cached_zoom = 0.0;
@@ -417,7 +455,7 @@ fn simloop(
                     print!("\rStep {}", i);
                     io::stdout().flush().unwrap();
                     if lbm_config.graphics_config.graphics {
-                        lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
+                        //lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
                     }
                 }
                 i += 1;
@@ -454,7 +492,7 @@ fn simloop(
                         d.graphics.camera_params.write(&params).enq().unwrap();
                     }
                     if lbm_config.graphics_config.graphics {
-                        lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
+                        //lbm.draw_frame(state.save, state.frame_spacing, sim_tx.clone(), i);
                     }
                     thread::sleep(Duration::from_millis(33)) // about 30 FPS
                 }

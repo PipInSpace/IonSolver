@@ -174,7 +174,7 @@ impl Graphics {
         }
     }
 
-    fn enqueue_draw_frame(&mut self) {
+    fn enqueue_draw_frame(&self) {
         // camera_params = update_camera()
         // camera_params.enqueue_write
         unsafe {
@@ -189,9 +189,8 @@ impl Graphics {
             if self.q_mode {
                 self.kernel_graphics_q.enq().unwrap();
             }
-
-            self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
-            self.zbuffer.read(&mut self.zbuffer_host).enq().unwrap();
+            //self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
+            //self.zbuffer.read(&mut self.zbuffer_host).enq().unwrap();
         }
     }
 }
@@ -238,7 +237,7 @@ impl GraphicsConfig {
 // draw_frame function for Lbm
 impl Lbm {
     pub fn draw_frame(
-        &mut self,
+        &self,
         state_save: bool,
         frame_spacing: u32,
         sim_tx: Sender<SimState>,
@@ -247,74 +246,94 @@ impl Lbm {
         let width = self.config.graphics_config.camera_width;
         let height = self.config.graphics_config.camera_height;
         let domain_numbers = self.get_domain_numbers();
-        let mut bitmap: Vec<i32> = vec![]; // Base bitmap
-        let mut zbuffer: Vec<i32> = vec![];
-        let mut bitmaps: Vec<Vec<i32>> = vec![]; // Holds later domain bitmaps
+        let mut bitmap: Vec<i32> = vec![0; (width * height) as usize]; // Base bitmap
+        let mut zbuffer: Vec<i32> = vec![0; (width * height) as usize];
+        let mut bitmaps: Vec<Vec<i32>> =
+            vec![vec![0; (width * height) as usize]; domain_numbers - 1]; // Holds later domain bitmaps
         let mut zbuffers: Vec<Vec<i32>> = vec![];
         for d in 0..domain_numbers {
             self.domains[d].graphics.enqueue_draw_frame();
         }
         for d in 0..domain_numbers {
             self.domains[d].queue.finish().unwrap();
+
             if d == 0 {
-                bitmap = self.domains[d].graphics.bitmap_host.clone();
-                zbuffer = self.domains[d].graphics.zbuffer_host.clone();
+                self.domains[d]
+                    .graphics
+                    .bitmap
+                    .read(&mut bitmap)
+                    .enq()
+                    .unwrap();
+                self.domains[d]
+                    .graphics
+                    .zbuffer
+                    .read(&mut zbuffer)
+                    .enq()
+                    .unwrap();
             } else {
-                bitmaps.push(self.domains[d].graphics.bitmap_host.clone());
-                zbuffers.push(self.domains[d].graphics.zbuffer_host.clone());
+                self.domains[d]
+                    .graphics
+                    .bitmap
+                    .read(&mut bitmaps[d])
+                    .enq()
+                    .unwrap();
+                self.domains[d]
+                    .graphics
+                    .zbuffer
+                    .read(&mut zbuffers[d])
+                    .enq()
+                    .unwrap();
             }
         }
-        thread::spawn(move || {
-            // Generating images needs own thread for performance reasons
-            for d in 0..domain_numbers - 1 {
-                let bitmap_d = &bitmaps[d];
-                let zbuffer_d = &zbuffers[d];
-                for i in 0..(width * height) as usize {
-                    let zdi = zbuffer_d[i];
-                    if zdi > zbuffer[i] {
-                        bitmap[i] = bitmap_d[i];
-                        zbuffer[i] = zbuffer_d[i];
-                    }
+        // Generating images needs own thread for performance reasons
+        for d in 0..domain_numbers - 1 {
+            let bitmap_d = &bitmaps[d];
+            let zbuffer_d = &zbuffers[d];
+            for i in 0..(width * height) as usize {
+                let zdi = zbuffer_d[i];
+                if zdi > zbuffer[i] {
+                    bitmap[i] = bitmap_d[i];
+                    zbuffer[i] = zbuffer_d[i];
                 }
             }
+        }
 
-            let mut save_buffer: Vec<u8> = vec![];
-            let mut pixels: Vec<Color32> = vec![];
-            for pixel in &bitmap {
-                let color = pixel & 0xFFFFFF;
-                pixels.push(Color32::from_rgb(
-                    ((color >> 16) & 0xFF) as u8,
-                    ((color >> 8) & 0xFF) as u8,
-                    (color & 0xFF) as u8,
-                ));
-                if state_save {
-                    // only update save buffer if required
-                    save_buffer.push(((color >> 16) & 0xFF) as u8);
-                    save_buffer.push(((color >> 8) & 0xFF) as u8);
-                    save_buffer.push((color & 0xFF) as u8);
-                }
-            }
-            let color_image = ColorImage {
-                size: [width as usize, height as usize],
-                pixels,
-            };
-            _ = sim_tx.send(SimState {
-                step: 1,
-                paused: false,
-                save: state_save,
-                img: color_image,
-            }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
+        let mut save_buffer: Vec<u8> = vec![];
+        let mut pixels: Vec<Color32> = vec![];
+        for pixel in &bitmap {
+            let color = pixel & 0xFFFFFF;
+            pixels.push(Color32::from_rgb(
+                ((color >> 16) & 0xFF) as u8,
+                ((color >> 8) & 0xFF) as u8,
+                (color & 0xFF) as u8,
+            ));
             if state_save {
-                thread::spawn(move || {
-                    //Saving needs own thread for performance reasons
-                    let imgbuffer: ImageBuffer<Rgb<u8>, _> =
-                        ImageBuffer::from_raw(1920, 1080, save_buffer).unwrap();
-                    imgbuffer
-                        .save(format!(r"out/img_{}.png", (i / frame_spacing)))
-                        .unwrap();
-                });
+                // only update save buffer if required
+                save_buffer.push(((color >> 16) & 0xFF) as u8);
+                save_buffer.push(((color >> 8) & 0xFF) as u8);
+                save_buffer.push((color & 0xFF) as u8);
             }
-        });
+        }
+        let color_image = ColorImage {
+            size: [width as usize, height as usize],
+            pixels,
+        };
+        _ = sim_tx.send(SimState {
+            step: 1,
+            paused: false,
+            save: state_save,
+            img: color_image,
+        }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
+        if state_save {
+            thread::spawn(move || {
+                //Saving needs own thread for performance reasons
+                let imgbuffer: ImageBuffer<Rgb<u8>, _> =
+                    ImageBuffer::from_raw(1920, 1080, save_buffer).unwrap();
+                imgbuffer
+                    .save(format!(r"out/img_{}.png", (i / frame_spacing)))
+                    .unwrap();
+            });
+        }
     }
 }
 

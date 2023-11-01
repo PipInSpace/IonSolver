@@ -1,5 +1,5 @@
-use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
 use crate::units::Units;
+use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
 use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 /// Velocity discretizations in 2D and 3D.
