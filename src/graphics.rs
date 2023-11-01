@@ -174,7 +174,7 @@ impl Graphics {
         }
     }
 
-    fn enqueue_draw_frame(&mut self) {
+    fn enqueue_draw_frame(&self) {
         // camera_params = update_camera()
         // camera_params.enqueue_write
         unsafe {
@@ -189,9 +189,8 @@ impl Graphics {
             if self.q_mode {
                 self.kernel_graphics_q.enq().unwrap();
             }
-
-            self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
-            self.zbuffer.read(&mut self.zbuffer_host).enq().unwrap();
+            //self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
+            //self.zbuffer.read(&mut self.zbuffer_host).enq().unwrap();
         }
     }
 }
@@ -238,7 +237,7 @@ impl GraphicsConfig {
 // draw_frame function for Lbm
 impl Lbm {
     pub fn draw_frame(
-        &mut self,
+        &self,
         state_save: bool,
         frame_spacing: u32,
         sim_tx: Sender<SimState>,
@@ -247,23 +246,55 @@ impl Lbm {
         let width = self.config.graphics_config.camera_width;
         let height = self.config.graphics_config.camera_height;
         let domain_numbers = self.get_domain_numbers();
-        let mut bitmap: Vec<i32> = vec![]; // Base bitmap
-        let mut zbuffer: Vec<i32> = vec![];
-        let mut bitmaps: Vec<Vec<i32>> = vec![]; // Holds later domain bitmaps
+        let mut bitmap: Vec<i32> = vec![0; (width * height) as usize]; // Base bitmap
+        let mut zbuffer: Vec<i32> = vec![0; (width * height) as usize];
+        let mut bitmaps: Vec<Vec<i32>> =
+            vec![vec![0; (width * height) as usize]; domain_numbers - 1]; // Holds later domain bitmaps
         let mut zbuffers: Vec<Vec<i32>> = vec![];
         for d in 0..domain_numbers {
-            self.domains[d].graphics.enqueue_draw_frame();
+            self.domains[d].graphics.as_ref().expect("graphics not enabled").enqueue_draw_frame();
         }
         for d in 0..domain_numbers {
             self.domains[d].queue.finish().unwrap();
+
             if d == 0 {
-                bitmap = self.domains[d].graphics.bitmap_host.clone();
-                zbuffer = self.domains[d].graphics.zbuffer_host.clone();
+                self.domains[d]
+                    .graphics
+                    .as_ref()
+                    .expect("graphics not enabled")
+                    .bitmap
+                    .read(&mut bitmap)
+                    .enq()
+                    .unwrap();
+                self.domains[d]
+                    .graphics
+                    .as_ref()
+                    .expect("graphics not enabled")
+                    .zbuffer
+                    .read(&mut zbuffer)
+                    .enq()
+                    .unwrap();
             } else {
-                bitmaps.push(self.domains[d].graphics.bitmap_host.clone());
-                zbuffers.push(self.domains[d].graphics.zbuffer_host.clone());
+                self.domains[d]
+                    .graphics
+                    .as_ref()
+                    .expect("graphics not enabled")
+                    .bitmap
+                    .read(&mut bitmaps[d])
+                    .enq()
+                    .unwrap();
+                self.domains[d]
+                    .graphics
+                    .as_ref()
+                    .expect("graphics not enabled")
+                    .zbuffer
+                    .read(&mut zbuffers[d])
+                    .enq()
+                    .unwrap();
             }
         }
+        self.finish_queues();
+
         thread::spawn(move || {
             // Generating images needs own thread for performance reasons
             for d in 0..domain_numbers - 1 {

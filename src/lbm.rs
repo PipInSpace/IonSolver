@@ -1,5 +1,5 @@
-use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
 use crate::units::Units;
+use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
 use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 /// Velocity discretizations in 2D and 3D.
@@ -359,7 +359,7 @@ pub struct LbmDomain {
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
 
-    pub graphics: Graphics, // Graphics struct, handles rendering
+    pub graphics: Option<Graphics>, // Graphics struct, handles rendering
 }
 
 impl LbmDomain {
@@ -562,7 +562,11 @@ impl LbmDomain {
         println!("Kernels for domain compiled.");
         //TODO: allocate transfer buffers
 
-        let graphics = Graphics::new(lbm_config, &program, &queue, &flags, &u);
+        let graphics: Option<Graphics> = if lbm_config.graphics_config.graphics {
+            Some(Graphics::new(lbm_config, &program, &queue, &flags, &u))
+        } else {
+            None
+        };
 
         LbmDomain {
             queue,
