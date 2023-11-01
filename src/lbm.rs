@@ -708,7 +708,7 @@ impl LbmDomain {
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
         + if lbm_config.ext_electric_force {"\n	        #define ELECTRIC_FORCE"} else {""}
         + &if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD".to_owned()
-        +"\n	#define def_ke "+ &format!("{:.5}", 8.9875517923E9 * lbm_config.n_x as f32 * 1.0 * 1.0) // coulomb constant scaled by distance per lattice cell
+        +"\n	#define def_ke "+ &format!("{:.5}", 8.9875517923E9 / lbm_config.units.ke) // coulomb constant scaled by distance per lattice cell
         } else {"".to_string()}
         + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""};
         //Extensions

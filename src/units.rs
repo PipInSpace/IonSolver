@@ -1,5 +1,6 @@
 /// SI Base units (Lattice unit * unit = si unit eg. lengthLU * m = length in meters)
 #[derive(Clone, Copy, Default)]
+#[allow(non_snake_case)]
 pub struct Units {
     /// meter
     m: f32,

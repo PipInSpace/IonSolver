@@ -1,12 +1,23 @@
 use crate::{lbm::Lbm, *};
 
-/// `setup()` is called at simulation start. Edit this function to change simulation parameters
+/// `setup()` is called at simulation start. Edit this function to change simulation parameters.
+/// 
+/// Usage:
+/// 
+/// Start by requesting a new `LbmConfig` with `LbmConfig::new()`.
+/// You can then set individual arguments by setting fields of the `LbmConfig`.
+/// If you are doing something that requires real-world units/scales, you can define them using `your_lbm_config.units.set()` and pass in your desired units.
+/// 
+/// After setting your config struct, request a new `Lbm` struct with `Lbm::new(your_lbm_config)`.
+/// Domain setup is handled automatically, you might now directly set specific cells in your domains, for an example look at `setup_taylor_green()`.
+/// 
+/// Run `your_lbm.initialize()` and return it with the config.
 pub fn setup() -> (Lbm, LbmConfig) {
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
-    lbm_config.n_x = 256;
-    lbm_config.n_y = 256;
-    lbm_config.n_z = 256;
+    lbm_config.n_x = 128;
+    lbm_config.n_y = 128;
+    lbm_config.n_z = 128;
     lbm_config.d_x = 1;
     lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
