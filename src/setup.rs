@@ -15,9 +15,9 @@ use crate::{lbm::Lbm, *};
 pub fn setup() -> (Lbm, LbmConfig) {
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
-    lbm_config.n_x = 256;
-    lbm_config.n_y = 256;
-    lbm_config.n_z = 256;
+    lbm_config.n_x = 128;
+    lbm_config.n_y = 128;
+    lbm_config.n_z = 128;
     lbm_config.d_x = 1;
     lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
