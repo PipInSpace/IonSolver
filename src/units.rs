@@ -2,17 +2,13 @@
 #[derive(Clone, Copy, Default)]
 pub struct Units {
     /// meter
-    pub m: f32,
+    m: f32,
     /// kilogram
-    pub kg: f32,
+    kg: f32,
     /// second
-    pub s: f32,
+    s: f32,
     /// coulomb
-    pub c: f32,
-    /// Newton
-    pub N : f32,
-    /// coulomb's constant
-    pub ke: f32,
+    c: f32,
 }
 
 impl Units {
@@ -22,8 +18,6 @@ impl Units {
             kg : 1.0,
             s : 1.0,
             c : 1.0,
-            N : 1.0,
-            ke : 1.0,
         }
     }
 
@@ -42,8 +36,79 @@ impl Units {
         self.kg = si_rho / rho * self.m * self.m * self.m;
         self.s = u / si_u * self.m;
         self.c = si_c / c;
-
-        self.N = self.kg * self.m / (self.s * self.s);
-        self.ke = self.N * self.m * self.m / (self.c * self.c);
     }
+
+    // to si from LU
+    #[allow(unused)]
+    pub fn len_to_si(&self, l : f32) -> f32{
+        l * self.m
+    }
+
+    #[allow(unused)]
+    pub fn mass_to_si(&self, m : f32) -> f32{
+        m * self.kg
+    }
+
+    #[allow(unused)]
+    pub fn dens_to_si(&self, rho : f32) -> f32{
+        rho * (self.kg/cb(self.m))
+    }
+
+    #[allow(unused)]
+    pub fn time_to_si(&self, t : f32) -> f32{
+        t * self.s
+    }
+
+    #[allow(unused)]
+    pub fn charge_to_si(&self, q : f32) -> f32{
+        q * self.c
+    }
+
+    #[allow(unused)]
+    pub fn force_to_si(&self, f : f32) -> f32{
+        f * (self.kg * self.m / (self.s * self.s))
+    }
+
+    // to LU from si
+
+    #[allow(unused)]
+    pub fn si_to_len(&self, l : f32) -> f32{
+        l / self.m
+    }
+
+    #[allow(unused)]
+    pub fn si_to_mass(&self, m : f32) -> f32{
+        m / self.kg
+    }
+
+    #[allow(unused)]
+    pub fn si_to_dens(&self, rho : f32) -> f32{
+        rho / (self.kg/cb(self.m))
+    }
+
+    #[allow(unused)]
+    pub fn si_to_time(&self, t : f32) -> f32{
+        t / self.s
+    }
+
+    #[allow(unused)]
+    pub fn si_to_charge(&self, q : f32) -> f32{
+        q / self.c
+    }
+
+    #[allow(unused)]
+    pub fn si_to_force(&self, f : f32) -> f32{
+        f / (self.kg * self.m / (self.s * self.s))
+    }
+
+    #[allow(unused)]
+    pub fn si_to_ke(&self, ke : f32) -> f32 {
+        ke / (self.kg * cb(self.m) / (self.c * self.c * self.s * self.s))
+    }
+
+}
+
+#[inline]
+fn cb(x: f32) -> f32 {
+    x * x * x
 }
