@@ -393,10 +393,11 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     println!("\nExiting Graphics Loop");
                     break;
                 }
-                if cached_rot[0] != state.camera_rotation[0]
+
+                let camera_changed = cached_rot[0] != state.camera_rotation[0]
                     || cached_rot[1] != state.camera_rotation[1]
-                    || cached_zoom != state.camera_zoom
-                {
+                    || cached_zoom != state.camera_zoom;
+                if camera_changed {
                     //only update camera params when camera updated
                     cached_rot = state.camera_rotation.clone();
                     cached_zoom = state.camera_zoom;
@@ -409,7 +410,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                         d.graphics.camera_params.write(&params).enq().unwrap();
                     }
                 }
-                if lbm_config.graphics_config.graphics {
+                if lbm_config.graphics_config.graphics && !(state.paused && !camera_changed) {
                     lbm.draw_frame(state.save, state.frame_spacing, sim_tx_g.clone(), i);
                 }
             }

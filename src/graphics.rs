@@ -285,55 +285,59 @@ impl Lbm {
                     .unwrap();
             }
         }
-        // Generating images needs own thread for performance reasons
-        for d in 0..domain_numbers - 1 {
-            let bitmap_d = &bitmaps[d];
-            let zbuffer_d = &zbuffers[d];
-            for i in 0..(width * height) as usize {
-                let zdi = zbuffer_d[i];
-                if zdi > zbuffer[i] {
-                    bitmap[i] = bitmap_d[i];
-                    zbuffer[i] = zbuffer_d[i];
+        self.finish_queues();
+
+        thread::spawn(move || {
+            // Generating images needs own thread for performance reasons
+            for d in 0..domain_numbers - 1 {
+                let bitmap_d = &bitmaps[d];
+                let zbuffer_d = &zbuffers[d];
+                for i in 0..(width * height) as usize {
+                    let zdi = zbuffer_d[i];
+                    if zdi > zbuffer[i] {
+                        bitmap[i] = bitmap_d[i];
+                        zbuffer[i] = zbuffer_d[i];
+                    }
                 }
             }
-        }
 
-        let mut save_buffer: Vec<u8> = vec![];
-        let mut pixels: Vec<Color32> = vec![];
-        for pixel in &bitmap {
-            let color = pixel & 0xFFFFFF;
-            pixels.push(Color32::from_rgb(
-                ((color >> 16) & 0xFF) as u8,
-                ((color >> 8) & 0xFF) as u8,
-                (color & 0xFF) as u8,
-            ));
-            if state_save {
-                // only update save buffer if required
-                save_buffer.push(((color >> 16) & 0xFF) as u8);
-                save_buffer.push(((color >> 8) & 0xFF) as u8);
-                save_buffer.push((color & 0xFF) as u8);
+            let mut save_buffer: Vec<u8> = vec![];
+            let mut pixels: Vec<Color32> = vec![];
+            for pixel in &bitmap {
+                let color = pixel & 0xFFFFFF;
+                pixels.push(Color32::from_rgb(
+                    ((color >> 16) & 0xFF) as u8,
+                    ((color >> 8) & 0xFF) as u8,
+                    (color & 0xFF) as u8,
+                ));
+                if state_save {
+                    // only update save buffer if required
+                    save_buffer.push(((color >> 16) & 0xFF) as u8);
+                    save_buffer.push(((color >> 8) & 0xFF) as u8);
+                    save_buffer.push((color & 0xFF) as u8);
+                }
             }
-        }
-        let color_image = ColorImage {
-            size: [width as usize, height as usize],
-            pixels,
-        };
-        _ = sim_tx.send(SimState {
-            step: 1,
-            paused: false,
-            save: state_save,
-            img: color_image,
-        }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
-        if state_save {
-            thread::spawn(move || {
-                //Saving needs own thread for performance reasons
-                let imgbuffer: ImageBuffer<Rgb<u8>, _> =
-                    ImageBuffer::from_raw(1920, 1080, save_buffer).unwrap();
-                imgbuffer
-                    .save(format!(r"out/img_{}.png", (i / frame_spacing)))
-                    .unwrap();
-            });
-        }
+            let color_image = ColorImage {
+                size: [width as usize, height as usize],
+                pixels,
+            };
+            _ = sim_tx.send(SimState {
+                step: 1,
+                paused: false,
+                save: state_save,
+                img: color_image,
+            }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
+            if state_save {
+                thread::spawn(move || {
+                    //Saving needs own thread for performance reasons
+                    let imgbuffer: ImageBuffer<Rgb<u8>, _> =
+                        ImageBuffer::from_raw(1920, 1080, save_buffer).unwrap();
+                    imgbuffer
+                        .save(format!(r"out/img_{}.png", (i / frame_spacing)))
+                        .unwrap();
+                });
+            }
+        });
     }
 }
 
