@@ -15,18 +15,19 @@ use crate::{lbm::Lbm, *};
 pub fn setup() -> (Lbm, LbmConfig) {
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
-    lbm_config.n_x = 128;
-    lbm_config.n_y = 128;
-    lbm_config.n_z = 128;
+    lbm_config.n_x = 512;
+    lbm_config.n_y = 512;
+    lbm_config.n_z = 256;
     lbm_config.d_x = 1;
     lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
-    lbm_config.ext_volume_force = true;
-    lbm_config.fx = 0.0001;
+    lbm_config.graphics_config.graphics = false;
+    //lbm_config.ext_volume_force = true;
+    //lbm_config.fx = 0.0001;
     let mut lbm = Lbm::new(lbm_config);
     lbm.setup_taylor_green();
-    lbm.domains[0].graphics.streamline_mode = true;
-    lbm.domains[0].graphics.q_mode = true;
+    //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").streamline_mode = true;
+    //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").q_mode = true;
     lbm.initialize();
     (lbm, lbm_config)
 }

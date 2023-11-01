@@ -252,7 +252,7 @@ impl Lbm {
             vec![vec![0; (width * height) as usize]; domain_numbers - 1]; // Holds later domain bitmaps
         let mut zbuffers: Vec<Vec<i32>> = vec![];
         for d in 0..domain_numbers {
-            self.domains[d].graphics.enqueue_draw_frame();
+            self.domains[d].graphics.as_ref().expect("graphics not enabled").enqueue_draw_frame();
         }
         for d in 0..domain_numbers {
             self.domains[d].queue.finish().unwrap();
@@ -260,12 +260,16 @@ impl Lbm {
             if d == 0 {
                 self.domains[d]
                     .graphics
+                    .as_ref()
+                    .expect("graphics not enabled")
                     .bitmap
                     .read(&mut bitmap)
                     .enq()
                     .unwrap();
                 self.domains[d]
                     .graphics
+                    .as_ref()
+                    .expect("graphics not enabled")
                     .zbuffer
                     .read(&mut zbuffer)
                     .enq()
@@ -273,12 +277,16 @@ impl Lbm {
             } else {
                 self.domains[d]
                     .graphics
+                    .as_ref()
+                    .expect("graphics not enabled")
                     .bitmap
                     .read(&mut bitmaps[d])
                     .enq()
                     .unwrap();
                 self.domains[d]
                     .graphics
+                    .as_ref()
+                    .expect("graphics not enabled")
                     .zbuffer
                     .read(&mut zbuffers[d])
                     .enq()
