@@ -43,8 +43,8 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
         //}
     } else {
         println!("Warning! Not enough devices of the same type available. Using single fastest device for all domains.");
-        for d in 0..domains as usize {
-            device_infos[d] = get_device_with_most_flops();
+        for d in device_infos.iter_mut().take(domains as usize) {
+            *d = get_device_with_most_flops();
         }
     }
     device_infos

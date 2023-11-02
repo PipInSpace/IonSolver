@@ -16,7 +16,6 @@ use lbm::{Lbm, LbmConfig, VelocitySet};
 /// Is send by the simulation to communicate information to the UI
 pub struct SimState {
     step: u32,
-    paused: bool,
     img: ColorImage,
 }
 
@@ -24,7 +23,6 @@ impl SimState {
     pub fn new() -> SimState {
         Self {
             step: 0,
-            paused: true,
             img: ColorImage::default(),
         }
     }
@@ -422,7 +420,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                         d.graphics.as_ref().expect("graphics used but not enabled").camera_params.write(&params).enq().unwrap();
                     }
                 }
-                if lbm.config.graphics_config.graphics && !(state.paused && !camera_changed) {
+                if (camera_changed || !state.paused) && lbm.config.graphics_config.graphics {
                     // Only draws frames, never saves them
                     lbm.draw_frame(false, sim_tx_g.clone(), i);
                 }

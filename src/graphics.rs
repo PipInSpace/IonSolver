@@ -293,7 +293,7 @@ impl Lbm {
         }
         self.finish_queues();
         
-        let i = i.clone();
+        let i = *i;
         thread::spawn(move || {
             // Generating images needs own thread for performance reasons
             for d in 0..domain_numbers - 1 {
@@ -330,7 +330,6 @@ impl Lbm {
             };
             _ = sim_tx.send(SimState {
                 step: 1,
-                paused: false,
                 img: color_image,
             }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
             if save {
@@ -374,6 +373,8 @@ pub fn get_graphics_defines(graphics_config: GraphicsConfig) -> String {
 pub fn new_camera_params() -> Vec<f32> {
     let mut params: Vec<f32> = vec![0.0; 15];
     //Defaults from FluidX3D: graphics.hpp:20
+    let eye_dist: u32 = 0;
+
     let rx = 0.5 * PI;
     let sinrx = rx.sin();
     let cosrx = rx.cos();
@@ -394,13 +395,15 @@ pub fn new_camera_params() -> Vec<f32> {
     params[11] = -sinrx * cosry; //Rzx
     params[12] = cosrx * cosry; //Rzy
     params[13] = sinry; //Rzz
-    params[14] = ((false as u32) << 31 | (false as u32) << 30 | (0 & 0xFFFF)) as f32;
+    params[14] = ((false as u32) << 31 | (false as u32) << 30 | (eye_dist & 0xFFFF)) as f32;
     params
 }
 
 pub fn camera_params_rot(rx: f32, ry: f32) -> Vec<f32> {
     let mut params: Vec<f32> = vec![0.0; 15];
     //Defaults from FluidX3D: graphics.hpp:20
+    let eye_dist: u32 = 0;
+
     //let rx = 0.5 * PI;
     let sinrx = rx.sin();
     let cosrx = rx.cos();
@@ -421,6 +424,6 @@ pub fn camera_params_rot(rx: f32, ry: f32) -> Vec<f32> {
     params[11] = -sinrx * cosry; //Rzx
     params[12] = cosrx * cosry; //Rzy
     params[13] = sinry; //Rzz
-    params[14] = ((false as u32) << 31 | (false as u32) << 30 | (0 & 0xFFFF)) as f32;
+    params[14] = ((false as u32) << 31 | (false as u32) << 30 | (eye_dist & 0xFFFF)) as f32;
     params
 }
