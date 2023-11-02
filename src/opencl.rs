@@ -3,7 +3,7 @@ use ocl::{flags, Buffer, Device, Platform, Queue};
 
 pub fn device_selection(domains: u32) -> Vec<Device> {
     let devices = get_devices();
-    if devices.len() == 0 {
+    if devices.is_empty() {
         println!("No Device detected. Aborting...");
         std::process::exit(1);
     }
@@ -37,9 +37,10 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
         }
     }
     if best_j >= 0 {
-        for d in 0..domains as usize {
-            device_infos[d] = device_type_ids[best_j as usize][d];
-        }
+        device_infos[..(domains as usize)].copy_from_slice(&device_type_ids[best_j as usize][..(domains as usize)]);
+        //for d in 0..domains as usize {
+        //    device_infos[d] = device_type_ids[best_j as usize][d];
+        //}
     } else {
         println!("Warning! Not enough devices of the same type available. Using single fastest device for all domains.");
         for d in 0..domains as usize {

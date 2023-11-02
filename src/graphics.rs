@@ -237,10 +237,9 @@ impl GraphicsConfig {
 impl Lbm {
     pub fn draw_frame(
         &self,
-        state_save: bool,
-        frame_spacing: u32,
+        save: bool,
         sim_tx: Sender<SimState>,
-        i: u32,
+        i: &u32,
     ) {
         let width = self.config.graphics_config.camera_width;
         let height = self.config.graphics_config.camera_height;
@@ -293,7 +292,8 @@ impl Lbm {
             }
         }
         self.finish_queues();
-
+        
+        let i = i.clone();
         thread::spawn(move || {
             // Generating images needs own thread for performance reasons
             for d in 0..domain_numbers - 1 {
@@ -317,7 +317,7 @@ impl Lbm {
                     ((color >> 8) & 0xFF) as u8,
                     (color & 0xFF) as u8,
                 ));
-                if state_save {
+                if save {
                     // only update save buffer if required
                     save_buffer.push(((color >> 16) & 0xFF) as u8);
                     save_buffer.push(((color >> 8) & 0xFF) as u8);
@@ -333,13 +333,13 @@ impl Lbm {
                 paused: false,
                 img: color_image,
             }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
-            if state_save {
+            if save {
                 thread::spawn(move || {
                     //Saving needs own thread for performance reasons
                     let imgbuffer: ImageBuffer<Rgb<u8>, _> =
                         ImageBuffer::from_raw(1920, 1080, save_buffer).unwrap();
                     imgbuffer
-                        .save(format!(r"out/img_{}.png", (i / frame_spacing)))
+                        .save(format!(r"out/frame_{}.png", i))
                         .unwrap();
                 });
             }

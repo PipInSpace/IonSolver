@@ -366,7 +366,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
         camera_rotation: vec![0.0; 2],
         camera_zoom: 3.0,
     };
-    let mut i = 0;
+    let mut i: u32 = 0;
 
     let mut lbm = setup::setup();
     lbm.initialize();
@@ -390,10 +390,12 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     if lbm.config.graphics_config.graphics {
         let lbm_ptr = &lbm as *const _ as usize;
         let state_ptr = &state as *const _ as usize;
+        let i_ptr = &i as *const _ as usize;
         let sim_tx_g = sim_tx.clone();
         thread::spawn(move || {
             let lbm = unsafe { &*(lbm_ptr as *const Lbm) };
             let state = unsafe { &*(state_ptr as *const SimControlTx) };
+            let i = unsafe { &*(i_ptr as *const u32) };
             let mut cached_rot: Vec<f32> = vec![0.0; 2];
             let mut cached_zoom = 0.0;
 
@@ -421,7 +423,8 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     }
                 }
                 if lbm.config.graphics_config.graphics && !(state.paused && !camera_changed) {
-                    lbm.draw_frame(state.save, state.frame_spacing, sim_tx_g.clone(), i);
+                    // Only draws frames, never saves them
+                    lbm.draw_frame(false, sim_tx_g.clone(), i);
                 }
             }
         });
@@ -447,6 +450,10 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
 
                 let time_per_step = (jnow.elapsed().as_micros()/j) as u32;
                 print!("\rStep {}, Steps/s: {}, MLUP/s: {}", i, 1000000/time_per_step, mn*(1000000/time_per_step) as u64);
+                if i % state.frame_spacing == 0 && state.save && lbm.config.graphics_config.graphics {
+                    // Saves frames if needed
+                    lbm.draw_frame(true, sim_tx.clone(), &i);
+                }
                 i += 1;
                 j += 1;
             }
