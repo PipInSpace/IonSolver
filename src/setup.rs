@@ -12,7 +12,7 @@ use crate::{lbm::Lbm, *};
 /// Domain setup is handled automatically, you might now directly set specific cells in your domains, for an example look at `setup_taylor_green()`.
 ///
 /// Run `your_lbm.initialize()` and return it with the config.
-pub fn setup() -> (Lbm, LbmConfig) {
+pub fn setup() -> Lbm {
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
     lbm_config.n_x = 512;
@@ -28,8 +28,7 @@ pub fn setup() -> (Lbm, LbmConfig) {
     lbm.setup_taylor_green();
     lbm.domains[0].graphics.as_mut().expect("grapics not enabled").streamline_mode = true;
     //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").q_mode = true;
-    lbm.initialize();
-    (lbm, lbm_config)
+    lbm
 }
 
 impl Lbm {

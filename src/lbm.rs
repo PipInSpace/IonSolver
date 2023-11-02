@@ -106,7 +106,7 @@ pub enum VariableFloatBuffer {
 ///    pub graphics_config: GraphicsConfig, // Grapics config struct
 ///}
 /// ```
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub struct LbmConfig {
     // Holds init information about the simulation
     pub velocity_set: VelocitySet,
@@ -218,7 +218,7 @@ impl Lbm {
                 d + 1
             );
             lbm_domains.push(LbmDomain::new(
-                lbm_config,
+                &lbm_config,
                 device_infos[d as usize],
                 x,
                 y,
@@ -328,11 +328,10 @@ impl Lbm {
 /// ```
 /// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function.
 /// This ensures all arguments are correctly set.
-#[allow(unused)]
+//#[allow(unused)]
 pub struct LbmDomain {
     // FluidX3D creates contexts/queues/programs for each device automatically through another class
     pub queue: Queue,
-    lbm_config: LbmConfig,
 
     kernel_initialize: Kernel, // Basic Kernels
     kernel_stream_collide: Kernel,
@@ -341,10 +340,6 @@ pub struct LbmDomain {
     pub n_x: u32, // Domain size
     pub n_y: u32,
     pub n_z: u32,
-
-    d_x: u32, // Domain
-    d_y: u32,
-    d_z: u32,
 
     fx: f32, // Volume force
     fy: f32,
@@ -367,7 +362,7 @@ impl LbmDomain {
     ///
     /// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function.
     /// This ensures all arguments are correctly set.
-    pub fn new(lbm_config: LbmConfig, device: Device, x: u32, y: u32, z: u32) -> LbmDomain {
+    pub fn new(lbm_config: &LbmConfig, device: Device, x: u32, y: u32, z: u32) -> LbmDomain {
         let n_x = lbm_config.n_x / lbm_config.d_x + 2u32 * (lbm_config.d_x > 1u32) as u32; // Size + Halo offsets
         let n_y = lbm_config.n_y / lbm_config.d_y + 2u32 * (lbm_config.d_y > 1u32) as u32; // When multiple domains on axis -> add 2 cells of padding
         let n_z = lbm_config.n_z / lbm_config.d_z + 2u32 * (lbm_config.d_z > 1u32) as u32;
@@ -570,7 +565,6 @@ impl LbmDomain {
 
         LbmDomain {
             queue,
-            lbm_config,
 
             kernel_initialize,
             kernel_stream_collide,
@@ -579,10 +573,6 @@ impl LbmDomain {
             n_x,
             n_y,
             n_z,
-
-            d_x,
-            d_y,
-            d_z,
 
             fx: lbm_config.fx,
             fy: lbm_config.fy,
@@ -617,7 +607,7 @@ impl LbmDomain {
         velocity_set: u8,
         transfers: u8,
         nu: f32,
-        lbm_config: LbmConfig,
+        lbm_config: &LbmConfig,
     ) -> String {
         //Conditional Defines:
         //Velocity set types

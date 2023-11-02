@@ -1,7 +1,7 @@
-//#![allow(non_snake_case)]
+#![allow(non_snake_case)]
 extern crate ocl;
 use std::time::Duration;
-use std::{f32::consts::PI, fs, io, io::Write, sync::mpsc, thread};
+use std::{f32::consts::PI, fs, sync::mpsc, thread};
 
 mod graphics;
 mod info;
@@ -10,17 +10,13 @@ mod opencl;
 mod setup;
 mod units;
 use eframe::*;
-use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2};
+use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2, InnerResponse};
 use lbm::{Lbm, LbmConfig, VelocitySet};
 
-#[allow(dead_code)]
+/// Is send by the simulation to communicate information to the UI
 pub struct SimState {
-    step: i32,
-
-    //Control:
+    step: u32,
     paused: bool,
-    save: bool,
-
     img: ColorImage,
 }
 
@@ -29,19 +25,8 @@ impl SimState {
         Self {
             step: 0,
             paused: true,
-            save: false,
             img: ColorImage::default(),
         }
-    }
-
-    pub fn reset_sim(&mut self) {
-        self.step = 0;
-        self.paused = true;
-    }
-
-    pub fn update_sim(&mut self) {
-        println!("Step {}", self.step);
-        self.step += 1;
     }
 }
 
@@ -51,7 +36,7 @@ impl Default for SimState {
     }
 }
 
-// UI+Control
+/// Is send by the UI to communicate information to the simulation
 pub struct SimControlTx {
     //SimControlTx is used to send information to the simulation thread
     paused: bool,
@@ -67,6 +52,7 @@ struct SimControl {
     //SimControl handles control/displaying of the Simulation over the UI
     paused: bool,
     save: bool,
+    step: u32,
     clear_images: bool,
     frame_spacing: u32,
     frame_spacing_str: String,
@@ -96,26 +82,9 @@ impl SimControl {
             })
             .expect("GUI cannot communicate with sim thread");
     }
-}
 
-impl App for SimControl {
-    /// UI update loop
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let recieve_result = self.sim_rx.try_iter().last();
-        if let Some(recieve) = recieve_result {
-            //self.display_img = Some(ctx.load_texture("sim", ColorImage::from_rgb([1920, 1080], &recieve.img), Default::default()));
-            if self.display_img.is_none() {
-                self.display_img =
-                    Some(ctx.load_texture("sim", recieve.img.clone(), Default::default()))
-            }
-            self.display_img
-                .as_mut()
-                .expect("Isn't TextureHandle")
-                .set(recieve.img, TextureOptions::default());
-        }
-
-        let mut send_control = false; // determines if ui needs to send control
-
+    // Egui response ro
+    fn draw_top_controls(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame, send_control: &mut bool) -> InnerResponse<InnerResponse<()>> {
         //egui styles
         let zeromargin = egui::Margin {
             left: 0.0,
@@ -129,19 +98,17 @@ impl App for SimControl {
             top: 1.0,
             bottom: -1.0,
         };
-        let mut frame = egui::Frame {
+        let frame = egui::Frame {
             fill: Color32::WHITE,
             inner_margin: small_left_margin,
             outer_margin: zeromargin,
             ..Default::default()
         };
-
         let transparent_stroke = Stroke {
             width: 0.0,
             color: Color32::TRANSPARENT,
         };
 
-        //Update gui
         egui::TopBottomPanel::top("top_controls")
             .frame(frame)
             .show(ctx, |ui| {
@@ -169,8 +136,7 @@ impl App for SimControl {
                         .clicked()
                     {
                         self.paused = !self.paused;
-                        send_control = true;
-                        let _z = self.paused;
+                        *send_control = true;
                     }
                     if ui
                         .add(
@@ -195,7 +161,7 @@ impl App for SimControl {
                         .clicked()
                     {
                         self.save = !self.save;
-                        send_control = true;
+                        *send_control = true;
                     }
                     if ui
                         .add(
@@ -210,7 +176,7 @@ impl App for SimControl {
                         .clicked()
                     {
                         self.clear_images = !self.clear_images;
-                        send_control = true;
+                        *send_control = true;
                     }
                     let mut text = self.frame_spacing_str.clone();
                     if ui
@@ -222,13 +188,55 @@ impl App for SimControl {
                         if let Ok(value) = result {
                             if value > 0 {
                                 self.frame_spacing = value;
-                                send_control = true;
+                                *send_control = true;
                             }
                         }
                     }
                 })
-            });
-        //TODO: Display the Simulation
+            })
+    }
+}
+
+impl App for SimControl {
+    /// UI update loop
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let recieve_result = self.sim_rx.try_iter().last();
+        if let Some(recieve) = recieve_result {
+            if self.display_img.is_none() {
+                self.display_img =
+                    Some(ctx.load_texture("sim", recieve.img.clone(), Default::default()))
+            }
+            self.display_img
+                .as_mut()
+                .expect("Isn't TextureHandle")
+                .set(recieve.img, TextureOptions::default());
+            self.step = recieve.step;
+        }
+
+        let mut send_control = false; // determines if ui needs to send control
+
+        //egui styles
+        let zeromargin = egui::Margin {
+            left: 0.0,
+            right: 0.0,
+            top: 0.0,
+            bottom: 0.0,
+        };
+        let small_left_margin = egui::Margin {
+            left: 0.0,
+            right: 0.0,
+            top: 1.0,
+            bottom: -1.0,
+        };
+        let mut frame = egui::Frame {
+            fill: Color32::WHITE,
+            inner_margin: small_left_margin,
+            outer_margin: zeromargin,
+            ..Default::default()
+        };
+
+        //Update gui
+        self.draw_top_controls(ctx, _frame, &mut send_control);
 
         frame.outer_margin = zeromargin;
         frame.fill = Color32::from_rgb(0x6C, 0x6C, 0x7C);
@@ -314,6 +322,7 @@ fn main() {
     let simcontrol = SimControl {
         paused: true,
         save: false,
+        step: 0,
         clear_images: true,
         frame_spacing: 100,
         frame_spacing_str: "100".to_string(),
@@ -359,7 +368,8 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     };
     let mut i = 0;
 
-    let (mut lbm, lbm_config) = setup::setup();
+    let mut lbm = setup::setup();
+    lbm.initialize();
 
     // get initial config from ui
     let recieve_result = ctrl_rx.try_recv();
@@ -377,7 +387,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     }
 
     // Create graphics thread with evil pointer hacks
-    if lbm_config.graphics_config.graphics {
+    if lbm.config.graphics_config.graphics {
         let lbm_ptr = &lbm as *const _ as usize;
         let state_ptr = &state as *const _ as usize;
         let sim_tx_g = sim_tx.clone();
@@ -410,14 +420,14 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                         d.graphics.as_ref().expect("graphics used but not enabled").camera_params.write(&params).enq().unwrap();
                     }
                 }
-                if lbm_config.graphics_config.graphics && !(state.paused && !camera_changed) {
+                if lbm.config.graphics_config.graphics && !(state.paused && !camera_changed) {
                     lbm.draw_frame(state.save, state.frame_spacing, sim_tx_g.clone(), i);
                 }
             }
         });
     }
 
-    let mn = (lbm_config.n_x as u64 * lbm_config.n_y as u64 * lbm_config.n_z as u64) / 1000000;
+    let mn = (lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64) / 1000000;
     loop {
         //This is the master loop, cannot be paused
         if !state.paused {

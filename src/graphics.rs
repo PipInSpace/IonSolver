@@ -10,32 +10,28 @@ use crate::{
 };
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
-#[allow(unused)]
 pub struct Graphics {
-    queue: Queue,
     kernel_clear: Kernel,
     bitmap: Buffer<i32>,
-    bitmap_host: Vec<i32>,
     zbuffer: Buffer<i32>,
-    zbuffer_host: Vec<i32>,
     pub camera_params: Buffer<f32>,
 
-    lbm_config: LbmConfig,
     kernel_graphics_flags: Kernel,
     kernel_graphics_flags_mc: Kernel,
     kernel_graphics_field: Kernel,
     kernel_graphics_streamline: Kernel,
     kernel_graphics_q: Kernel,
 
-    t_last_rendered_frame: u64,
     pub streamline_mode: bool,
     pub field_mode: bool,
     pub q_mode: bool,
+    pub flags_mode: bool,
+    pub flags_surface_mode: bool,
 }
 
 impl Graphics {
     pub fn new(
-        lbm_config: LbmConfig,
+        lbm_config: &LbmConfig,
         program: &Program,
         queue: &Queue,
         flags: &Buffer<u8>,
@@ -153,24 +149,21 @@ impl Graphics {
             .unwrap();
 
         Graphics {
-            queue: queue.clone(),
             kernel_clear,
             bitmap,
-            bitmap_host: vec![0; (width * height) as usize],
             zbuffer,
-            zbuffer_host: vec![0; (width * height) as usize],
             camera_params,
 
-            lbm_config,
             kernel_graphics_flags,
             kernel_graphics_flags_mc,
             kernel_graphics_field,
             kernel_graphics_streamline,
             kernel_graphics_q,
-            t_last_rendered_frame: 0,
             streamline_mode: true,
             field_mode: false,
             q_mode: false,
+            flags_mode: false,
+            flags_surface_mode: false,
         }
     }
 
@@ -188,6 +181,12 @@ impl Graphics {
             }
             if self.q_mode {
                 self.kernel_graphics_q.enq().unwrap();
+            }
+            if self.flags_mode {
+                self.kernel_graphics_flags.enq().unwrap();
+            }
+            if self.flags_surface_mode {
+                self.kernel_graphics_flags_mc.enq().unwrap();
             }
             //self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
             //self.zbuffer.read(&mut self.zbuffer_host).enq().unwrap();
@@ -332,7 +331,6 @@ impl Lbm {
             _ = sim_tx.send(SimState {
                 step: 1,
                 paused: false,
-                save: state_save,
                 img: color_image,
             }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
             if state_save {
