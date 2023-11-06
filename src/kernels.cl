@@ -38,6 +38,7 @@
 #define def_ws (1.0f/9.0f)
 #define def_we (1.0f/36.0f)
 #define def_ke 8.9875517923E9f
+#define def_charge 0.1f // Electric charge of a cell
 
 #define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
 #define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
@@ -126,20 +127,15 @@ int color_mix_3(const int c0, const int c1, const int c2, const float w0, const 
 	return as_int((uchar4)((uchar)fcm.x, (uchar)fcm.y, (uchar)fcm.z, (uchar)0u));
 }
 int shading(const int c, const float3 p, const float3 normal, const float* camera_cache) {
-    const float dis  = camera_cache[ 1]; // fetch camera parameters (rotation matrix, camera position, etc.)
-    const float posx = camera_cache[ 2]-def_domain_offset_x;
-    const float posy = camera_cache[ 3]-def_domain_offset_y;
-    const float posz = camera_cache[ 4]-def_domain_offset_z;
-    const float Rzx  = camera_cache[11];
-    const float Rzy  = camera_cache[12];
-    const float Rzz  = camera_cache[13];
-    const uchar cr=c>>16&255, cg=c>>8&255, cb=c&255;
+    const float zoom = camera_cache[ 0]; // fetch camera parameters (rotation matrix, camera position, etc.)
+	const float  dis = camera_cache[ 1];
+	const float3 pos = (float3)(camera_cache[ 2], camera_cache[ 3], camera_cache[ 4])-(float3)(def_domain_offset_x, def_domain_offset_y, def_domain_offset_z);
+	const float3 Rz  = (float3)(camera_cache[11], camera_cache[12], camera_cache[13]);
+	const float3 d = p-Rz*(dis/zoom)-pos; // distance vector between p and camera position
     const float nl2 = sq(normal.x)+sq(normal.y)+sq(normal.z); // only one native_sqrt instead of two
-    const float dx = p.x-fma(Rzx, dis, posx); // direction of light source is viewing direction
-    const float dy = p.y-fma(Rzy, dis, posy);
-    const float dz = p.z-fma(Rzz, dis, posz);
-    const float dl2 = sq(dx)+sq(dy)+sq(dz);
-    const float br = max(1.5f*fabs(normal.x*dx+normal.y*dy+normal.z*dz)*rsqrt(nl2*dl2), 0.3f);
+    const float dl2 = sq(d.x)+sq(d.y)+sq(d.z);
+	const float br = max(1.5f*fabs(dot(normal, d))*rsqrt(nl2*dl2), 0.3f);
+	const float cr=(float)((c>>16)&255), cg=(float)((c>>8)&255), cb=(float)(c&255);
     return min((int)(br*cr), 255)<<16|min((int)(br*cg), 255)<<8|min((int)(br*cb), 255);
 }
 bool is_off_screen(const int x, const int y, const int stereo) {
@@ -170,30 +166,20 @@ void draw(const int x, const int y, const float z, const int color, global int* 
 }
 bool convert(int* rx, int* ry, float* rz, const float3 p, const float* camera_cache, const int stereo) { // 3D -> 2D
 	const float zoom = camera_cache[0]; // fetch camera parameters (rotation matrix, camera position, etc.)
-	const float dis  = camera_cache[1];
-	const float posx = camera_cache[2];
-	const float posy = camera_cache[3];
-	const float posz = camera_cache[4];
-	const float Rxx  = camera_cache[5];
-	const float Rxy  = camera_cache[6];
-	const float Rxz  = camera_cache[7];
-	const float Ryx  = camera_cache[8];
-	const float Ryy  = camera_cache[9];
-	const float Ryz  = camera_cache[10];
-	const float Rzx  = camera_cache[11];
-	const float Rzy  = camera_cache[12];
-	const float Rzz  = camera_cache[13];
+	const float  dis = camera_cache[1];
+	const float3 pos = (float3)(camera_cache[ 2], camera_cache[ 3], camera_cache[ 4])-(float3)(def_domain_offset_x, def_domain_offset_y, def_domain_offset_z);
+	const float3 Rx  = (float3)(camera_cache[ 5], camera_cache[ 6], camera_cache[ 7]);
+	const float3 Ry  = (float3)(camera_cache[ 8], camera_cache[ 9], camera_cache[10]);
+	const float3 Rz  = (float3)(camera_cache[11], camera_cache[12], camera_cache[13]);
 	const float eye_distance = vload_half(28, (half*)camera_cache);
 	float3 t, r;
-	t.x = p.x+def_domain_offset_x-posx-(float)stereo*eye_distance/zoom*Rxx; // transformation
-	t.y = p.y+def_domain_offset_y-posy-(float)stereo*eye_distance/zoom*Rxy;
-	t.z = p.z+def_domain_offset_z-posz;
-	r.z = Rzx*t.x+Rzy*t.y+Rzz*t.z; // z-position for z-buffer
+	t = p-pos-((float)stereo*eye_distance/zoom)*(float3)(Rx.x, Rx.y, 0.0f); // transformation
+	r.z = dot(Rz, t); // z-position for z-buffer
 	const float rs = zoom*dis/(dis-r.z*zoom); // perspective (reciprocal is more efficient)
 	if(rs<=0.0f) return false; // point is behins camera
 	const float tv = ((as_int(camera_cache[14])>>30)&0x1)&&stereo!=0 ? 0.5f : 1.0f;
-	r.x = ((Rxx*t.x+Rxy*t.y+Rxz*t.z)*rs+(float)stereo*eye_distance)*tv+(0.5f+(float)stereo*0.25f)*(float)def_screen_width; // x position on screen
-	r.y =  (Ryx*t.x+Ryy*t.y+Ryz*t.z)*rs+0.5f*(float)def_screen_height; // y position on screen
+	r.x = (dot(Rx, t)*rs+(float)stereo*eye_distance)*tv+(0.5f+(float)stereo*0.25f)*(float)def_screen_width; // x position on screen
+	r.y =  dot(Ry, t)*rs+0.5f*(float)def_screen_height; // y position on screen
 	*rx = (int)(r.x+0.5f);
 	*ry = (int)(r.y+0.5f);
 	*rz = r.z;
@@ -220,7 +206,8 @@ void convert_triangle(float3 p0, float3 p1, float3 p2, const int color, const fl
 	int r0x, r0y, r1x, r1y, r2x, r2y; float r0z, r1z, r2z;
 	if(convert(&r0x, &r0y, &r0z, p0, camera_cache, stereo) && convert(&r1x, &r1y, &r1z, p1, camera_cache, stereo) && convert(&r2x, &r2y, &r2z, p2, camera_cache, stereo)
 		&& !(is_off_screen(r0x, r0y, stereo) && is_off_screen(r1x, r1y, stereo) && is_off_screen(r2x, r2y, stereo))) { // cancel drawing if all points are off screen
-		if(r0x*(r1y-r2y)+r1x*(r2y-r0y)+r2x*(r0y-r1y)>100000 || (r0y==r1y&&r0y==r2y)) return; // return for large triangle area or degenerate triangles
+		if(r0x*(r1y-r2y)+r1x*(r2y-r0y)+r2x*(r0y-r1y)>40000 || (r0y==r1y&&r0y==r2y)) return; // return for large triangle area or degenerate triangles
+		//if(r1x*r0y+r2x*r1y+r0x*r2y>=r0x*r1y+r1x*r2y+r2x*r0y) return; // clockwise backface culling
 		if(r0y>r1y) { const int xt = r0x; const int yt = r0y; r0x = r1x; r0y = r1y; r1x = xt; r1y = yt; } // sort vertices ascending by y
 		if(r0y>r2y) { const int xt = r0x; const int yt = r0y; r0x = r2x; r0y = r2y; r2x = xt; r2y = yt; }
 		if(r1y>r2y) { const int xt = r1x; const int yt = r1y; r1x = r2x; r1y = r2y; r2x = xt; r2y = yt; }
@@ -245,7 +232,8 @@ void convert_triangle_interpolated(float3 p0, float3 p1, float3 p2, int c0, int 
 	int r0x, r0y, r1x, r1y, r2x, r2y; float r0z, r1z, r2z;
 	if(convert(&r0x, &r0y, &r0z, p0, camera_cache, stereo) && convert(&r1x, &r1y, &r1z, p1, camera_cache, stereo) && convert(&r2x, &r2y, &r2z, p2, camera_cache, stereo)
 		&& !(is_off_screen(r0x, r0y, stereo) && is_off_screen(r1x, r1y, stereo) && is_off_screen(r2x, r2y, stereo))) { // cancel drawing if all points are off screen
-		if(r0x*(r1y-r2y)+r1x*(r2y-r0y)+r2x*(r0y-r1y)>100000 || (r0y==r1y&&r0y==r2y)) return; // return for large triangle area or degenerate triangles
+		if(r0x*(r1y-r2y)+r1x*(r2y-r0y)+r2x*(r0y-r1y)>40000 || (r0y==r1y&&r0y==r2y)) return; // return for large triangle area or degenerate triangles
+		//if(r1x*r0y+r2x*r1y+r0x*r2y>=r0x*r1y+r1x*r2y+r2x*r0y) return; // clockwise backface culling
 		if(r0y>r1y) { const int xt = r0x; const int yt = r0y; r0x = r1x; r0y = r1y; r1x = xt; r1y = yt; const int ct = c0; c0 = c1; c1 = ct; } // sort vertices ascending by y
 		if(r0y>r2y) { const int xt = r0x; const int yt = r0y; r0x = r2x; r0y = r2y; r2x = xt; r2y = yt; const int ct = c0; c0 = c2; c2 = ct; }
 		if(r1y>r2y) { const int xt = r1x; const int yt = r1y; r1x = r2x; r1y = r2y; r2x = xt; r2y = yt; const int ct = c1; c1 = c2; c2 = ct; }
@@ -405,7 +393,42 @@ uint marching_cubes(const float* v, const float iso, float3* triangles) { // inp
 	}
 	return i/3u; // return number of triangles
 }
-
+bool is_above_plane(const float3 point, const float3 plane_p, const float3 plane_n) {
+	return dot(point-plane_p, plane_n)>=0.0f;
+}
+bool is_in_camera_frustrum(const float3 p, const float* camera_cache) { // returns true if point is located in camera frustrum
+	const float zoom = camera_cache[0]; // fetch camera parameters (rotation matrix, camera position, etc.)
+	const float  dis = camera_cache[1];
+	const float3 pos = (float3)(camera_cache[ 2], camera_cache[ 3], camera_cache[ 4])-(float3)(def_domain_offset_x, def_domain_offset_y, def_domain_offset_z);
+	const float3 Rx  = (float3)(camera_cache[ 5], camera_cache[ 6], camera_cache[ 7]);
+	const float3 Ry  = (float3)(camera_cache[ 8], camera_cache[ 9], camera_cache[10]);
+	const float3 Rz  = (float3)(camera_cache[11], camera_cache[12], camera_cache[13]);
+	const bool   vr  = (as_int(camera_cache[14])>>31)&0x1;
+	const float  rtv = (as_int(camera_cache[14])>>30)&0x1 ? 2.0f : 1.0f;
+	const float3 p0 = (float3)(0.0f, 0.0f, dis/zoom);
+	const float3 camera_center = Rx*p0.x+Ry*p0.y+Rz*p0.z+pos; // reverse rotation and reverse transformation of p0
+	const float x_left   = !vr ? (float)(-(int)def_screen_width/2  ) : ((float)(-(int)def_screen_width/2  )+(float)(def_screen_width/4u))*rtv;
+	const float x_right  = !vr ? (float)( (int)def_screen_width/2-1) : ((float)( (int)def_screen_width/2-1)-(float)(def_screen_width/4u))*rtv;
+	const float y_top    = (float)(-(int)def_screen_height/2 );
+	const float y_bottom = (float)((int)def_screen_height/2-1);
+	float3 r00 = p0+normalize((float3)(x_left , y_top   , -dis)); // get 4 edge vectors of frustrum, get_camray(...) inlined and redundant parts eliminated
+	float3 r01 = p0+normalize((float3)(x_right, y_top   , -dis));
+	float3 r10 = p0+normalize((float3)(x_left , y_bottom, -dis));
+	float3 r11 = p0+normalize((float3)(x_right, y_bottom, -dis));
+	r00 = Rx*r00.x+Ry*r00.y+Rz*r00.z+pos-camera_center; // reverse rotation and reverse transformation of r00
+	r01 = Rx*r01.x+Ry*r01.y+Rz*r01.z+pos-camera_center; // reverse rotation and reverse transformation of r01
+	r10 = Rx*r10.x+Ry*r10.y+Rz*r10.z+pos-camera_center; // reverse rotation and reverse transformation of r10
+	r11 = Rx*r11.x+Ry*r11.y+Rz*r11.z+pos-camera_center; // reverse rotation and reverse transformation of r11
+	const float3 plane_n_top    = cross(r00, r01); // get 4 frustrum planes
+	const float3 plane_n_bottom = cross(r11, r10);
+	const float3 plane_n_left   = cross(r10, r00);
+	const float3 plane_n_right  = cross(r01, r11);
+	const float3 plane_p_top    = camera_center-2.0f*plane_n_top; // move frustrum planes outward by 2 units
+	const float3 plane_p_bottom = camera_center-2.0f*plane_n_bottom;
+	const float3 plane_p_left   = camera_center-(2.0f+8.0f*(float)vr)*plane_n_left; // move frustrum planes outward by 2 units, for stereoscopic rendering a bit more
+	const float3 plane_p_right  = camera_center-(2.0f+8.0f*(float)vr)*plane_n_right;
+	return is_above_plane(p, plane_p_top, plane_n_top)&&is_above_plane(p, plane_p_bottom, plane_n_bottom)&&is_above_plane(p, plane_p_left, plane_n_left)&&is_above_plane(p, plane_p_right, plane_n_right);
+}
 
 #endif
 
@@ -658,25 +681,26 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 // q: float array for charges
 // E: electric field at n
 void calculate_E(const uint n, const global float* q, global float* E) {// uses coulomb's law https://en.wikipedia.org/wiki/Coulomb%27s_law
-	const float3 coord_n = convert_float3(coordinates(n));
+	const float3 c_n = convert_float3(coordinates(n));
+	float3 e_i;
 	for(uint i = 0; i < def_N; i++){
-		const float3 coord_i = convert_float3(coordinates(i));
+		const float3 c_i = convert_float3(coordinates(i));
 		//const float3 e_i = def_ke * convert_float3((coord_n - coord_i)) / cbmagnitude(coord_n - coord_i); // coulomb's law
-		const float3 e_i = ((def_ke * q[i]) / sq(distance(coord_n, coord_i))) * normalize(coord_n - coord_i);
-		E[n                 ] += e_i.x;
-		E[(ulong)n+def_N    ] += e_i.y;
-		E[(ulong)n+def_N*2ul] += e_i.z;
+		e_i += q[i] / (sq(c_n.x-c_i.x)+sq(c_n.y-c_i.y)+sq(c_n.z-c_i.z)) * fast_normalize(c_n - c_i);
 	}
+	E[n					] = e_i.x * def_ke;
+	E[(ulong)n+def_N	] = e_i.y * def_ke;
+	E[(ulong)n+def_N*2ul] = e_i.z * def_ke;
 }
 #endif
 
 __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz 
 #ifdef FORCE_FIELD
 , const global float* F 
-#endif
+#endif // FORCE_FIELD
 #ifdef ELECTRIC_FORCE
 , global float* E
-#endif
+#endif // ELECTRIC_FORCE
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute stream_collide() on halo
@@ -708,15 +732,11 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
 
 	#ifdef ELECTRIC_FORCE
-	//// what am i doing this maybe works
-	//float3 E, Fe;
-	//calculate_E(n, q, &E);
-	//Fe = E * q[n];
-
-	//fxn += Fe.x;
-	//fyn += Fe.y;
-	//fzn += Fe.z;
-
+	//{ // separate block to avoid variable name conflicts
+	//	fxn += E[                 n] * rhon * def_charge; // apply electric field * charge = force
+	//	fyn += E[    def_N+(ulong)n] * rhon * def_charge;
+	//	fzn += E[2ul*def_N+(ulong)n] * rhon * def_charge;
+	//}
 	#endif// ELECTRIC_FORCE
 
     float Fin[def_velocity_set]; // forcing terms
@@ -843,8 +863,8 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
     calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
 	#ifdef ELECTRIC_FORCE
-	calculate_E(n, q, E);
-	#endif
+		calculate_E(n, q, E);
+	#endif // ELECTRIC FORCE
 } // initialize()
 
 kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
@@ -929,10 +949,11 @@ kernel void graphics_flags(const global uchar* flags, const global float* camera
     //if(flagsn&TYPE_SU) return; // don't draw surface
     float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
     for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
-    uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
-    calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
     const uint3 xyz = coordinates(n);
     const float3 p = position(xyz);
+	if(!is_in_camera_frustrum(p, camera_cache)) return; // skip loading LBM data if grid cell is not visible
+	uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
+	calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
     const int c =  // coloring scheme
     	flagsn_bo==TYPE_S ? COLOR_S : // solid boundary
     	((flagsn&TYPE_T)&&flagsn_bo==TYPE_E) ? color_average(COLOR_T, COLOR_E) : // both temperature boundary and equilibrium boundary
@@ -981,6 +1002,10 @@ kernel void graphics_flags_mc(const global uchar* flags, const global float* cam
     const uint3 xyz = coordinates(n);
     if(xyz.x>=def_Nx-1u||xyz.y>=def_Ny-1u||xyz.z>=def_Nz-1u) return;
     //if(xyz.x==0u||xyz.y==0u||xyz.z==0u||xyz.x>=def_Nx-2u||xyz.y>=def_Ny-2u||xyz.z>=def_Nz-2u) return;
+	float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
+	for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
+	const float3 p = position(xyz);
+	if(!is_in_camera_frustrum(p, camera_cache)) return; // skip loading LBM data if grid cell is not visible
     uint j[8];
     const uint x0 =  xyz.x; // cube stencil
     const uint xp =  xyz.x+1u;
@@ -1001,17 +1026,14 @@ kernel void graphics_flags_mc(const global uchar* flags, const global float* cam
     float3 triangles[15]; // maximum of 5 triangles with 3 vertices each
     const uint tn = marching_cubes(v, 0.5f, triangles); // run marching cubes algorithm
     if(tn==0u) return;
-    float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
-    for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
-    const float3 offset = (float3)((float)xyz.x+0.5f-0.5f*(float)def_Nx, (float)xyz.y+0.5f-0.5f*(float)def_Ny, (float)xyz.z+0.5f-0.5f*(float)def_Nz);
-    for(uint i=0u; i<tn; i++) {
+    for(uint i=0u; i<tn; i++) { // TODO: make compatible with FORCE_FIELD
 	    const float3 p0 = triangles[3u*i   ];
 	    const float3 p1 = triangles[3u*i+1u];
 	    const float3 p2 = triangles[3u*i+2u];
 	    const float3 normal = normalize(cross(p1-p0, p2-p0));
 
-        const int c = shading(0xDFDFDF, (p0+p1+p2)/3.0f+offset, normal, camera_cache); // 0xDFDFDF;
-        draw_triangle(p0+offset, p1+offset, p2+offset, c, camera_cache, bitmap, zbuffer);
+        const int c = shading(0xDFDFDF, p+(p0+p1+p2)/3.0f, normal, camera_cache); // 0xDFDFDF;
+		draw_triangle(p+p0, p+p1, p+p2, c, camera_cache, bitmap, zbuffer);
     }
 }
 
@@ -1021,15 +1043,16 @@ kernel void graphics_field(const global uchar* flags, const global float* u, con
 	const uint3 xyz = coordinates(n);
 	const bool rx=(int)xyz.x!=slice_x, ry=(int)xyz.y!=slice_y, rz=(int)xyz.z!=slice_z;
 	if((slice_mode==1&&rx)||(slice_mode==2&&ry)||(slice_mode==3&&rz)||(slice_mode==4&&rx&&rz)||(slice_mode==5&&rx&&ry&&rz)||(slice_mode==6&&ry&&rz)||(slice_mode==7&&rx&&ry)) return;
+	float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
+	for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
+	const float3 p = position(xyz);
+	if(!is_in_camera_frustrum(p, camera_cache)) return; // skip loading LBM data if grid cell is not visible
 
     if(flags[n]&(TYPE_S|TYPE_E|TYPE_I|TYPE_G)) return;
 
     float3 un = load_u(n, u); // cache velocity
     const float ul = length(un);
     if(def_scale_u*ul<0.1f) return; // don't draw lattice points where the velocity is lower than this threshold
-    float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
-    for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
-    const float3 p = position(coordinates(n));
     const int c = iron_color(255.0f*def_scale_u*ul); // coloring by velocity
     draw_line(p-(0.5f/ul)*un, p+(0.5f/ul)*un, c, camera_cache, bitmap, zbuffer);
 
@@ -1046,13 +1069,13 @@ kernel void graphics_streamline(const global uchar* flags, const global float* u
         const uint x = t%(def_Nx/def_streamline_sparse);
         float3 p = (float)def_streamline_sparse*((float3)((float)x+0.5f, (float)y+0.5f, (float)z+0.5f))-0.5f*((float3)((float)def_Nx, (float)def_Ny, (float)def_Nz));
         const bool rx=fabs(p.x-slice.x)>0.5f*(float)def_streamline_sparse, ry=fabs(p.y-slice.y)>0.5f*(float)def_streamline_sparse, rz=fabs(p.z-slice.z)>0.5f*(float)def_streamline_sparse;
-    #else
+    #else // D2Q9
         if(n>=(def_Nx/def_streamline_sparse)*(def_Ny/def_streamline_sparse)) return;
         const uint y = n/(def_Nx/def_streamline_sparse); // disassemble 1D index to 3D coordinates
         const uint x = n%(def_Nx/def_streamline_sparse);
         float3 p = ((float3)((float)def_streamline_sparse*((float)x+0.5f), (float)def_streamline_sparse*((float)y+0.5f), 0.5f))-0.5f*((float3)((float)def_Nx, (float)def_Ny, (float)def_Nz));
         const bool rx=fabs(p.x-slice.x)>0.5f*(float)def_streamline_sparse, ry=fabs(p.y-slice.y)>0.5f*(float)def_streamline_sparse, rz=true;
-    #endif
+    #endif // D2Q9
     if((slice_mode==1&&rx)||(slice_mode==2&&ry)||(slice_mode==3&&rz)||(slice_mode==4&&rx&&rz)||(slice_mode==5&&rx&&ry&&rz)||(slice_mode==6&&ry&&rz)||(slice_mode==7&&rx&&ry)) return;
     if((slice_mode==1||slice_mode==5||slice_mode==4||slice_mode==7)&!rx) p.x = slice.x; // snap streamline position to slice position
     if((slice_mode==2||slice_mode==5||slice_mode==6||slice_mode==7)&!ry) p.y = slice.y;
@@ -1084,13 +1107,14 @@ kernel void graphics_q_field(const global uchar* flags, const global float* u, c
     const uint n = get_global_id(0);
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute graphics_q_field() on halo
     if(flags[n]&(TYPE_S|TYPE_E|TYPE_I|TYPE_G)) return;
+	const float3 p = position(coordinates(n));
+	float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
+	for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
+	if(!is_in_camera_frustrum(p, camera_cache)) return; // skip loading LBM data if grid cell is not visible
     float3 un = load_u(n, u); // cache velocity
     const float ul = length(un);
     const float Q = calculate_Q(n, u);
     if(Q<def_scale_Q_min||ul==0.0f) return; // don't draw lattice points where the velocity is very low
-    float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
-    for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
-    const float3 p = position(coordinates(n));
     const int c = rainbow_color(255.0f*def_scale_u*ul); // coloring by velocity
     draw_line(p-(0.5f/ul)*un, p+(0.5f/ul)*un, c, camera_cache, bitmap, zbuffer);
 }
@@ -1099,6 +1123,10 @@ kernel void graphics_q(const global uchar* flags, const global float* u, const g
     const uint n = get_global_id(0);
 	const uint3 xyz = coordinates(n);
 	if(xyz.x>=def_Nx-1u||xyz.y>=def_Ny-1u||xyz.z>=def_Nz-1u||is_halo_q(xyz)) return; // don't execute graphics_q_field() on marching-cubes halo
+	const float3 p = position(xyz);
+	float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
+	for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
+	if(!is_in_camera_frustrum(p, camera_cache)) return; // skip loading LBM data if grid cell is not visible
 	const uint x0 =  xyz.x; // cube stencil
 	const uint xp =  xyz.x+1u;
 	const uint y0 =  xyz.y    *def_Nx;
@@ -1161,9 +1189,6 @@ kernel void graphics_q(const global uchar* flags, const global float* u, const g
 	float3 triangles[15]; // maximum of 5 triangles with 3 vertices each
 	const uint tn = marching_cubes(v, def_scale_Q_min, triangles); // run marching cubes algorithm
 	if(tn==0u) return;
-	float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
-	for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
-	const float3 offset = (float3)((float)xyz.x+0.5f-0.5f*(float)def_Nx, (float)xyz.y+0.5f-0.5f*(float)def_Ny, (float)xyz.z+0.5f-0.5f*(float)def_Nz);
 	for(uint i=0u; i<tn; i++) {
 		const float3 p0 = triangles[3u*i   ]; // triangle coordinates in [0,1] (local cell)
 		const float3 p1 = triangles[3u*i+1u];
@@ -1172,17 +1197,17 @@ kernel void graphics_q(const global uchar* flags, const global float* u, const g
 		int c0, c1, c2; {
 			const float x1=p0.x, y1=p0.y, z1=p0.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c0 = shading(rainbow_color(255.0f*def_scale_u*length(ui)), p0+offset, normal, camera_cache); // rainbow_color(255.0f*def_scale_u*length(ui));
+			c0 = shading(rainbow_color(255.0f*def_scale_u*length(ui)), p+p0, normal, camera_cache); // rainbow_color(255.0f*def_scale_u*length(ui));
 		} {
 			const float x1=p1.x, y1=p1.y, z1=p1.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c1 = shading(rainbow_color(255.0f*def_scale_u*length(ui)), p1+offset, normal, camera_cache); // rainbow_color(255.0f*def_scale_u*length(ui));
+			c1 = shading(rainbow_color(255.0f*def_scale_u*length(ui)), p+p1, normal, camera_cache); // rainbow_color(255.0f*def_scale_u*length(ui));
 		} {
 			const float x1=p2.x, y1=p2.y, z1=p2.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c2 = shading(rainbow_color(255.0f*def_scale_u*length(ui)), p2+offset, normal, camera_cache); // rainbow_color(255.0f*def_scale_u*length(ui));
+			c2 = shading(rainbow_color(255.0f*def_scale_u*length(ui)), p+p2, normal, camera_cache); // rainbow_color(255.0f*def_scale_u*length(ui));
 		}
-		draw_triangle_interpolated(p0+offset, p1+offset, p2+offset, c0, c1, c2, camera_cache, bitmap, zbuffer); // draw triangle with interpolated colors
+		draw_triangle_interpolated(p+p0, p+p1, p+p2, c0, c1, c2, camera_cache, bitmap, zbuffer); // draw triangle with interpolated colors
 	}
 }
 

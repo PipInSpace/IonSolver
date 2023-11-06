@@ -79,6 +79,8 @@ pub enum VariableFloatBuffer {
     F32(Buffer<f32>),
 }
 
+
+
 /// Struct used to bundle arguments for LBM simulation setup.
 /// ```
 /// LbmConfig {
@@ -129,7 +131,7 @@ pub struct LbmConfig {
     pub ext_equilibrium_boudaries: bool, //Extensions
     pub ext_volume_force: bool,
     pub ext_force_field: bool,    // Needs volume_force to work
-    pub ext_electric_force: bool, // Needs force_field to work
+    pub ext_electric_force: bool, // Needs volume_force to work
 
     pub graphics_config: GraphicsConfig,
 }
@@ -700,10 +702,10 @@ impl LbmDomain {
         }
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
-        + if lbm_config.ext_electric_force {"\n	        #define ELECTRIC_FORCE"} else {""}
-        + &if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD".to_owned()
-        +"\n	#define def_ke "+ &format!("{:.5}", lbm_config.units.si_to_ke(8.987552E9)) // coulomb constant scaled by distance per lattice cell
+        + &if lbm_config.ext_electric_force {"\n	        #define ELECTRIC_FORCE".to_owned()
+        +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke(8.987552E9)) // coulomb constant scaled by distance per lattice cell
         } else {"".to_string()}
+        + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""};
         //Extensions
     }

@@ -367,7 +367,10 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     let mut i: u32 = 0;
 
     let mut lbm = setup::setup();
+    let now = std::time::Instant::now();
+    println!("Starting initialize kernel");
     lbm.initialize();
+    println!("initialize kernel took: {}", now.elapsed().as_millis());
 
     // get initial config from ui
     let recieve_result = ctrl_rx.try_recv();
