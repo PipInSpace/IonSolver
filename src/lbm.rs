@@ -12,18 +12,13 @@ use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 ///}
 /// ```
 #[allow(dead_code)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub enum VelocitySet {
+    #[default]
     D2Q9,  // 2D
     D3Q15, // 3D low precision
     D3Q19, // 3D recommended
     D3Q27, // 3D highest precision
-}
-
-impl Default for VelocitySet {
-    fn default() -> Self {
-        VelocitySet::D2Q9
-    }
 }
 
 /// LBM relaxation time type.
@@ -34,16 +29,11 @@ impl Default for VelocitySet {
 ///}
 /// ```
 #[allow(dead_code)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub enum RelaxationTime {
+    #[default]
     Srt, // Single relaxation time, more efficient
     Trt, // Two-relaxation time, more precise
-}
-
-impl Default for RelaxationTime {
-    fn default() -> Self {
-        RelaxationTime::Srt
-    }
 }
 
 /// Enum for different floating-point number types used in the simulation.
@@ -57,17 +47,12 @@ impl Default for RelaxationTime {
 ///
 /// [Learn more at this paper about custom float types.](https://www.researchgate.net/publication/362275548_Accuracy_and_performance_of_the_lattice_Boltzmann_method_with_64-bit_32-bit_and_customized_16-bit_number_formats)
 #[allow(dead_code)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub enum FloatType {
+    #[default]
     FP16S, // Custom float type represented as a u16, recommended
     FP16C, // Custom float type represented as a u16
     FP32,  // Default float type
-}
-
-impl Default for FloatType {
-    fn default() -> Self {
-        FloatType::FP16S
-    }
 }
 
 /// Enum representing a buffer of variable [`FloatType`]
@@ -642,7 +627,7 @@ impl LbmDomain {
         +"\n	#define load(p,o) p[o]" // regular float read
         +"\n	#define store(p,o,x) p[o]=x"; // regular float write
 
-        return "\n    #define def_Nx ".to_owned() + &n_x.to_string()+"u"
+        "\n    #define def_Nx ".to_owned() + &n_x.to_string()+"u"
         +"\n	#define def_Ny "+ &n_y.to_string()+"u"
         +"\n	#define def_Nz "+ &n_z.to_string()+"u"
         +"\n	#define def_N  "+ &Self::get_n(n_x, n_y, n_z).to_string()+"ul"
@@ -706,7 +691,7 @@ impl LbmDomain {
         +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke(8.987552E9)) // coulomb constant scaled by distance per lattice cell
         } else {"".to_string()}
         + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
-        + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""};
+        + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""}
         //Extensions
     }
 
