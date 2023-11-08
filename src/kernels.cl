@@ -863,7 +863,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
     calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
 	#ifdef ELECTRIC_FORCE
-		calculate_E(n, q, E);
+		//calculate_E(n, q, E);
 	#endif // ELECTRIC FORCE
 } // initialize()
 

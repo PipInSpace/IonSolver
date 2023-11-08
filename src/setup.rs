@@ -1,4 +1,4 @@
-use crate::{lbm::Lbm, *};
+use crate::{lbm::Lbm, *, efield_precompute::precompute_E};
 
 /// `setup()` is called at simulation start. Edit this function to change simulation parameters.
 ///
@@ -22,8 +22,13 @@ pub fn setup() -> Lbm {
     lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.graphics_config.graphics = true;
-    lbm_config.ext_electric_force = false;
+    lbm_config.ext_electric_force = true;
     let mut lbm = Lbm::new(lbm_config);
+    let mut vec_q: Vec<(u64, f32)> = vec![];
+    for i in 0..4000 {
+        vec_q.push((i*3, (i*2) as f32))
+    }
+    precompute_E(&lbm, vec_q);
     lbm.setup_taylor_green();
     lbm.domains[0].graphics.as_mut().expect("grapics not enabled").streamline_mode = true;
     //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").q_mode = true;
