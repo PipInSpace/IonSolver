@@ -3,6 +3,7 @@ extern crate ocl;
 use std::time::Duration;
 use std::{f32::consts::PI, fs, sync::mpsc, thread};
 
+mod efield_precompute;
 mod graphics;
 mod info;
 mod lbm;
@@ -10,7 +11,7 @@ mod opencl;
 mod setup;
 mod units;
 use eframe::*;
-use egui::{Color32, ColorImage, Image, Label, Sense, Stroke, TextureOptions, Vec2, InnerResponse};
+use egui::{Color32, ColorImage, Image, InnerResponse, Label, Sense, Stroke, TextureOptions, Vec2};
 use lbm::{Lbm, LbmConfig, VelocitySet};
 
 /// Is send by the simulation to communicate information to the UI
@@ -82,7 +83,12 @@ impl SimControl {
     }
 
     // Egui response ro
-    fn draw_top_controls(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame, send_control: &mut bool) -> InnerResponse<InnerResponse<()>> {
+    fn draw_top_controls(
+        &mut self,
+        ctx: &egui::Context,
+        _frame: &mut eframe::Frame,
+        send_control: &mut bool,
+    ) -> InnerResponse<InnerResponse<()>> {
         //egui styles
         let zeromargin = egui::Margin {
             left: 0.0,
@@ -420,7 +426,13 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     );
                     params[0] = state.camera_zoom;
                     for d in &lbm.domains {
-                        d.graphics.as_ref().expect("graphics used but not enabled").camera_params.write(&params).enq().unwrap();
+                        d.graphics
+                            .as_ref()
+                            .expect("graphics used but not enabled")
+                            .camera_params
+                            .write(&params)
+                            .enq()
+                            .unwrap();
                     }
                 }
                 if (camera_changed || !state.paused) && lbm.config.graphics_config.graphics {
@@ -449,9 +461,15 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
 
                 lbm.do_time_step();
 
-                let time_per_step = (jnow.elapsed().as_micros()/j) as u32;
-                print!("\rStep {}, Steps/s: {}, MLUP/s: {}", i, 1000000/time_per_step, mn*(1000000/time_per_step) as u64);
-                if i % state.frame_spacing == 0 && state.save && lbm.config.graphics_config.graphics {
+                let time_per_step = (jnow.elapsed().as_micros() / j) as u32;
+                print!(
+                    "\rStep {}, Steps/s: {}, MLUP/s: {}",
+                    i,
+                    1000000 / time_per_step,
+                    mn * (1000000 / time_per_step) as u64
+                );
+                if i % state.frame_spacing == 0 && state.save && lbm.config.graphics_config.graphics
+                {
                     // Saves frames if needed
                     lbm.draw_frame(true, sim_tx.clone(), &i);
                 }
