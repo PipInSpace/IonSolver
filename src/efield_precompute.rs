@@ -7,7 +7,7 @@ use rayon::prelude::*;
 /// from a vector of charges. 
 fn calculate_e(
     n: u64,
-    charges: &Vec<([f32; 3], f32)>,
+    charges: &[([f32; 3], f32)],
     lengths: (u32, u32, u32),
     def_ke: f32,
 ) -> [f32; 3] {
@@ -78,7 +78,7 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     let def_ke = lbm.config.units.si_to_ke(8.987552E9);
 
-    fn deborrow<'a, 'b, T>(r: &'a T) -> &'b mut T {
+    fn deborrow<'b, T>(r: &T) -> &'b mut T {
         // Neded to access e_field in parallel.
         // This is safe, because no indecies are accessed multiple times
         unsafe { #[allow(mutable_transmutes)] std::mem::transmute(r) }
