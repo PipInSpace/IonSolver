@@ -336,8 +336,7 @@ pub struct LbmDomain {
     pub rho: Buffer<f32>,
     pub u: Buffer<f32>,
     pub flags: Buffer<u8>,
-    pub q: Option<Buffer<f32>>, // Optional Buffers
-    pub e: Option<Buffer<f32>>,
+    pub e: Option<Buffer<f32>>, // Optional Buffers
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
 
@@ -458,12 +457,6 @@ impl LbmDomain {
         } else {
             None
         };
-        // Electric charge buffer.
-        let q: Option<Buffer<f32>> = if lbm_config.ext_electric_force {
-            Some(opencl::create_buffer(&queue, [n], 0f32))
-        } else {
-            None
-        };
         // Electric field buffer as 3D Vectors
         let e: Option<Buffer<f32>> = if lbm_config.ext_electric_force {
             Some(opencl::create_buffer(&queue, [n * 3], 0f32))
@@ -530,13 +523,14 @@ impl LbmDomain {
             kernel_stream_collide_builder
                 .arg_named("F", f.as_ref().expect("f buffer used but not initialized"));
         }
-        if lbm_config.ext_electric_force {
-            kernel_initialize_builder
-                .arg_named("q", q.as_ref().expect("q buffer used but not initialized"))
-                .arg_named("E", e.as_ref().expect("e buffer used but not initialized"));
-            kernel_stream_collide_builder
-                .arg_named("E", e.as_ref().expect("e buffer used but not initialized"));
-        }
+        // Example of conditional arguments:
+        // 
+        //if lbm_config.ext_electric_force {
+        //    kernel_initialize_builder
+        //        .arg_named("E", e.as_ref().expect("e buffer used but not initialized"));
+        //    kernel_stream_collide_builder
+        //        .arg_named("E", e.as_ref().expect("e buffer used but not initialized"));
+        //}
 
         let kernel_initialize: Kernel = kernel_initialize_builder.build().unwrap();
         let kernel_stream_collide: Kernel = kernel_stream_collide_builder.build().unwrap();
@@ -569,7 +563,6 @@ impl LbmDomain {
             rho,
             u,
             flags,
-            q,
             e,
             f,
             t,

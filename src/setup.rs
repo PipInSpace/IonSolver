@@ -72,8 +72,6 @@ impl Lbm {
             let z = d / (dx * dy);
 
             let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx * dsy * dsz * 3) as usize];
-            #[allow(unused_mut)]
-            let mut domain_vec_q: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize]; // temporary q (all 0)
             let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize];
             for zi in 0..dsz {
                 // iterates over every cell in the domain, filling it with  Taylor-Green-vortex
@@ -134,16 +132,6 @@ impl Lbm {
                 .write(&domain_vec_rho)
                 .enq()
                 .unwrap();
-            if self.config.ext_electric_force {
-                // Only write to buffer if it is needed/initialized
-                self.domains[d as usize]
-                    .q
-                    .as_mut()
-                    .expect("q buffer used but not initialized")
-                    .write(&domain_vec_q)
-                    .enq()
-                    .unwrap();
-            }
             self.domains[d as usize].queue.finish().unwrap();
         }
         println!();
