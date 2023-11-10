@@ -545,7 +545,7 @@ impl LbmDomain {
         //TODO: allocate transfer buffers
 
         let graphics: Option<Graphics> = if lbm_config.graphics_config.graphics {
-            Some(Graphics::new(lbm_config, &program, &queue, &flags, &u))
+            Some(Graphics::new(lbm_config, &program, &queue, &flags, e.as_ref().expect("msg")))
         } else {
             None
         };
