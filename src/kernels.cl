@@ -834,7 +834,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 __kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags
 #ifdef ELECTRIC_FORCE
-, global float* q, global float* E
+
 #endif
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx

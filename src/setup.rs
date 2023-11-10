@@ -15,8 +15,8 @@ use crate::{lbm::Lbm, *, efield_precompute::precompute_E};
 pub fn setup() -> Lbm {
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
-    lbm_config.n_x = 512;
-    lbm_config.n_y = 512;
+    lbm_config.n_x = 256;
+    lbm_config.n_y = 256;
     lbm_config.n_z = 256;
     lbm_config.d_x = 1;
     lbm_config.nu = 0.1;

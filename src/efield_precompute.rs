@@ -29,7 +29,7 @@ fn calculate_e(
         ];
         let normalized = fast_normalize(coord_diff);
         let length_sq = len_sq(coord_diff);
-        let length_sq_inv = 1.0/len_sq(coord_diff);
+        let length_sq_inv = 1.0/length_sq;
         if length_sq != 0.0 {
             e_at_cell = [
                 e_at_cell[0] + (charge * length_sq_inv * normalized[0]),
@@ -67,7 +67,7 @@ fn charge_float_pos(charges: Vec<(u64, f32)>, lengths: (u32, u32, u32)) -> Vec<(
 
 #[allow(unused_mut)]
 // variables are mutated with deborrow
-/// precomputes the E field from a Vector of charges
+/// precomputes the electric field from a Vector of charges
 pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
     // TODO: Make multi-domain compatible
     println!("Precomputing E for {} charges", charges.len());
