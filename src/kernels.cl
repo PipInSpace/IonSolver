@@ -732,11 +732,11 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
 
 	#ifdef ELECTRIC_FORCE
-	//{ // separate block to avoid variable name conflicts
-	//	fxn += E[                 n] * rhon * def_charge; // apply electric field * charge = force
-	//	fyn += E[    def_N+(ulong)n] * rhon * def_charge;
-	//	fzn += E[2ul*def_N+(ulong)n] * rhon * def_charge;
-	//}
+		{ // separate block to avoid variable name conflicts
+			fxn += E[                 n] * rhon * def_charge; // apply electric field * charge = force
+			fyn += E[    def_N+(ulong)n] * rhon * def_charge;
+			fzn += E[2ul*def_N+(ulong)n] * rhon * def_charge;
+		}
 	#endif// ELECTRIC_FORCE
 
     float Fin[def_velocity_set]; // forcing terms

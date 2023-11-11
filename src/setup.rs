@@ -15,14 +15,15 @@ use crate::{efield_precompute::precompute_E, lbm::Lbm, *};
 pub fn setup() -> Lbm {
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
-    lbm_config.n_x = 128;
-    lbm_config.n_y = 128;
-    lbm_config.n_z = 128;
+    lbm_config.n_x = 256;
+    lbm_config.n_y = 256;
+    lbm_config.n_z = 256;
     lbm_config.d_x = 1;
     lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.graphics_config.graphics = true;
     lbm_config.graphics_config.streamline_every = 8;
+    lbm_config.ext_volume_force = true;
     lbm_config.ext_electric_force = true;
     let mut lbm = Lbm::new(lbm_config);
 
@@ -38,6 +39,7 @@ pub fn setup() -> Lbm {
         .as_mut()
         .expect("grapics not enabled")
         .streamline_mode = true;
+    //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").streamline_e_mode = true;
     //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").field_mode = true;
     //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").q_mode = true;
 
