@@ -15,7 +15,7 @@ use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 #[derive(Clone, Copy, Default)]
 pub enum VelocitySet {
     #[default]
-    D2Q9,  // 2D
+    D2Q9, // 2D
     D3Q15, // 3D low precision
     D3Q19, // 3D recommended
     D3Q27, // 3D highest precision
@@ -63,8 +63,6 @@ pub enum VariableFloatBuffer {
     U16(Buffer<u16>), // Buffers for variable float types
     F32(Buffer<f32>),
 }
-
-
 
 /// Struct used to bundle arguments for LBM simulation setup.
 /// ```
@@ -523,7 +521,7 @@ impl LbmDomain {
             kernel_stream_collide_builder
                 .arg_named("F", f.as_ref().expect("f buffer used but not initialized"));
         }
-        
+
         if lbm_config.ext_electric_force {
             kernel_stream_collide_builder
                 .arg_named("E", e.as_ref().expect("e buffer used but not initialized"));
@@ -536,7 +534,7 @@ impl LbmDomain {
         //TODO: allocate transfer buffers
 
         let graphics: Option<Graphics> = if lbm_config.graphics_config.graphics {
-            Some(Graphics::new(lbm_config, &program, &queue, &flags, e.as_ref().expect("msg")))
+            Some(Graphics::new(lbm_config, &program, &queue, &flags, &u))
         } else {
             None
         };

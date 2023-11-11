@@ -11,7 +11,7 @@ mod opencl;
 mod setup;
 mod units;
 use eframe::*;
-use egui::{Color32, ColorImage, Image, InnerResponse, Label, Sense, Stroke, TextureOptions, Vec2};
+use egui::{Color32, ColorImage, InnerResponse, Label, Sense, Stroke, TextureOptions, Vec2};
 use lbm::{Lbm, LbmConfig, VelocitySet};
 
 /// Is send by the simulation to communicate information to the UI
@@ -243,12 +243,12 @@ impl App for SimControl {
         self.draw_top_controls(ctx, _frame, &mut send_control);
 
         frame.outer_margin = zeromargin;
-        frame.fill = Color32::from_rgb(0x6C, 0x6C, 0x7C);
+        frame.fill = Color32::BLACK;
         egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
             ui.style_mut().visuals.override_text_color = Some(Color32::WHITE);
             match &self.display_img {
                 Some(img) => {
-                    let response = ui.add(Image::new(img.id(), ui.available_size()));
+                    let response = ui.image(img.id(), ui.available_size());
                     let id = ui.id();
                     let response = ui.interact(response.rect, id, Sense::click_and_drag());
                     if response.dragged() {
@@ -263,7 +263,18 @@ impl App for SimControl {
                     }
                 }
                 None => {
-                    ui.add(Label::new("Simulation Graphic Output"));
+                    ui.style_mut()
+                        .text_styles
+                        .get_mut(&egui::TextStyle::Body)
+                        .unwrap()
+                        .size = 18.0;
+                    ui.with_layout(
+                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        |ui| {
+                            ui.label("Simulation Graphic Output");
+                            ui.add(Label::new("text"));
+                        },
+                    );
                 }
             }
             ui.input(|i| {

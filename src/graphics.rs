@@ -5,7 +5,7 @@ use image::{ImageBuffer, Rgb};
 use ocl::{Buffer, Kernel, Program, Queue};
 
 use crate::{
-    lbm::{Lbm, LbmConfig, VelocitySet},
+    lbm::{Lbm, LbmConfig, LbmDomain, VelocitySet},
     opencl, SimState,
 };
 
@@ -22,11 +22,12 @@ pub struct Graphics {
     kernel_graphics_streamline: Kernel,
     kernel_graphics_q: Kernel,
 
-    pub streamline_mode: bool,
-    pub field_mode: bool,
-    pub q_mode: bool,
-    pub flags_mode: bool,
-    pub flags_surface_mode: bool,
+    pub streamline_mode: bool,    // Draw streamline mode
+    pub streamline_e_mode: bool,  // Streamline e field
+    pub field_mode: bool,         // Draw field
+    pub q_mode: bool,             // Draw q (vorticity)
+    pub flags_mode: bool,         // Draw flags
+    pub flags_surface_mode: bool, // Draw flags (surface)
 }
 
 impl Graphics {
@@ -160,36 +161,54 @@ impl Graphics {
             kernel_graphics_streamline,
             kernel_graphics_q,
             streamline_mode: true,
+            streamline_e_mode: false,
             field_mode: false,
             q_mode: false,
             flags_mode: false,
             flags_surface_mode: false,
         }
     }
+}
 
+impl LbmDomain {
     fn enqueue_draw_frame(&self) {
-        // camera_params = update_camera()
-        // camera_params.enqueue_write
+        let graphics = self
+            .graphics
+            .as_ref()
+            .expect("Graphics used but not initialized");
         unsafe {
-            self.kernel_clear.enq().unwrap();
+            graphics.kernel_clear.enq().unwrap();
             //if visualisation mode
-            if self.streamline_mode {
-                self.kernel_graphics_streamline.enq().unwrap();
+            if graphics.streamline_mode {
+                // Streamlines can show velocity and e field
+                if graphics.streamline_e_mode {
+                    graphics
+                        .kernel_graphics_streamline
+                        .set_arg(
+                            "u",
+                            self.e.as_ref().expect("E buffer used but not initialized"),
+                        )
+                        .unwrap();
+                } else {
+                    graphics
+                        .kernel_graphics_streamline
+                        .set_arg("u", &self.u)
+                        .unwrap();
+                }
+                graphics.kernel_graphics_streamline.enq().unwrap();
             }
-            if self.field_mode {
-                self.kernel_graphics_field.enq().unwrap();
+            if graphics.field_mode {
+                graphics.kernel_graphics_field.enq().unwrap();
             }
-            if self.q_mode {
-                self.kernel_graphics_q.enq().unwrap();
+            if graphics.q_mode {
+                graphics.kernel_graphics_q.enq().unwrap();
             }
-            if self.flags_mode {
-                self.kernel_graphics_flags.enq().unwrap();
+            if graphics.flags_mode {
+                graphics.kernel_graphics_flags.enq().unwrap();
             }
-            if self.flags_surface_mode {
-                self.kernel_graphics_flags_mc.enq().unwrap();
+            if graphics.flags_surface_mode {
+                graphics.kernel_graphics_flags_mc.enq().unwrap();
             }
-            //self.bitmap.read(&mut self.bitmap_host).enq().unwrap();
-            //self.zbuffer.read(&mut self.zbuffer_host).enq().unwrap();
         }
     }
 }
@@ -235,12 +254,7 @@ impl GraphicsConfig {
 
 // draw_frame function for Lbm
 impl Lbm {
-    pub fn draw_frame(
-        &self,
-        save: bool,
-        sim_tx: Sender<SimState>,
-        i: &u32,
-    ) {
+    pub fn draw_frame(&self, save: bool, sim_tx: Sender<SimState>, i: &u32) {
         let width = self.config.graphics_config.camera_width;
         let height = self.config.graphics_config.camera_height;
         let domain_numbers = self.get_domain_numbers();
@@ -250,7 +264,7 @@ impl Lbm {
             vec![vec![0; (width * height) as usize]; domain_numbers - 1]; // Holds later domain bitmaps
         let mut zbuffers: Vec<Vec<i32>> = vec![];
         for d in 0..domain_numbers {
-            self.domains[d].graphics.as_ref().expect("graphics not enabled").enqueue_draw_frame();
+            self.domains[d].enqueue_draw_frame();
         }
         for d in 0..domain_numbers {
             self.domains[d].queue.finish().unwrap();
@@ -292,7 +306,7 @@ impl Lbm {
             }
         }
         self.finish_queues();
-        
+
         let i = *i;
         thread::spawn(move || {
             // Generating images needs own thread for performance reasons
@@ -337,9 +351,7 @@ impl Lbm {
                     //Saving needs own thread for performance reasons
                     let imgbuffer: ImageBuffer<Rgb<u8>, _> =
                         ImageBuffer::from_raw(1920, 1080, save_buffer).unwrap();
-                    imgbuffer
-                        .save(format!(r"out/frame_{}.png", i))
-                        .unwrap();
+                    imgbuffer.save(format!(r"out/frame_{}.png", i)).unwrap();
                 });
             }
         });

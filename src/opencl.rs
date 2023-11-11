@@ -37,7 +37,8 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
         }
     }
     if best_j >= 0 {
-        device_infos[..(domains as usize)].copy_from_slice(&device_type_ids[best_j as usize][..(domains as usize)]);
+        device_infos[..(domains as usize)]
+            .copy_from_slice(&device_type_ids[best_j as usize][..(domains as usize)]);
         //for d in 0..domains as usize {
         //    device_infos[d] = device_type_ids[best_j as usize][d];
         //}

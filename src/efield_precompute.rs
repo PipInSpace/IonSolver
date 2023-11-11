@@ -1,10 +1,10 @@
 use std::ops::Mul;
 
-use crate::{lbm::Lbm, info};
+use crate::{info, lbm::Lbm};
 use rayon::prelude::*;
 
-/// calculates electric field vector at a cell with index n 
-/// from a vector of charges. 
+/// calculates electric field vector at a cell with index n
+/// from a vector of charges.
 fn calculate_e(
     n: u64,
     charges: &[([f32; 3], f32)],
@@ -29,7 +29,7 @@ fn calculate_e(
         ];
         let normalized = fast_normalize(coord_diff);
         let length_sq = len_sq(coord_diff);
-        let length_sq_inv = 1.0/length_sq;
+        let length_sq_inv = 1.0 / length_sq;
         if length_sq != 0.0 {
             e_at_cell = [
                 e_at_cell[0] + (charge * length_sq_inv * normalized[0]),
@@ -37,7 +37,6 @@ fn calculate_e(
                 e_at_cell[2] + (charge * length_sq_inv * normalized[2]),
             ]
         }
-        
     }
     e_at_cell[0] *= def_ke;
     e_at_cell[1] *= def_ke;
@@ -74,30 +73,39 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
 
     // Set variables
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
-    let mut e_field: Vec<f32> = vec![0.0; (n*3) as usize];
+    let mut e_field: Vec<f32> = vec![0.0; (n * 3) as usize];
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     let def_ke = lbm.config.units.si_to_ke(8.987552E9);
 
     fn deborrow<'b, T>(r: &T) -> &'b mut T {
         // Neded to access e_field in parallel.
         // This is safe, because no indecies are accessed multiple times
-        unsafe { #[allow(mutable_transmutes)] std::mem::transmute(r) }
+        unsafe {
+            #[allow(mutable_transmutes)]
+            std::mem::transmute(r)
+        }
     }
 
     let charges_float_pos: Vec<([f32; 3], f32)> = charge_float_pos(charges, lengths);
 
     let mut count: u32 = 0;
-    (0..n).into_par_iter().for_each(|i|{
+    (0..n).into_par_iter().for_each(|i| {
         let e_at = calculate_e(i, &charges_float_pos, lengths, def_ke);
-        deborrow(&e_field)[i         as usize] = e_at[0];
-        deborrow(&e_field)[(i+n)     as usize] = e_at[1];
-        deborrow(&e_field)[(i+(n*2)) as usize] = e_at[2];
+        deborrow(&e_field)[i as usize] = e_at[0];
+        deborrow(&e_field)[(i + n) as usize] = e_at[1];
+        deborrow(&e_field)[(i + (n * 2)) as usize] = e_at[2];
         *deborrow(&count) += 1;
         print!("\r{}", info::progressbar(count as f32 / n as f32));
     });
     println!();
 
-    lbm.domains[0].e.as_ref().expect("E buffer used but not initialized").write(&e_field).enq().unwrap();
+    lbm.domains[0]
+        .e
+        .as_ref()
+        .expect("E buffer used but not initialized")
+        .write(&e_field)
+        .enq()
+        .unwrap();
 }
 
 #[inline]

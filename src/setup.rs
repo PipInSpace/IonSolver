@@ -1,4 +1,4 @@
-use crate::{lbm::Lbm, *, efield_precompute::precompute_E};
+use crate::{efield_precompute::precompute_E, lbm::Lbm, *};
 
 /// `setup()` is called at simulation start. Edit this function to change simulation parameters.
 ///
@@ -15,25 +15,29 @@ use crate::{lbm::Lbm, *, efield_precompute::precompute_E};
 pub fn setup() -> Lbm {
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
-    lbm_config.n_x = 256;
-    lbm_config.n_y = 256;
-    lbm_config.n_z = 256;
+    lbm_config.n_x = 128;
+    lbm_config.n_y = 128;
+    lbm_config.n_z = 128;
     lbm_config.d_x = 1;
     lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.graphics_config.graphics = true;
+    lbm_config.graphics_config.streamline_every = 8;
     lbm_config.ext_electric_force = true;
     let mut lbm = Lbm::new(lbm_config);
 
     // Setup test charges
     let mut vec_q: Vec<(u64, f32)> = vec![];
-    for i in 0..4000 {
-        vec_q.push((i*4, (i*2) as f32 / -1000000000000000.0))
-    }
+    vec_q.push((1056824, 0.00000001));
+    vec_q.push((1056840, -0.00000001));
     precompute_E(&lbm, vec_q);
 
     lbm.setup_taylor_green();
-    lbm.domains[0].graphics.as_mut().expect("grapics not enabled").streamline_mode = true;
+    lbm.domains[0]
+        .graphics
+        .as_mut()
+        .expect("grapics not enabled")
+        .streamline_mode = true;
     //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").field_mode = true;
     //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").q_mode = true;
 

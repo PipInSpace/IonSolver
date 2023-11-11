@@ -116,7 +116,6 @@ impl Units {
     pub fn si_to_ke(&self, ke: f32) -> f32 {
         ke / (self.kg * cb(self.m) / (self.c * self.c * self.s * self.s))
     }
-
 }
 
 #[inline]
