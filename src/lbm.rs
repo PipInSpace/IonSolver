@@ -1,5 +1,5 @@
-use crate::units::Units;
-use crate::{graphics::Graphics, graphics::GraphicsConfig, *};
+use crate::{units::Units, graphics::GraphicsConfig};
+use crate::*;
 use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 /// Velocity discretizations in 2D and 3D.
@@ -126,7 +126,7 @@ impl LbmConfig {
             velocity_set: VelocitySet::D2Q9,
             relaxation_time: RelaxationTime::Srt,
             float_type: FloatType::FP16S,
-            units: Units::new(),
+            units: units::Units::new(),
             n_x: 1,
             n_y: 1,
             n_z: 1,
@@ -143,7 +143,7 @@ impl LbmConfig {
             ext_electric_force: false,
             ext_force_field: false,
 
-            graphics_config: GraphicsConfig::new(),
+            graphics_config: graphics::GraphicsConfig::new(),
         }
     }
 }
@@ -313,7 +313,6 @@ impl Lbm {
 /// ```
 /// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function.
 /// This ensures all arguments are correctly set.
-//#[allow(unused)]
 pub struct LbmDomain {
     // FluidX3D creates contexts/queues/programs for each device automatically through another class
     pub queue: Queue,
@@ -338,7 +337,7 @@ pub struct LbmDomain {
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
 
-    pub graphics: Option<Graphics>, // Graphics struct, handles rendering
+    pub graphics: Option<graphics::Graphics>, // Graphics struct, handles rendering
 }
 
 impl LbmDomain {
@@ -533,8 +532,8 @@ impl LbmDomain {
         println!("Kernels for domain compiled.");
         //TODO: allocate transfer buffers
 
-        let graphics: Option<Graphics> = if lbm_config.graphics_config.graphics {
-            Some(Graphics::new(lbm_config, &program, &queue, &flags, &u))
+        let graphics: Option<graphics::Graphics> = if lbm_config.graphics_config.graphics {
+            Some(graphics::Graphics::new(lbm_config, &program, &queue, &flags, &u))
         } else {
             None
         };
@@ -677,7 +676,7 @@ impl LbmDomain {
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
         + &if lbm_config.ext_electric_force {"\n	        #define ELECTRIC_FORCE".to_owned()
         +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke(8.987552E9)) // coulomb constant scaled by distance per lattice cell
-        +"\n	#define def_charge "+ &format!("{:.5}f", 0.01) // charge held per density unit
+        +"\n	#define def_charge "+ &format!("{:.5}f", 0.005) // charge held per density unit
         } else {"".to_string()}
         + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""}

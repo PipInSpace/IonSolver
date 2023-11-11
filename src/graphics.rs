@@ -4,10 +4,7 @@ use egui::{Color32, ColorImage};
 use image::{ImageBuffer, Rgb};
 use ocl::{Buffer, Kernel, Program, Queue};
 
-use crate::{
-    lbm::{Lbm, LbmConfig, LbmDomain, VelocitySet},
-    opencl, SimState,
-};
+use crate::*;
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
 pub struct Graphics {

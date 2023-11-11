@@ -12,7 +12,7 @@ mod setup;
 mod units;
 use eframe::*;
 use egui::{Color32, ColorImage, InnerResponse, Label, Sense, Stroke, TextureOptions, Vec2};
-use lbm::{Lbm, LbmConfig, VelocitySet};
+use lbm::*;
 
 /// Is send by the simulation to communicate information to the UI
 pub struct SimState {
@@ -473,12 +473,12 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                 lbm.do_time_step();
 
                 let time_per_step = (jnow.elapsed().as_micros() / j) as u32;
-                print!(
+                if i % 20 == 0 {print!(
                     "\rStep {}, Steps/s: {}, MLUP/s: {}",
                     i,
                     1000000 / time_per_step,
                     mn * (1000000 / time_per_step) as u64
-                );
+                );}
                 if i % state.frame_spacing == 0 && state.save && lbm.config.graphics_config.graphics
                 {
                     // Saves frames if needed
@@ -486,6 +486,14 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                 }
                 i += 1;
                 j += 1;
+
+                // ##### SLOWDOWN #####
+                // #####  REMOVE  #####
+                // ##### SLOWDOWN #####
+                //thread::sleep(Duration::from_millis(3))
+                // ##### SLOWDOWN #####
+                // #####  REMOVE  #####
+                // ##### SLOWDOWN #####
             }
         }
         if !state.active {
