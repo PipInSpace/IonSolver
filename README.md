@@ -1,11 +1,11 @@
 # IonSolver
-<img src="https://repository-images.githubusercontent.com/605166637/d1e24e9e-178e-4ca3-92d7-638996106ec6">
+<img src="https://github.com/PipInSpace/IonSolver/blob/main/icons/LogoIonSolver.png?raw=true)">
 
 
 This software will attempt to model magnetohydrodynamic processes with magnetic field-ionized gas interactions. It uses a lattice-boltzman-model for the fluid, initial kernel functions for the LBM where taken with permission from the software [FluidX3D](https://github.com/ProjectPhysX/FluidX3D) by Dr. Moritz Lehmann.
 
 ## Usage
-<img src="https://repository-images.githubusercontent.com/605166637/21090284-8e02-437b-afcb-026e766017bd">
+<img src="https://github.com/PipInSpace/IonSolver/blob/main/icons/Screenshot.png?raw=true">
 To run this software, clone this repository, install rust if not installed already, and run the command <code>cargo run --release</code>
 
 
