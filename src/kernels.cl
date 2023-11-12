@@ -1082,6 +1082,7 @@ kernel void graphics_streamline(const global uchar* flags, const global float* u
     if((slice_mode==3||slice_mode==5||slice_mode==4||slice_mode==6)&!rz) p.z = slice.z;
     float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
     for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
+	if(!is_in_camera_frustrum(p, camera_cache)) return; // skip loading LBM data if grid cell is not visible
     const float hLx=0.5f*(float)(def_Nx-2u*(def_Dx>1u)), hLy=0.5f*(float)(def_Ny-2u*(def_Dy>1u)), hLz=0.5f*(float)(def_Nz-2u*(def_Dz>1u));
     //draw_circle(p, 0.5f*def_streamline_sparse, 0xFFFFFF, camera_cache, bitmap, zbuffer);
     for(float dt=-1.0f; dt<=1.0f; dt+=2.0f) { // integrate forward and backward in time

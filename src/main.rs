@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 extern crate ocl;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{f32::consts::PI, fs, sync::mpsc, thread};
 
 mod efield_precompute;
@@ -414,15 +414,24 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
             let lbm = unsafe { &*(lbm_ptr as *const Lbm) };
             let state = unsafe { &*(state_ptr as *const SimControlTx) };
             let i = unsafe { &*(i_ptr as *const u32) };
+            let mut graphics_i: u32 = 0;
             let mut cached_rot: Vec<f32> = vec![0.0; 2];
             let mut cached_zoom = 0.0;
 
             loop {
-                thread::sleep(Duration::from_millis(33));
+                let now = Instant::now();
                 if !state.active {
                     println!("Exiting Graphics Loop");
                     break;
                 }
+
+                // If sim not paused, only draw frame when sim time step updated
+                let frame_changed = if i > &graphics_i {
+                    graphics_i = *i;
+                    true
+                } else {
+                    false
+                };
 
                 let camera_changed = cached_rot[0] != state.camera_rotation[0]
                     || cached_rot[1] != state.camera_rotation[1]
@@ -446,10 +455,11 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                             .unwrap();
                     }
                 }
-                if (camera_changed || !state.paused) && lbm.config.graphics_config.graphics {
+                if (camera_changed || (!state.paused && frame_changed)) && lbm.config.graphics_config.graphics {
                     // Only draws frames, never saves them
                     lbm.draw_frame(false, sim_tx_g.clone(), i);
                 }
+                thread::sleep(Duration::from_millis(std::cmp::max(0, 33-(now.elapsed().as_millis() as i64)) as u64));
             }
         });
     }
@@ -477,7 +487,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     "\rStep {}, Steps/s: {}, MLUP/s: {}",
                     i,
                     1000000 / time_per_step,
-                    mn * (1000000 / time_per_step) as u64
+                    (mn *1000000) / time_per_step as u64
                 );}
                 if i % state.frame_spacing == 0 && state.save && lbm.config.graphics_config.graphics
                 {
@@ -500,7 +510,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
             println!("\nExiting Simulation Loop");
             break;
         }
-        print!("\rStep {}, Steps/s: {}, MLUP/s: {}", i, 0, 0);
+        print!("\rStep {}, Steps/s: 0, MLUP/s: 0                    ", i);
         let recieve_result = ctrl_rx.try_recv();
         if let Ok(recieve) = recieve_result {
             state = recieve;
