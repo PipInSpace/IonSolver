@@ -13,6 +13,7 @@ use crate::*;
 ///
 /// Run `your_lbm.initialize()` and return it with the config.
 pub fn setup() -> Lbm {
+    //let now = Instant::now();
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
     lbm_config.n_x = 128;
@@ -22,20 +23,27 @@ pub fn setup() -> Lbm {
     lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.graphics_config.graphics = true;
-    lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.u_max = 0.5;
-    lbm_config.graphics_config.q_min = 0.00005;
+    lbm_config.graphics_config.streamline_every = 16;
     lbm_config.ext_volume_force = true;
     lbm_config.ext_electric_force = true;
     let mut lbm = Lbm::new(lbm_config);
 
     // Setup test charges
     let mut vec_q: Vec<(u64, f32)> = vec![];
-    //vec_q.push((1056824, 0.00000002));
-    //vec_q.push((1056840, 0.00000002));
-    for i in 0..1000 {
-        vec_q.push((i*66108 + 131072, 0.000000003));
-    }
+    //vec_q.push((1056824, 0.00000001));
+    //vec_q.push((1056840, -0.00000001));
+    
+    vec_q.push((1048576+8192, 0.00000001));
+    vec_q.push((1048576+8192+127, -0.00000001));
+    // Pseudorandom generation 
+    //let mut s: u64 = now.elapsed().as_nanos() as u64;
+    //for _i in 0..20 {
+    //    s = s.wrapping_add(0xA0761D6478BD642F);
+    //    let t = u128::from(s) * u128::from(s ^ 0xE7037ED1A0B428DB);
+    //    let r = (t as u64) ^ (t >> 64) as u64;
+    //    let f = r as f64 / u64::MAX as f64;
+    //    vec_q.push(((2097152.0 * f) as u64, -0.0000000001));
+    //}
     efield_precompute::precompute_E(&lbm, vec_q);
 
     //lbm.setup_taylor_green();
@@ -44,9 +52,9 @@ pub fn setup() -> Lbm {
         .as_mut()
         .expect("grapics not enabled")
         .streamline_mode = true;
-    lbm.domains[0].graphics.as_mut().expect("grapics not enabled").streamline_e_mode = true;
-    //lbm.domains[0].graphics.as_mut().expect("grapics not enabled").field_mode = true;
-    lbm.domains[0].graphics.as_mut().expect("grapics not enabled").q_mode = true;
+    lbm.domains[0].graphics.as_mut().expect("grapics not enabled").vector_e_mode = true;
+    lbm.domains[0].graphics.as_mut().expect("grapics not enabled").field_mode = false;
+    lbm.domains[0].graphics.as_mut().expect("grapics not enabled").q_mode = false;
 
     lbm
 }

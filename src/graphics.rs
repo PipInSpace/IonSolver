@@ -20,7 +20,7 @@ pub struct Graphics {
     kernel_graphics_q: Kernel,
 
     pub streamline_mode: bool,    // Draw streamline mode
-    pub streamline_e_mode: bool,  // Streamline e field
+    pub vector_e_mode: bool,  // Streamline e field
     pub field_mode: bool,         // Draw field
     pub q_mode: bool,             // Draw q (vorticity)
     pub flags_mode: bool,         // Draw flags
@@ -158,7 +158,7 @@ impl Graphics {
             kernel_graphics_streamline,
             kernel_graphics_q,
             streamline_mode: true,
-            streamline_e_mode: false,
+            vector_e_mode: false,
             field_mode: false,
             q_mode: false,
             flags_mode: false,
@@ -178,7 +178,7 @@ impl LbmDomain {
             //if visualisation mode
             if graphics.streamline_mode {
                 // Streamlines can show velocity and e field
-                if graphics.streamline_e_mode {
+                if graphics.vector_e_mode {
                     graphics
                         .kernel_graphics_streamline
                         .set_arg(
@@ -195,6 +195,20 @@ impl LbmDomain {
                 graphics.kernel_graphics_streamline.enq().unwrap();
             }
             if graphics.field_mode {
+                if graphics.vector_e_mode {
+                    graphics
+                        .kernel_graphics_field
+                        .set_arg(
+                            "u",
+                            self.e.as_ref().expect("E buffer used but not initialized"),
+                        )
+                        .unwrap();
+                } else {
+                    graphics
+                        .kernel_graphics_field
+                        .set_arg("u", &self.u)
+                        .unwrap();
+                }
                 graphics.kernel_graphics_field.enq().unwrap();
             }
             if graphics.q_mode {

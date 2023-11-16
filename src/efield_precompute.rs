@@ -27,14 +27,14 @@ fn calculate_e(
             coord[1] - coord_charge[1],
             coord[2] - coord_charge[2],
         ];
-        let normalized = fast_normalize(coord_diff);
         let length_sq = len_sq(coord_diff);
-        let length_sq_inv = 1.0 / length_sq;
         if length_sq != 0.0 {
+            let charge_length_sq_inv = charge * (1.0 / length_sq);
+            let normalized = fast_normalize(coord_diff);
             e_at_cell = [
-                e_at_cell[0] + (charge * length_sq_inv * normalized[0]),
-                e_at_cell[1] + (charge * length_sq_inv * normalized[1]),
-                e_at_cell[2] + (charge * length_sq_inv * normalized[2]),
+                e_at_cell[0] + (charge_length_sq_inv * normalized[0]),
+                e_at_cell[1] + (charge_length_sq_inv * normalized[1]),
+                e_at_cell[2] + (charge_length_sq_inv * normalized[2]),
             ]
         }
     }
