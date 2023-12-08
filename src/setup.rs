@@ -23,18 +23,18 @@ pub fn setup() -> Lbm {
     lbm_config.nu = 0.1;
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.graphics_config.graphics = true;
-    lbm_config.graphics_config.streamline_every = 16;
+    lbm_config.graphics_config.streamline_every = 8;
     lbm_config.ext_volume_force = true;
     lbm_config.ext_electric_force = true;
     let mut lbm = Lbm::new(lbm_config);
 
     // Setup test charges
     let mut vec_q: Vec<(u64, f32)> = vec![];
-    //vec_q.push((1056824, 0.00000001));
-    //vec_q.push((1056840, -0.00000001));
+    vec_q.push((1056824, 0.00000001));
+    vec_q.push((1056840, -0.00000001));
     
-    vec_q.push((1048576+8192, 0.00000001));
-    vec_q.push((1048576+8192+127, -0.00000001));
+    //vec_q.push((1048576+8192, 0.00000001));
+    //vec_q.push((1048576+8192+127, -0.00000001));
     // Pseudorandom generation 
     //let mut s: u64 = now.elapsed().as_nanos() as u64;
     //for _i in 0..20 {
