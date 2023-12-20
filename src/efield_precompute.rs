@@ -78,7 +78,7 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
     println!("Precomputing electric field for {} charges and {} cells. (This may take a while)", charges.len(), n);
 
     fn deborrow<'b, T>(r: &T) -> &'b mut T {
-        // Neded to access e_field in parallel.
+        // Needed to access e_field in parallel.
         // This is safe, because no indecies are accessed multiple times
         unsafe {
             #[allow(mutable_transmutes)]
