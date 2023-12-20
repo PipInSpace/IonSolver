@@ -7,30 +7,31 @@ use rayon::prelude::*;
 /// from a vector of charges.
 fn calculate_e(
     n: u64,
-    charges: &[([f32; 3], f32)],
+    charges: &[([u32; 3], f32)],
     lengths: (u32, u32, u32),
     def_ke: f32,
 ) -> [f32; 3] {
-    let convert = move |n| -> [f32; 3] {
+    let convert = move |n| -> [u32; 3] {
         [
-            (n % lengths.1 as u64) as f32,
-            (n / lengths.1 as u64 % lengths.2 as u64) as f32,
-            (n / lengths.1 as u64 / lengths.2 as u64) as f32,
+            (n % lengths.1 as u64) as u32,
+            (n / lengths.1 as u64 % lengths.2 as u64) as u32,
+            (n / lengths.1 as u64 / lengths.2 as u64) as u32,
         ]
     };
 
     let coord = convert(n);
     let mut e_at_cell = [0.0; 3];
+    
     for &(coord_charge, charge) in charges.iter() {
         let coord_diff = [
             coord[0] - coord_charge[0],
             coord[1] - coord_charge[1],
             coord[2] - coord_charge[2],
         ];
-        let length_sq = len_sq(coord_diff);
+        let length_sq = len_sq_u32(coord_diff);
         if length_sq != 0.0 {
             let charge_length_sq_inv = charge * (1.0 / length_sq);
-            let normalized = fast_normalize(coord_diff);
+            let normalized = fast_normalize_u32(coord_diff);
             e_at_cell = [
                 e_at_cell[0] + (charge_length_sq_inv * normalized[0]),
                 e_at_cell[1] + (charge_length_sq_inv * normalized[1]),
@@ -44,14 +45,14 @@ fn calculate_e(
     e_at_cell
 }
 
-/// Converts charge u64 index positions to float3 positions
-fn charge_float_pos(charges: Vec<(u64, f32)>, lengths: (u32, u32, u32)) -> Vec<([f32; 3], f32)> {
-    let mut charges_vector_pos: Vec<([f32; 3], f32)> = Vec::with_capacity(charges.len());
-    let convert = move |n| -> [f32; 3] {
+/// Converts charge u64 index positions to u32 coords
+fn charge_u32_pos(charges: Vec<(u64, f32)>, lengths: (u32, u32, u32)) -> Vec<([u32; 3], f32)> {
+    let mut charges_vector_pos: Vec<([u32; 3], f32)> = Vec::with_capacity(charges.len());
+    let convert = move |n| -> [u32; 3] {
         [
-            (n % lengths.1 as u64) as f32,
-            (n / lengths.1 as u64 % lengths.2 as u64) as f32,
-            (n / lengths.1 as u64 / lengths.2 as u64) as f32,
+            (n % lengths.1 as u64) as u32,
+            (n / lengths.1 as u64 % lengths.2 as u64) as u32,
+            (n / lengths.1 as u64 / lengths.2 as u64) as u32,
         ]
     };
 
@@ -86,7 +87,7 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
         }
     }
 
-    let charges_float_pos: Vec<([f32; 3], f32)> = charge_float_pos(charges, lengths);
+    let charges_float_pos: Vec<([u32; 3], f32)> = charge_u32_pos(charges, lengths);
 
     //let mut count: u32 = 0;
     (0..n).into_par_iter().for_each(|i| {
@@ -109,14 +110,28 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
 }
 
 #[inline]
+#[allow(unused)]
 fn len_sq(v: [f32; 3]) -> f32 {
     v[0].sq() + v[1].sq() + v[2].sq()
 }
 
+#[inline]
+fn len_sq_u32(v: [u32; 3]) -> f32 {
+    (v[0] as f32).sq() + (v[1] as f32).sq() + (v[2] as f32).sq()
+}
+
 // Fast vector normalization
+#[inline]
+#[allow(unused)]
 fn fast_normalize(v: [f32; 3]) -> [f32; 3] {
     let len = fast_inv_sqrt(len_sq(v));
     v.map(|x| x * len)
+}
+
+// Fast vector normalization
+fn fast_normalize_u32(v: [u32; 3]) -> [f32; 3] {
+    let len = fast_inv_sqrt(len_sq_u32(v));
+    v.map(|x| x as f32 * len)
 }
 
 // Fast inverse square root algorithm
