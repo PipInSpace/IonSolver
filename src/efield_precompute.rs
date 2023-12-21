@@ -75,7 +75,7 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
     let mut e_field: Vec<f32> = vec![0.0; (n * 3) as usize];
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
-    let def_ke = lbm.config.units.si_to_ke(8.987552E9);
+    let def_ke = lbm.config.units.si_to_ke();
     println!("Precomputing electric field for {} charges and {} cells. (This may take a while)", charges.len(), n);
 
     fn deborrow<'b, T>(r: &T) -> &'b mut T {
