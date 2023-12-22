@@ -20,14 +20,17 @@ pub fn setup() -> Lbm {
     lbm_config.n_y = 128;
     lbm_config.n_z = 128;
     lbm_config.d_x = 1;
-    lbm_config.nu = 0.1;
+    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     lbm_config.velocity_set = VelocitySet::D3Q19;
-    lbm_config.graphics_config.graphics = true;
-    lbm_config.graphics_config.streamline_every = 8;
+    // Extensions
     lbm_config.ext_volume_force = true;
     lbm_config.ext_electric_force = true;
-    let mut lbm = Lbm::new(lbm_config);
+    // Graphics
+    lbm_config.graphics_config.graphics = true;
+    lbm_config.graphics_config.streamline_every = 8;
 
+    let mut lbm = Lbm::new(lbm_config);
+    
     // Setup test charges
     let mut vec_q: Vec<(u64, f32)> = vec![];
     vec_q.push((1056824, 0.00000001));

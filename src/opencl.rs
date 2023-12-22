@@ -117,21 +117,3 @@ fn get_device_with_most_flops() -> Device {
     }
     devices[best_i as usize]
 }
-
-//fn get_cores(device: Device) -> u32 {
-//    let compute_units: i32 = device
-//        .info(ocl::enums::DeviceInfo::MaxComputeUnits)
-//        .unwrap()
-//        .to_string()
-//        .parse()
-//        .unwrap();
-//    let freq: i32 = device
-//        .info(ocl::enums::DeviceInfo::MaxClockFrequency)
-//        .unwrap()
-//        .to_string()
-//        .parse()
-//        .unwrap();
-//    let name = device.name().unwrap().to_lowercase();
-//    let nvidia_192_cores_per_cu = name.contains("pat") || freq<1000;
-//    1
-//}

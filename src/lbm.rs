@@ -614,6 +614,7 @@ impl LbmDomain {
         +"\n	#define load(p,o) p[o]" // regular float read
         +"\n	#define store(p,o,x) p[o]=x"; // regular float write
 
+        // Return String
         "\n    #define def_Nx ".to_owned() + &n_x.to_string()+"u"
         +"\n	#define def_Ny "+ &n_y.to_string()+"u"
         +"\n	#define def_Nz "+ &n_z.to_string()+"u"
@@ -675,7 +676,7 @@ impl LbmDomain {
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
         + &if lbm_config.ext_electric_force {"\n	        #define ELECTRIC_FORCE".to_owned()
-        +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke(8.987552E9)) // coulomb constant scaled by distance per lattice cell
+        +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
         +"\n	#define def_charge "+ &format!("{:.5}f", 0.005) // charge held per density unit
         } else {"".to_string()}
         + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
