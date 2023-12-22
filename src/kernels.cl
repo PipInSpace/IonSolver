@@ -677,7 +677,7 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 #endif // VOLUME_FORCE
 
 #ifdef ELECTRIC_FORCE
-// we need to optimize this
+// this is unusable
 // n: cell id
 // q: float array for charges
 // E: electric field at n
