@@ -117,12 +117,14 @@ fn len_sq_u32(v: [u32; 3]) -> f32 {
     sq(v[0] as f32) + sq(v[1] as f32) + sq(v[2] as f32)
 }
 
+#[inline]
 /// Fast vector normalization for a u32 vector. Returns f32 vector
 fn fast_normalize_u32(v: [u32; 3]) -> [f32; 3] {
     let len = fast_inv_sqrt(len_sq_u32(v));
     v.map(|x| x as f32 * len)
 }
 
+#[inline]
 /// Fast inverse square root algorithm
 fn fast_inv_sqrt(x: f32) -> f32 {
     let i = x.to_bits();
@@ -132,6 +134,7 @@ fn fast_inv_sqrt(x: f32) -> f32 {
     y * (1.5 - 0.5 * x * y * y)
 }
 
+#[inline]
 /// square
 fn sq(x: f32) -> f32 {
     x * x
