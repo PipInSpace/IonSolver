@@ -30,15 +30,15 @@ pub fn setup() -> Lbm {
     lbm_config.graphics_config.streamline_every = 8;
 
     let mut lbm = Lbm::new(lbm_config);
-    
+
     // Setup test charges
     let mut vec_q: Vec<(u64, f32)> = vec![];
     vec_q.push((1056824, 0.00000001));
     vec_q.push((1056840, -0.00000001));
-    
+
     //vec_q.push((1048576+8192, 0.00000001));
     //vec_q.push((1048576+8192+127, -0.00000001));
-    // Pseudorandom generation 
+    // Pseudorandom generation
     //let mut s: u64 = now.elapsed().as_nanos() as u64;
     //for _i in 0..20 {
     //    s = s.wrapping_add(0xA0761D6478BD642F);
@@ -55,9 +55,21 @@ pub fn setup() -> Lbm {
         .as_mut()
         .expect("grapics not enabled")
         .streamline_mode = true;
-    lbm.domains[0].graphics.as_mut().expect("grapics not enabled").vector_e_mode = true;
-    lbm.domains[0].graphics.as_mut().expect("grapics not enabled").field_mode = false;
-    lbm.domains[0].graphics.as_mut().expect("grapics not enabled").q_mode = false;
+    lbm.domains[0]
+        .graphics
+        .as_mut()
+        .expect("grapics not enabled")
+        .vector_e_mode = true;
+    lbm.domains[0]
+        .graphics
+        .as_mut()
+        .expect("grapics not enabled")
+        .field_mode = false;
+    lbm.domains[0]
+        .graphics
+        .as_mut()
+        .expect("grapics not enabled")
+        .q_mode = false;
 
     lbm
 }

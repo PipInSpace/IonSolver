@@ -20,7 +20,7 @@ pub struct Graphics {
     kernel_graphics_q: Kernel,
 
     pub streamline_mode: bool,    // Draw streamline mode
-    pub vector_e_mode: bool,  // Streamline e field
+    pub vector_e_mode: bool,      // Streamline e field
     pub field_mode: bool,         // Draw field
     pub q_mode: bool,             // Draw q (vorticity)
     pub flags_mode: bool,         // Draw flags

@@ -455,11 +455,16 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                             .unwrap();
                     }
                 }
-                if (camera_changed || (!state.paused && frame_changed)) && lbm.config.graphics_config.graphics {
+                if (camera_changed || (!state.paused && frame_changed))
+                    && lbm.config.graphics_config.graphics
+                {
                     // Only draws frames, never saves them
                     lbm.draw_frame(false, sim_tx_g.clone(), i);
                 }
-                thread::sleep(Duration::from_millis(std::cmp::max(0, 33-(now.elapsed().as_millis() as i64)) as u64));
+                thread::sleep(Duration::from_millis(std::cmp::max(
+                    0,
+                    33 - (now.elapsed().as_millis() as i64),
+                ) as u64));
             }
         });
     }
@@ -483,12 +488,14 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                 lbm.do_time_step();
 
                 let time_per_step = (jnow.elapsed().as_micros() / j) as u32;
-                if i % 20 == 0 {print!(
-                    "\rStep {}, Steps/s: {}, MLUP/s: {}",
-                    i,
-                    1000000 / time_per_step,
-                    (mn *1000000) / time_per_step as u64
-                );}
+                if i % 20 == 0 {
+                    print!(
+                        "\rStep {}, Steps/s: {}, MLUP/s: {}",
+                        i,
+                        1000000 / time_per_step,
+                        (mn * 1000000) / time_per_step as u64
+                    );
+                }
                 if i % state.frame_spacing == 0 && state.save && lbm.config.graphics_config.graphics
                 {
                     // Saves frames if needed

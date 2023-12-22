@@ -1,5 +1,5 @@
-use crate::{units::Units, graphics::GraphicsConfig};
 use crate::*;
+use crate::{graphics::GraphicsConfig, units::Units};
 use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 /// Velocity discretizations in 2D and 3D.
@@ -533,7 +533,9 @@ impl LbmDomain {
         //TODO: allocate transfer buffers
 
         let graphics: Option<graphics::Graphics> = if lbm_config.graphics_config.graphics {
-            Some(graphics::Graphics::new(lbm_config, &program, &queue, &flags, &u))
+            Some(graphics::Graphics::new(
+                lbm_config, &program, &queue, &flags, &u,
+            ))
         } else {
             None
         };

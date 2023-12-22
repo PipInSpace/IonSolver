@@ -11,22 +11,19 @@ fn calculate_e(
     lengths: (u32, u32, u32),
     def_ke: f32,
 ) -> [f32; 3] {
-    let convert = move |n| -> [u32; 3] {
-        [
-            (n % lengths.1 as u64) as u32,
-            (n / lengths.1 as u64 % lengths.2 as u64) as u32,
-            (n / lengths.1 as u64 / lengths.2 as u64) as u32,
-        ]
-    };
 
-    let coord = convert(n);
+    let coord_cell = [
+        (n % lengths.1 as u64) as u32,
+        (n / lengths.1 as u64 % lengths.2 as u64) as u32,
+        (n / lengths.1 as u64 / lengths.2 as u64) as u32,
+    ];
     let mut e_at_cell = [0.0; 3];
-    
+
     for &(coord_charge, charge) in charges.iter() {
         let coord_diff = [
-            coord[0] - coord_charge[0],
-            coord[1] - coord_charge[1],
-            coord[2] - coord_charge[2],
+            coord_cell[0] - coord_charge[0],
+            coord_cell[1] - coord_charge[1],
+            coord_cell[2] - coord_charge[2],
         ];
         let length_sq = len_sq_u32(coord_diff);
         if length_sq != 0.0 {
@@ -48,17 +45,14 @@ fn calculate_e(
 /// Converts charge u64 index positions to u32 coords
 fn charge_u32_pos(charges: Vec<(u64, f32)>, lengths: (u32, u32, u32)) -> Vec<([u32; 3], f32)> {
     let mut charges_vector_pos: Vec<([u32; 3], f32)> = Vec::with_capacity(charges.len());
-    let convert = move |n| -> [u32; 3] {
-        [
-            (n % lengths.1 as u64) as u32,
-            (n / lengths.1 as u64 % lengths.2 as u64) as u32,
-            (n / lengths.1 as u64 / lengths.2 as u64) as u32,
-        ]
-    };
 
     // Precompute position vectors
     for &(i, charge) in charges.iter() {
-        let coord_charge = convert(i);
+        let coord_charge = [
+            (i % lengths.1 as u64) as u32,
+            (i / lengths.1 as u64 % lengths.2 as u64) as u32,
+            (i / lengths.1 as u64 / lengths.2 as u64) as u32,
+        ];
         charges_vector_pos.push((coord_charge, charge))
     }
 
@@ -76,7 +70,11 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
     let mut e_field: Vec<f32> = vec![0.0; (n * 3) as usize];
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     let def_ke = lbm.config.units.si_to_ke();
-    println!("Precomputing electric field for {} charges and {} cells. (This may take a while)", charges.len(), n);
+    println!(
+        "Precomputing electric field for {} charges and {} cells. (This may take a while)",
+        charges.len(),
+        n
+    );
 
     fn deborrow<'b, T>(r: &T) -> &'b mut T {
         // Needed to access e_field in parallel.
