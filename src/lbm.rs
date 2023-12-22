@@ -4,36 +4,38 @@ use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 
 /// Velocity discretizations in 2D and 3D.
 /// ```
-/// pub enum VelocitySet {
-///    D2Q9,  // 2D
-///    D3Q15, // 3D low precision
-///    D3Q19, // 3D recommended
-///    D3Q27, // 3D highest precision
-///}
+/// D2Q9:  2D
+/// D3Q15: 3D low precision
+/// D3Q19: 3D recommended
+/// D3Q27: 3D highest precision
 /// ```
 #[allow(dead_code)]
 #[derive(Clone, Copy, Default)]
 pub enum VelocitySet {
     #[default]
-    D2Q9, // 2D
-    D3Q15, // 3D low precision
-    D3Q19, // 3D recommended
-    D3Q27, // 3D highest precision
+    /// 2D
+    D2Q9,
+    /// 3D low precision
+    D3Q15,
+    /// 3D recommended
+    D3Q19,
+    /// 3D highest precision
+    D3Q27,
 }
 
 /// LBM relaxation time type.
 /// ```
-/// pub enum RelaxationTime {
-///    Srt, // Single relaxation time type, more efficient
-///    Trt, // Two-relaxation time type, more precise
-///}
+/// Srt: Single relaxation time type, more efficient
+/// Trt: Two-relaxation time type, more precise
 /// ```
 #[allow(dead_code)]
 #[derive(Clone, Copy, Default)]
 pub enum RelaxationTime {
     #[default]
-    Srt, // Single relaxation time, more efficient
-    Trt, // Two-relaxation time, more precise
+    /// Single relaxation time, more efficient
+    Srt,
+    /// Two-relaxation time, more precise
+    Trt,
 }
 
 /// Enum for different floating-point number types used in the simulation.
@@ -50,9 +52,12 @@ pub enum RelaxationTime {
 #[derive(Clone, Copy, Default)]
 pub enum FloatType {
     #[default]
-    FP16S, // Custom float type represented as a u16, recommended
-    FP16C, // Custom float type represented as a u16
-    FP32,  // Default float type
+    /// Custom float type represented as a u16, recommended
+    FP16S,
+    /// Custom float type represented as a u16
+    FP16C,
+    /// Default float type
+    FP32,
 }
 
 /// Enum representing a buffer of variable [`FloatType`]
@@ -66,30 +71,28 @@ pub enum VariableFloatBuffer {
 
 /// Struct used to bundle arguments for LBM simulation setup.
 /// ```
-/// LbmConfig {
-///    pub velocity_set: VelocitySet, // Velocity discretization
-///    pub relaxation_time: RelaxationTime, // Sim relaxation time
-///    pub float_type: FloatType, // Float type for memory compression
-///    pub n_x: u32, // Size on each axis
-///    pub n_y: u32,
-///    pub n_z: u32,
+/// velocity_set: VelocitySet, // Velocity discretization mode
+/// relaxation_time: RelaxationTime, // Sim relaxation time type
+/// float_type: FloatType, // Sim float type for memory compression of ddf's
+/// n_x: u32, // Sim size on each axis
+/// n_y: u32,
+/// n_z: u32,
 ///
-///    pub d_x: u32, // Domains on each axis
-///    pub d_y: u32,
-///    pub d_z: u32,
+/// d_x: u32, // Sim domains on each axis
+/// d_y: u32, // Multi-domain support is planned, but only partially implemented currently
+/// d_z: u32,
 ///
-///    pub nu: f32, // Kinematic shear viscosity
-///    pub fx: f32, // Volume force on each axis
-///    pub fy: f32,
-///    pub fz: f32,
+/// nu: f32, // Kinematic shear viscosity
+/// fx: f32, // Volume force on each axis
+/// fy: f32,
+/// fz: f32,
 ///
-///    pub ext_equilibrium_boudaries: bool, // Extensions, provide additional functionality
-///    pub ext_volume_force: bool,
-///    pub ext_force_field: bool,    // Needs volume_force to work
-///    pub ext_electric_force: bool, // Needs force_field to work
+/// ext_equilibrium_boudaries: bool, // Extensions, provide additional functionality
+/// ext_volume_force: bool,
+/// ext_force_field: bool,    // Needs volume_force to work
+/// ext_electric_force: bool, // Needs force_field to work
 ///
-///    pub graphics_config: GraphicsConfig, // Grapics config struct
-///}
+/// graphics_config: GraphicsConfig, // Grapics config struct
 /// ```
 #[derive(Clone, Default)]
 pub struct LbmConfig {
@@ -172,6 +175,11 @@ impl Lbm {
     /// Returns new `Lbm` struct from pre-configured `LbmConfig` struct. `LbmDomain` setup is handled automatically.
     /// Configures Domains
     pub fn new(mut lbm_config: LbmConfig) -> Lbm {
+        // TODO: Multi-domain support:
+        if lbm_config.d_x * lbm_config.d_y * lbm_config.d_z > 1 {
+            panic!("Attempted to start with more than one domain. Multi-domain support is not yet implemented!");
+        }
+
         let n_d_x: u32 = (lbm_config.n_x / lbm_config.d_x) * lbm_config.d_x;
         let n_d_y: u32 = (lbm_config.n_y / lbm_config.d_y) * lbm_config.d_y;
         let n_d_z: u32 = (lbm_config.n_z / lbm_config.d_z) * lbm_config.d_z;

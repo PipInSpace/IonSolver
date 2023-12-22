@@ -104,7 +104,7 @@ impl Units {
     }
 
     pub fn si_to_ke(&self) -> f32 {
-        // 1 / (4 * pi * epsilon_0) = k_e
+        // 1 / (4 * pi * epsilon_0) = k_e (Coulombs constant)
         // epsilon_0 has the unit Farad/meter and needs to be converted to lattice units
         // 1 / (4 * 3.14159 * (8.8541878128 * 10^-12)) = 8.987552E9 (k_e)
         8.987552E9 / (self.kg * cb(self.m) / (self.c * self.c * self.s * self.s))
