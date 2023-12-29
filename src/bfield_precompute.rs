@@ -46,11 +46,7 @@ fn calculate_b(
             ];
         }
     }
-
-    psi_at_cell[0] *= def_mu0;
-    psi_at_cell[1] *= def_mu0;
-    psi_at_cell[2] *= def_mu0;
-
+    
     // TODO: finish b field
 
     return [0.0; 3];
