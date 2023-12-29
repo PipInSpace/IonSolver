@@ -23,16 +23,16 @@ fn calculate_e(
     for &(coord_charge, charge) in charges.iter() {
         // Compute difference vector from cell to current charge
         let coord_diff = [
-            coord_cell[0] - coord_charge[0],
-            coord_cell[1] - coord_charge[1],
-            coord_cell[2] - coord_charge[2],
+            (coord_cell[0] as i32) - (coord_charge[0] as i32),
+            (coord_cell[1] as i32) - (coord_charge[1] as i32),
+            (coord_cell[2] as i32) - (coord_charge[2] as i32),
         ];
         // Check if difference vector lenght is not 0 (The current charge is inside the cell)
-        let length_sq = len_sq_u32(coord_diff);
+        let length_sq = len_sq_i32(coord_diff);
         if length_sq != 0.0 {
             // Combine/reuse charge * (1 / lenght_sq) for performance reasons 
             let charge_length_sq_inv = charge / length_sq;
-            let normalized = fast_normalize_u32(coord_diff);
+            let normalized = fast_normalize_i32(coord_diff);
             // Add new field component vector to cell field vector
             e_at_cell = [
                 e_at_cell[0] + (charge_length_sq_inv * normalized[0]),
@@ -111,14 +111,14 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
 
 #[inline]
 /// Returns the lenght of a u32 vector with all components squared
-fn len_sq_u32(v: [u32; 3]) -> f32 {
+fn len_sq_i32(v: [i32; 3]) -> f32 {
     sq(v[0] as f32) + sq(v[1] as f32) + sq(v[2] as f32)
 }
 
 #[inline]
 /// Fast vector normalization for a u32 vector. Returns f32 vector
-fn fast_normalize_u32(v: [u32; 3]) -> [f32; 3] {
-    let len = fast_inv_sqrt(len_sq_u32(v));
+fn fast_normalize_i32(v: [i32; 3]) -> [f32; 3] {
+    let len = fast_inv_sqrt(len_sq_i32(v));
     v.map(|x| x as f32 * len)
 }
 
