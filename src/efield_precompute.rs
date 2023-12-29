@@ -1,3 +1,4 @@
+
 use crate::*;
 use rayon::prelude::*;
 
@@ -27,18 +28,15 @@ fn calculate_e(
             (coord_cell[1] as i32) - (coord_charge[1] as i32),
             (coord_cell[2] as i32) - (coord_charge[2] as i32),
         ];
-        // Check if difference vector lenght is not 0 (The current charge is inside the cell)
-        let length_sq = len_sq_i32(coord_diff);
-        if length_sq != 0.0 {
-            // Combine/reuse charge * (1 / lenght_sq) for performance reasons 
-            let charge_length_sq_inv = charge / length_sq;
-            let normalized = fast_normalize_i32(coord_diff);
-            // Add new field component vector to cell field vector
+
+        // if not the cell we are checking
+        if !coord_diff.eq(&[0 as i32; 3]) {
+            let pre_e = charge / cb(length(coord_diff));
             e_at_cell = [
-                e_at_cell[0] + (charge_length_sq_inv * normalized[0]),
-                e_at_cell[1] + (charge_length_sq_inv * normalized[1]),
-                e_at_cell[2] + (charge_length_sq_inv * normalized[2]),
-            ]
+                e_at_cell[0] + coord_diff[0] as f32 * pre_e,
+                e_at_cell[1] + coord_diff[1] as f32 * pre_e,
+                e_at_cell[2] + coord_diff[2] as f32 * pre_e,
+            ];
         }
     }
     // Scale field vector with coulombs constant
@@ -133,7 +131,17 @@ fn fast_inv_sqrt(x: f32) -> f32 {
 }
 
 #[inline]
+fn length(v: [i32; 3]) -> f32 {
+    f32::sqrt(len_sq_i32(v))
+}
+
+#[inline]
 /// square
 fn sq(x: f32) -> f32 {
     x * x
+}
+
+#[inline]
+fn cb(x: f32) -> f32 {
+    x * x * x
 }
