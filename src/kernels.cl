@@ -701,6 +701,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 #endif // FORCE_FIELD
 #ifdef ELECTRO_HYDRO
 , global float* E
+, global float* B
 #endif // ELECTRO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -732,21 +733,6 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
 
-	#ifdef ELECTRO_HYDRO
-		{
-			// Force = Electric field * ParticlesN * (elemental charge * ionization factor) 
-			// Force = E * (mass / molar mass) * (e * i_fac) 
-			// Force = E * (rhon * volume / molar mass) * (e * i_fac) 
-			// Force = E * rhon * def_volume_molar_e
-			// def_volume_molar_e is calculated at runtime
-			// def_volume_molar_e = (volume / molar mass) * e * i_fac
-			// 
-			fxn += E[                 n] * rhon * def_charge; // apply electric field * charge = force
-			fyn += E[    def_N+(ulong)n] * rhon * def_charge;
-			fzn += E[2ul*def_N+(ulong)n] * rhon * def_charge;
-		}
-	#endif// ELECTRO_HYDRO
-
     float Fin[def_velocity_set]; // forcing terms
 
 	#ifdef FORCE_FIELD
@@ -756,6 +742,30 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		fzn += F[2ul*def_N+(ulong)n];
 	}
 	#endif
+
+	#ifdef ELECTRO_HYDRO
+	{
+		// Force = Electric field * ParticlesN * (elemental charge * ionization factor) 
+		// Force = E * (mass / molar mass) * (e * i_fac) 
+		// Force = E * (rhon * volume / molar mass) * (e * i_fac) 
+		// Force = E * rhon * def_volume_molar_e
+		// def_volume_molar_e is calculated at runtime
+		// def_volume_molar_e = (volume / molar mass) * e * i_fac
+		// 
+		//fxn += E[                 n] * rhon * def_charge; // apply electric field * charge = force
+		//fyn += E[    def_N+(ulong)n] * rhon * def_charge;
+		//fzn += E[2ul*def_N+(ulong)n] * rhon * def_charge;
+		//float UcrossB[3] = {
+		//	uyn*B[2ul*def_N+(ulong)n] + uzn*B[    def_N+(ulong)n], 
+		//	uzn*B[                 n] + uxn*B[2ul*def_N+(ulong)n], 
+		//	uxn*B[    def_N+(ulong)n] + uyn*B[                 n]
+		//};
+		// F = charge * (E + (U cross B))
+		fxn += rhon * def_charge * (E[                 n] + uyn*B[2ul*def_N+(ulong)n] + uzn*B[    def_N+(ulong)n]); // apply electric field * charge = force
+		fyn += rhon * def_charge * (E[    def_N+(ulong)n] + uzn*B[                 n] + uxn*B[2ul*def_N+(ulong)n]);
+		fzn += rhon * def_charge * (E[2ul*def_N+(ulong)n] + uxn*B[    def_N+(ulong)n] + uyn*B[                 n]);
+	}
+	#endif// ELECTRO_HYDRO
 
 	#ifdef VOLUME_FORCE
 		const float rho2 = 0.5f/rhon; // apply external volume force (Guo forcing, Krueger p.233f)
