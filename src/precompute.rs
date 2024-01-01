@@ -169,25 +169,36 @@ fn calculate_psi(
     psi_at_cell / (4.0 * PI)
 }
 
+#[allow(unused_mut)]
 pub fn calculate_psi_field_padded(
     lbm: &Lbm,
     magnets: Vec<(u64, [f32; 3])>,
 ) -> Vec<f32> {
     // Set variables
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
+    let n = ((lengths.0 + 2) as u64) * ((lengths.1 + 2) as u64) * ((lengths.2 + 2) as u64);
     // 1 padding on each side
-    let mut psi_field = vec![0.0f32; ((lengths.0 + 2) * (lengths.1 + 2) * (lengths.2 + 2)) as usize];
+    let mut psi_field = vec![0.0f32; n as usize];
 
     println!(
         "Precomputing magnetic scalar potential for {} magnets and {} cells. (This may take a while)",
         magnets.len(),
-        lengths.0 * lengths.1 * lengths.2,
+        n,
     );
 
-    // get psi for all including padding
-    for i in 0..psi_field.len() {
-        psi_field[i] = calculate_psi(i as u64, &magnets, lengths);
+    fn deborrow<'b, T>(r: &T) -> &'b mut T {
+        // Needed to access b_field in parallel.
+        // This is safe, because no indecies are accessed multiple times
+        unsafe {
+            #[allow(mutable_transmutes)]
+            std::mem::transmute(r)
+        }
     }
+
+    // get psi for all including padding
+    (0..n).into_par_iter().for_each(|i| {
+        deborrow(&psi_field)[i as usize] = calculate_psi(i, &magnets, lengths);
+    });
 
     psi_field
 }
