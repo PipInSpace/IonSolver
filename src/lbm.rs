@@ -470,7 +470,7 @@ impl LbmDomain {
             None
         };
         // Magnetic field buffer as 3D Vectors
-        let b: Option<Buffer<f32>> = if lbm_config.ext_electric_force {
+        let b: Option<Buffer<f32>> = if lbm_config.ext_electro_hydro {
             Some(opencl::create_buffer(&queue, [n * 3], 0f32))
         } else {
             None
