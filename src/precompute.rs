@@ -116,7 +116,7 @@ pub fn precompute_B(lbm: &Lbm, psi: Vec<f32>) {
     );
 
     fn deborrow<'b, T>(r: &T) -> &'b mut T {
-        // Needed to access e_field in parallel.
+        // Needed to access b_field in parallel.
         // This is safe, because no indecies are accessed multiple times
         unsafe {
             #[allow(mutable_transmutes)]
@@ -126,15 +126,16 @@ pub fn precompute_B(lbm: &Lbm, psi: Vec<f32>) {
 
     (0..n).into_par_iter().for_each(|i| {
         let b_at = calculate_b(i, &psi, lengths, def_mu0);
-        deborrow(&b_field)[i as usize] = b_at[0];
-        deborrow(&b_field)[(i + n) as usize] = b_at[1];
-        deborrow(&b_field)[(i + (n * 2)) as usize] = b_at[2];
+        // Arbitrary factors for testing must remove
+        deborrow(&b_field)[i as usize] = b_at[0] * 10.0E9;
+        deborrow(&b_field)[(i + n) as usize] = b_at[1] * 10.0E9;
+        deborrow(&b_field)[(i + (n * 2)) as usize] = b_at[2] * 10.0E9;
     });
 
     lbm.domains[0]
         .b
         .as_ref()
-        .expect("E buffer used but not initialized")
+        .expect("B buffer used but not initialized")
         .write(&b_field)
         .enq()
         .unwrap();
@@ -176,7 +177,6 @@ pub fn calculate_psi_field_padded(
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     // 1 padding on each side
     let mut psi_field = vec![0.0f32; ((lengths.0 + 2) * (lengths.1 + 2) * (lengths.2 + 2)) as usize];
-    let def_mu0 = lbm.config.units.si_to_mu0();
 
     println!(
         "Precomputing magnetic scalar potential for {} magnets and {} cells. (This may take a while)",

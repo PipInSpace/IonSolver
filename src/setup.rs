@@ -51,8 +51,8 @@ pub fn setup() -> Lbm {
 
     // magnetic field
     let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
-    vec_m.push((1056824, [0.01, 0.0, 0.0]));
-    vec_m.push((1056840, [0.01, 0.0, 0.0]));
+    vec_m.push((1056824, [1.0, 0.0, 0.0]));
+    vec_m.push((1056840, [1.0, 0.0, 0.0]));
 
     let vec_psi = precompute::calculate_psi_field_padded(&lbm, vec_m);
 
@@ -63,11 +63,21 @@ pub fn setup() -> Lbm {
         .as_mut()
         .expect("grapics not enabled")
         .streamline_mode = true;
+    // E-Field
+    
     lbm.domains[0]
         .graphics
         .as_mut()
         .expect("grapics not enabled")
-        .vector_e_mode = true;
+        .vector_e_mode = false;
+    
+    // B-Field
+    lbm.domains[0]
+        .graphics
+        .as_mut()
+        .expect("grapics not enabled")
+        .vector_b_mode = true;
+
     lbm.domains[0]
         .graphics
         .as_mut()
