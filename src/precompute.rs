@@ -146,8 +146,8 @@ fn calculate_psi(
     magnets: &[(u64, [f32; 3])],
     lengths: (u32, u32, u32),
 ) -> f32 {
-    // Compute current cell coordinates
-    let coord_cell = coord(n, lengths);
+    // Compute current cell coordinates with padding
+    let coord_cell = coord(n, (lengths.0 + 2, lengths.1 + 2, lengths.2 + 2));
 
     let mut psi_at_cell = 0.0f32;
 
@@ -213,7 +213,7 @@ fn calculate_b(
     let mut b = [0.0f32; 3];
 
     let coord = coord(n, lengths);
-    let pre_b = nabla(psi, lengths, coord[0] + 1, coord[1] + 1, coord[2] + 1);
+    let pre_b = nabla(psi, (lengths.0 + 2, lengths.1 + 2, lengths.2 + 2), coord[0] + 1, coord[1] + 1, coord[2] + 1);
 
     b[0] = -def_mu0 * pre_b[0];
     b[1] = -def_mu0 * pre_b[1];
