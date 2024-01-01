@@ -61,7 +61,7 @@
 
 #define EQUILIBRIUM_BOUNDARIES
 #define VOLUME_FORCE
-#define ELECTRIC_FORCE
+#define ELECTRO_HYDRO
 
 #define GRAPHICS
 #define def_streamline_sparse 4u
@@ -676,7 +676,7 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 }
 #endif // VOLUME_FORCE
 
-#ifdef ELECTRIC_FORCE
+#ifdef ELECTRO_HYDRO
 // this is unusable
 // n: cell id
 // q: float array for charges
@@ -699,9 +699,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 #ifdef FORCE_FIELD
 , const global float* F 
 #endif // FORCE_FIELD
-#ifdef ELECTRIC_FORCE
+#ifdef ELECTRO_HYDRO
 , global float* E
-#endif // ELECTRIC_FORCE
+#endif // ELECTRO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute stream_collide() on halo
@@ -732,7 +732,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
 
-	#ifdef ELECTRIC_FORCE
+	#ifdef ELECTRO_HYDRO
 		{
 			// Force = Electric field * ParticlesN * (elemental charge * ionization factor) 
 			// Force = E * (mass / molar mass) * (e * i_fac) 
@@ -745,7 +745,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 			fyn += E[    def_N+(ulong)n] * rhon * def_charge;
 			fzn += E[2ul*def_N+(ulong)n] * rhon * def_charge;
 		}
-	#endif// ELECTRIC_FORCE
+	#endif// ELECTRO_HYDRO
 
     float Fin[def_velocity_set]; // forcing terms
 
@@ -841,7 +841,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 } // stream_collide()
 
 __kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags
-#ifdef ELECTRIC_FORCE
+#ifdef ELECTRO_HYDRO
 
 #endif
 ) {
@@ -870,7 +870,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
     float feq[def_velocity_set]; // f_equilibrium
     calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
-	#ifdef ELECTRIC_FORCE
+	#ifdef ELECTRO_HYDRO
 		//calculate_E(n, q, E);
 	#endif // ELECTRIC FORCE
 } // initialize()

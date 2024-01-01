@@ -90,7 +90,7 @@ pub enum VariableFloatBuffer {
 /// ext_equilibrium_boudaries: bool, // Extensions, provide additional functionality
 /// ext_volume_force: bool,
 /// ext_force_field: bool,    // Needs volume_force to work
-/// ext_electric_force: bool, // Needs force_field to work
+/// ext_electro_hydro: bool, // Needs force_field to work
 ///
 /// graphics_config: GraphicsConfig, // Grapics config struct
 /// ```
@@ -117,7 +117,7 @@ pub struct LbmConfig {
     pub ext_equilibrium_boudaries: bool, //Extensions
     pub ext_volume_force: bool,
     pub ext_force_field: bool,    // Needs volume_force to work
-    pub ext_electric_force: bool, // Needs volume_force to work
+    pub ext_electro_hydro: bool, // Needs volume_force to work
 
     pub graphics_config: GraphicsConfig,
 }
@@ -143,7 +143,7 @@ impl LbmConfig {
 
             ext_equilibrium_boudaries: false,
             ext_volume_force: false,
-            ext_electric_force: false,
+            ext_electro_hydro: false,
             ext_force_field: false,
 
             graphics_config: graphics::GraphicsConfig::new(),
@@ -463,7 +463,7 @@ impl LbmDomain {
             None
         };
         // Electric field buffer as 3D Vectors
-        let e: Option<Buffer<f32>> = if lbm_config.ext_electric_force {
+        let e: Option<Buffer<f32>> = if lbm_config.ext_electro_hydro {
             Some(opencl::create_buffer(&queue, [n * 3], 0f32))
         } else {
             None
@@ -529,7 +529,7 @@ impl LbmDomain {
                 .arg_named("F", f.as_ref().expect("f buffer used but not initialized"));
         }
 
-        if lbm_config.ext_electric_force {
+        if lbm_config.ext_electro_hydro {
             kernel_stream_collide_builder
                 .arg_named("E", e.as_ref().expect("e buffer used but not initialized"));
         }
@@ -685,7 +685,7 @@ impl LbmDomain {
         }
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
-        + &if lbm_config.ext_electric_force {"\n	        #define ELECTRIC_FORCE".to_owned()
+        + &if lbm_config.ext_electro_hydro {"\n	        #define ELECTRO_HYDRO".to_owned()
         +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
         +"\n	#define def_charge "+ &format!("{:.5}f", 0.005) // charge held per density unit
         } else {"".to_string()}
