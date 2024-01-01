@@ -61,7 +61,7 @@
 
 #define EQUILIBRIUM_BOUNDARIES
 #define VOLUME_FORCE
-#define ELECTRIC_FORCE
+#define ELECTRO_HYDRO
 
 #define GRAPHICS
 #define def_streamline_sparse 4u
@@ -676,7 +676,7 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 }
 #endif // VOLUME_FORCE
 
-#ifdef ELECTRIC_FORCE
+#ifdef ELECTRO_HYDRO
 // this is unusable
 // n: cell id
 // q: float array for charges
@@ -699,9 +699,10 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 #ifdef FORCE_FIELD
 , const global float* F 
 #endif // FORCE_FIELD
-#ifdef ELECTRIC_FORCE
+#ifdef ELECTRO_HYDRO
 , global float* E
-#endif // ELECTRIC_FORCE
+, global float* B
+#endif // ELECTRO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute stream_collide() on halo
@@ -732,21 +733,6 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
 
-	#ifdef ELECTRIC_FORCE
-		{
-			// Force = Electric field * ParticlesN * (elemental charge * ionization factor) 
-			// Force = E * (mass / molar mass) * (e * i_fac) 
-			// Force = E * (rhon * volume / molar mass) * (e * i_fac) 
-			// Force = E * rhon * def_volume_molar_e
-			// def_volume_molar_e is calculated at runtime
-			// def_volume_molar_e = (volume / molar mass) * e * i_fac
-			// 
-			fxn += E[                 n] * rhon * def_charge; // apply electric field * charge = force
-			fyn += E[    def_N+(ulong)n] * rhon * def_charge;
-			fzn += E[2ul*def_N+(ulong)n] * rhon * def_charge;
-		}
-	#endif// ELECTRIC_FORCE
-
     float Fin[def_velocity_set]; // forcing terms
 
 	#ifdef FORCE_FIELD
@@ -756,6 +742,30 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		fzn += F[2ul*def_N+(ulong)n];
 	}
 	#endif
+
+	#ifdef ELECTRO_HYDRO
+	{
+		// Force = Electric field * ParticlesN * (elemental charge * ionization factor) 
+		// Force = E * (mass / molar mass) * (e * i_fac) 
+		// Force = E * (rhon * volume / molar mass) * (e * i_fac) 
+		// Force = E * rhon * def_volume_molar_e
+		// def_volume_molar_e is calculated at runtime
+		// def_volume_molar_e = (volume / molar mass) * e * i_fac
+		// 
+		//fxn += E[                 n] * rhon * def_charge; // apply electric field * charge = force
+		//fyn += E[    def_N+(ulong)n] * rhon * def_charge;
+		//fzn += E[2ul*def_N+(ulong)n] * rhon * def_charge;
+		//float UcrossB[3] = {
+		//	uyn*B[2ul*def_N+(ulong)n] + uzn*B[    def_N+(ulong)n], 
+		//	uzn*B[                 n] + uxn*B[2ul*def_N+(ulong)n], 
+		//	uxn*B[    def_N+(ulong)n] + uyn*B[                 n]
+		//};
+		// F = charge * (E + (U cross B))
+		fxn += rhon * def_charge * (E[                 n] + uyn*B[2ul*def_N+(ulong)n] + uzn*B[    def_N+(ulong)n]); // apply electric field * charge = force
+		fyn += rhon * def_charge * (E[    def_N+(ulong)n] + uzn*B[                 n] + uxn*B[2ul*def_N+(ulong)n]);
+		fzn += rhon * def_charge * (E[2ul*def_N+(ulong)n] + uxn*B[    def_N+(ulong)n] + uyn*B[                 n]);
+	}
+	#endif// ELECTRO_HYDRO
 
 	#ifdef VOLUME_FORCE
 		const float rho2 = 0.5f/rhon; // apply external volume force (Guo forcing, Krueger p.233f)
@@ -841,7 +851,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 } // stream_collide()
 
 __kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags
-#ifdef ELECTRIC_FORCE
+#ifdef ELECTRO_HYDRO
 
 #endif
 ) {
@@ -870,7 +880,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
     float feq[def_velocity_set]; // f_equilibrium
     calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
-	#ifdef ELECTRIC_FORCE
+	#ifdef ELECTRO_HYDRO
 		//calculate_E(n, q, E);
 	#endif // ELECTRIC FORCE
 } // initialize()

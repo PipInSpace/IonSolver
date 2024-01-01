@@ -24,7 +24,7 @@ pub fn setup() -> Lbm {
     lbm_config.velocity_set = VelocitySet::D3Q19;
     // Extensions
     lbm_config.ext_volume_force = true;
-    lbm_config.ext_electric_force = true;
+    lbm_config.ext_electro_hydro = true;
     // Graphics
     lbm_config.graphics_config.graphics = true;
     lbm_config.graphics_config.streamline_every = 8;
