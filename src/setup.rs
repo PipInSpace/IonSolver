@@ -47,7 +47,7 @@ pub fn setup() -> Lbm {
     //    let f = r as f64 / u64::MAX as f64;
     //    vec_q.push(((2097152.0 * f) as u64, -0.0000000001));
     //}
-    efield_precompute::precompute_E(&lbm, vec_q);
+    precompute::precompute_E(&lbm, vec_q);
 
     //lbm.setup_taylor_green();
     lbm.domains[0]

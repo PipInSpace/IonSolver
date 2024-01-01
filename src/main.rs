@@ -3,7 +3,7 @@ extern crate ocl;
 use std::time::{Duration, Instant};
 use std::{f32::consts::PI, fs, sync::mpsc, thread};
 
-mod efield_precompute;
+mod precompute;
 mod graphics;
 mod info;
 mod lbm;
