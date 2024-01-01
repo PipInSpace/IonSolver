@@ -342,6 +342,7 @@ pub struct LbmDomain {
     pub u: Buffer<f32>,
     pub flags: Buffer<u8>,
     pub e: Option<Buffer<f32>>, // Optional Buffers
+    pub b: Option<Buffer<f32>>, // Optional Buffers
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
 
@@ -468,6 +469,12 @@ impl LbmDomain {
         } else {
             None
         };
+        // Magnetic field buffer as 3D Vectors
+        let b: Option<Buffer<f32>> = if lbm_config.ext_electric_force {
+            Some(opencl::create_buffer(&queue, [n * 3], 0f32))
+        } else {
+            None
+        };
 
         // Initialize Kernels
         let mut kernel_initialize_builder = Kernel::builder();
@@ -531,7 +538,8 @@ impl LbmDomain {
 
         if lbm_config.ext_electric_force {
             kernel_stream_collide_builder
-                .arg_named("E", e.as_ref().expect("e buffer used but not initialized"));
+                .arg_named("E", e.as_ref().expect("e buffer used but not initialized"))
+                .arg_named("B", b.as_ref().expect("b buffer used but not initialized"));
         }
 
         let kernel_initialize: Kernel = kernel_initialize_builder.build().unwrap();
@@ -568,6 +576,7 @@ impl LbmDomain {
             u,
             flags,
             e,
+            b,
             f,
             t,
 

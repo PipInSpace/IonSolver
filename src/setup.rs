@@ -49,6 +49,14 @@ pub fn setup() -> Lbm {
     //}
     precompute::precompute_E(&lbm, vec_q);
 
+    // magnetic field
+    let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
+    vec_m.push((1056824, [0.01, 0.0, 0.0]));
+    vec_m.push((1056840, [0.01, 0.0, 0.0]));
+
+    let vec_psi = precompute::calculate_psi_field_padded(&lbm, vec_m);
+
+    precompute::precompute_B(&lbm, vec_psi);
     //lbm.setup_taylor_green();
     lbm.domains[0]
         .graphics

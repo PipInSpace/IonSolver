@@ -12,11 +12,7 @@ fn calculate_e(
 ) -> [f32; 3] {
 
     // Compute current cell coordinates
-    let coord_cell = [
-        (n % lengths.1 as u64) as u32,
-        (n / lengths.1 as u64 % lengths.2 as u64) as u32,
-        (n / lengths.1 as u64 / lengths.2 as u64) as u32,
-    ];
+    let coord_cell = coord(n, lengths);
     // Initialize field vector
     let mut e_at_cell = [0.0; 3];
 
@@ -52,11 +48,7 @@ fn charge_u32_pos(charges: Vec<(u64, f32)>, lengths: (u32, u32, u32)) -> Vec<([u
 
     // Precompute position vectors
     for &(i, charge) in charges.iter() {
-        let coord_charge = [
-            (i % lengths.1 as u64) as u32,
-            (i / lengths.1 as u64 % lengths.2 as u64) as u32,
-            (i / lengths.1 as u64 / lengths.2 as u64) as u32,
-        ];
+        let coord_charge = coord(i, lengths);
         charges_vector_pos.push((coord_charge, charge))
     }
 
@@ -107,43 +99,165 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
         .unwrap();
 }
 
-fn calculate_b(
+#[allow(unused_mut)]
+// Variables are mutated with deborrow
+/// Precomputes the magnetic field from a Vector of magnetic scalar potentials
+pub fn precompute_B(lbm: &Lbm, psi: Vec<f32>) {
+    // TODO: Make multi-domain compatible
+
+    // Set variables
+    let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
+    let mut b_field: Vec<f32> = vec![0.0; (n * 3) as usize];
+    let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
+    let def_mu0 = lbm.config.units.si_to_mu0();
+    println!(
+        "Precomputing magnetic field for {} cells. (This may take a while)",
+        n
+    );
+
+    fn deborrow<'b, T>(r: &T) -> &'b mut T {
+        // Needed to access e_field in parallel.
+        // This is safe, because no indecies are accessed multiple times
+        unsafe {
+            #[allow(mutable_transmutes)]
+            std::mem::transmute(r)
+        }
+    }
+
+    (0..n).into_par_iter().for_each(|i| {
+        let b_at = calculate_b(i, &psi, lengths, def_mu0);
+        deborrow(&b_field)[i as usize] = b_at[0];
+        deborrow(&b_field)[(i + n) as usize] = b_at[1];
+        deborrow(&b_field)[(i + (n * 2)) as usize] = b_at[2];
+    });
+
+    lbm.domains[0]
+        .b
+        .as_ref()
+        .expect("E buffer used but not initialized")
+        .write(&b_field)
+        .enq()
+        .unwrap();
+}
+
+fn calculate_psi(
     n: u64,
-    magnets: &[([u32; 3], [f32; 3])],
+    magnets: &[(u64, [f32; 3])],
     lengths: (u32, u32, u32),
-    def_mu0: f32,
-) -> [f32; 3] {
-
+) -> f32 {
     // Compute current cell coordinates
-    let coord_cell = [
-        (n % lengths.1 as u64) as u32,
-        (n / lengths.1 as u64 % lengths.2 as u64) as u32,
-        (n / lengths.1 as u64 / lengths.2 as u64) as u32,
-    ];
+    let coord_cell = coord(n, lengths);
 
-    let mut psi_at_cell = [0.0f32; 3];
+    let mut psi_at_cell = 0.0f32;
 
     // loop over all magnet cells
-    for &(coord_magnet, magnetization) in magnets.iter() {
+    for &(i, magnetization) in magnets.iter() {
+        let coord_magnet = coord(i, lengths);
         // Compute difference vector from cell to current magnet
         let coord_diff = [
-            (coord_cell[0] as i32) - (coord_magnet[0] as i32),
-            (coord_cell[1] as i32) - (coord_magnet[1] as i32),
-            (coord_cell[2] as i32) - (coord_magnet[2] as i32),
+            (coord_cell[0] as i32) - (coord_magnet[0] as i32 + 1),
+            (coord_cell[1] as i32) - (coord_magnet[1] as i32 + 1),
+            (coord_cell[2] as i32) - (coord_magnet[2] as i32 + 1),
         ];
         if !coord_diff.eq(&[0 as i32; 3]) {
             let pre_psi = dotp_f32_i32(magnetization, coord_diff) / cb(length(coord_diff));
-            psi_at_cell = [
-                psi_at_cell[0] + coord_diff[0] as f32 * pre_psi,
-                psi_at_cell[1] + coord_diff[1] as f32 * pre_psi,
-                psi_at_cell[2] + coord_diff[2] as f32 * pre_psi,
-            ];
+            psi_at_cell += pre_psi;
         }
     }
-    
-    // TODO: finish b field
 
-    return [0.0; 3];
+    psi_at_cell / (4.0 * PI)
+}
+
+pub fn calculate_psi_field_padded(
+    lbm: &Lbm,
+    magnets: Vec<(u64, [f32; 3])>,
+) -> Vec<f32> {
+    // Set variables
+    let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
+    // 1 padding on each side
+    let mut psi_field = vec![0.0f32; ((lengths.0 + 2) * (lengths.1 + 2) * (lengths.2 + 2)) as usize];
+    let def_mu0 = lbm.config.units.si_to_mu0();
+
+    println!(
+        "Precomputing magnetic scalar potential for {} magnets and {} cells. (This may take a while)",
+        magnets.len(),
+        lengths.0 * lengths.1 * lengths.2,
+    );
+
+    // get psi for all including padding
+    for i in 0..psi_field.len() {
+        psi_field[i] = calculate_psi(i as u64, &magnets, lengths);
+    }
+
+    psi_field
+}
+
+#[allow(unused)]
+fn calculate_b(
+    n: u64,
+    psi: &[f32],
+    lengths: (u32, u32, u32),
+    def_mu0: f32,
+) -> [f32; 3] {
+    let mut b = [0.0f32; 3];
+
+    let coord = coord(n, lengths);
+    let pre_b = nabla(psi, lengths, coord[0] + 1, coord[1] + 1, coord[2] + 1);
+
+    b[0] = -def_mu0 * pre_b[0];
+    b[1] = -def_mu0 * pre_b[1];
+    b[2] = -def_mu0 * pre_b[2];
+
+    b
+}
+
+fn magnet_u32_pos(magnets: Vec<(u64, [f32; 3])>, lengths: (u32, u32, u32)) -> Vec<([u32; 3], [f32; 3])> {
+    let mut magnets_vector_pos: Vec<([u32; 3], [f32; 3])> = Vec::with_capacity(magnets.len());
+
+    // Precompute position vectors
+    for &(i, magnet) in magnets.iter() {
+        let coord_magnet = coord(i, lengths);
+        magnets_vector_pos.push((coord_magnet, magnet));
+    }
+
+    magnets_vector_pos
+}
+
+#[inline]
+fn coord(n: u64, lengths: (u32, u32, u32)) -> [u32; 3] {
+    [
+        (n % lengths.1 as u64) as u32,
+        (n / lengths.1 as u64 % lengths.2 as u64) as u32,
+        (n / lengths.1 as u64 / lengths.2 as u64) as u32,
+    ]
+}
+
+#[inline]
+fn index_of(x: u32, y: u32, z:u32, lengths: (u32, u32, u32)) -> u64 {
+    (x as u64) + (y as u64) * (lengths.0 as u64) + (z as u64) * (lengths.0 as u64) * (lengths.1 as u64)
+}
+
+fn nabla(
+    f: &[f32],
+    lengths: (u32, u32, u32),
+    x: u32,
+    y: u32,
+    z: u32,
+) -> [f32; 3] {
+    // assume padding goes to -1, shifting done outside
+    let minus_x = index_of(x - 1, y, z, lengths);
+    let plus_x = index_of(x + 1, y, z, lengths);
+    let minus_y = index_of(x, y - 1, z, lengths);
+    let plus_y = index_of(x, y + 1, z, lengths);
+    let minus_z = index_of(x, y, z - 1, lengths);
+    let plus_z = index_of(x, y, z + 1, lengths);
+
+    let mut grad = [0.0f32; 3];
+    grad[0] = (f[plus_x as usize] - f[minus_x as usize]) / 2.0;
+    grad[1] = (f[plus_y as usize] - f[minus_y as usize]) / 2.0;
+    grad[2] = (f[plus_z as usize] - f[minus_z as usize]) / 2.0;
+
+    grad
 }
 
 #[inline]

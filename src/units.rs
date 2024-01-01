@@ -109,6 +109,11 @@ impl Units {
         // 1 / (4 * 3.14159 * (8.8541878128 * 10^-12)) = 8.987552E9 (k_e)
         8.987552E9 / (self.kg * cb(self.m) / (self.c * self.c * self.s * self.s))
     }
+
+    pub fn si_to_mu0(&self) -> f32 {
+        // 1 / (epsilon_0 * c²) = mu_0 (Magnetic Field Constant)
+        1.25663706212E-6 / (self.kg * self.m / (self.c * self.c))
+    }
 }
 
 #[inline]
