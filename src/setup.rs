@@ -18,9 +18,9 @@ pub fn setup() -> Lbm {
     lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
-    lbm_config.n_z = 128;
+    lbm_config.n_z = 256;
     lbm_config.d_x = 1;
-    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
+    lbm_config.nu = 0.2;//lbm_config.units.si_to_nu(1.48E-5);
     lbm_config.velocity_set = VelocitySet::D3Q19;
     // Extensions
     lbm_config.ext_volume_force = true;
@@ -33,8 +33,8 @@ pub fn setup() -> Lbm {
 
     // Setup test charges
     let mut vec_q: Vec<(u64, f32)> = vec![];
-    vec_q.push((1056824, 0.00000001));
-    vec_q.push((1056840, -0.00000001));
+    vec_q.push((1056824, 0.000000001));
+    vec_q.push((1056840, -0.000000001));
 
     //vec_q.push((1048576+8192, 0.00000001));
     //vec_q.push((1048576+8192+127, -0.00000001));
@@ -51,20 +51,22 @@ pub fn setup() -> Lbm {
 
     // magnetic field
     let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
-    vec_m.push((1056824, [1.0, 0.0, 0.0]));
-    vec_m.push((1056832, [1.0, 0.0, 0.0]));
-    vec_m.push((1056833, [1.0, 0.0, 0.0]));
-    vec_m.push((1056840, [1.0, 0.0, 0.0]));
+    //vec_m.push((1056824, [1.0, 0.0, 0.0]));
+    //vec_m.push((1056832, [1.0, 0.0, 0.0]));
+    //vec_m.push((1056833, [1.0, 0.0, 0.0]));
+    //vec_m.push((1056840, [1.0, 0.0, 0.0]));
+    for i in 0..256 {
+        vec_m.push((i * 41, [0.0, 0.0, 600000000.0]));
+        vec_m.push((i * 41 + 2097152, [0.0, 0.0, 600000000.0]));
+    }
 
-    let vec_psi = precompute::calculate_psi_field_padded(&lbm, vec_m);
-
-    precompute::precompute_B(&lbm, vec_psi);
-    //lbm.setup_taylor_green();
+    precompute::precompute_B(&lbm, vec_m);
+    lbm.setup_taylor_green();
     lbm.domains[0]
         .graphics
         .as_mut()
         .expect("grapics not enabled")
-        .streamline_mode = false;
+        .streamline_mode = true;
     // E-Field
     
     lbm.domains[0]
@@ -78,13 +80,13 @@ pub fn setup() -> Lbm {
         .graphics
         .as_mut()
         .expect("grapics not enabled")
-        .vector_b_mode = true;
+        .vector_b_mode = false;
 
     lbm.domains[0]
         .graphics
         .as_mut()
         .expect("grapics not enabled")
-        .field_mode = true;
+        .field_mode = false;
     lbm.domains[0]
         .graphics
         .as_mut()

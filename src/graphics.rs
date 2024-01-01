@@ -87,10 +87,10 @@ impl Graphics {
             .arg_named("camera_params", &camera_params)
             .arg_named("bitmap", &bitmap)
             .arg_named("zbuffer", &zbuffer)
-            .arg_named("slice_mode", 2)
-            .arg_named("slice_x", 64)
-            .arg_named("slice_y", 64)
-            .arg_named("slice_z", 64)
+            .arg_named("slice_mode", 0)
+            .arg_named("slice_x", 0)
+            .arg_named("slice_y", 0)
+            .arg_named("slice_z", 0)
             .build()
             .unwrap();
         let kernel_graphics_streamline = match lbm_config.velocity_set {

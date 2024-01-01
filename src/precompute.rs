@@ -2,9 +2,54 @@
 use crate::*;
 use rayon::prelude::*;
 
+
+#[allow(unused_mut)] // Variables are mutated with deborrow
+/// Precomputes the electric field from a Vector of charges
+pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
+    // TODO: Make multi-domain compatible
+
+    // Set variables
+    let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
+    let mut e_field: Vec<f32> = vec![0.0; (n * 3) as usize];
+    let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
+    let def_ke = lbm.config.units.si_to_ke();
+    println!(
+        "Precomputing electric field for {} charges and {} cells. (This may take a while)",
+        charges.len(),
+        n
+    );
+
+    fn deborrow<'b, T>(r: &T) -> &'b mut T {
+        // Needed to access e_field in parallel.
+        // This is safe, because no indecies are accessed multiple times
+        unsafe {
+            #[allow(mutable_transmutes)]
+            std::mem::transmute(r)
+        }
+    }
+
+    let charges_u32_3_pos: Vec<([u32; 3], f32)> = u32_3_pos(charges, lengths);
+
+    (0..n).into_par_iter().for_each(|i| {
+        let e_at = calculate_e_at(i, &charges_u32_3_pos, lengths, def_ke);
+        deborrow(&e_field)[i as usize] = e_at[0];
+        deborrow(&e_field)[(i + n) as usize] = e_at[1];
+        deborrow(&e_field)[(i + (n * 2)) as usize] = e_at[2];
+    });
+
+    // Write to device
+    lbm.domains[0]
+        .e
+        .as_ref()
+        .expect("E buffer used but not initialized")
+        .write(&e_field)
+        .enq()
+        .unwrap();
+}
+
 /// Calculates electric field vector at a cell with index n
 /// from a vector of charges.
-fn calculate_e(
+fn calculate_e_at(
     n: u64,
     charges: &[([u32; 3], f32)],
     lengths: (u32, u32, u32),
@@ -42,68 +87,12 @@ fn calculate_e(
     e_at_cell
 }
 
-/// Converts charge u64 index positions to u32 coords
-fn charge_u32_pos(charges: Vec<(u64, f32)>, lengths: (u32, u32, u32)) -> Vec<([u32; 3], f32)> {
-    let mut charges_vector_pos: Vec<([u32; 3], f32)> = Vec::with_capacity(charges.len());
-
-    // Precompute position vectors
-    for &(i, charge) in charges.iter() {
-        let coord_charge = coord(i, lengths);
-        charges_vector_pos.push((coord_charge, charge))
-    }
-
-    charges_vector_pos
-}
-
-#[allow(unused_mut)]
-// Variables are mutated with deborrow
-/// Precomputes the electric field from a Vector of charges
-pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
-    // TODO: Make multi-domain compatible
-
-    // Set variables
-    let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
-    let mut e_field: Vec<f32> = vec![0.0; (n * 3) as usize];
-    let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
-    let def_ke = lbm.config.units.si_to_ke();
-    println!(
-        "Precomputing electric field for {} charges and {} cells. (This may take a while)",
-        charges.len(),
-        n
-    );
-
-    fn deborrow<'b, T>(r: &T) -> &'b mut T {
-        // Needed to access e_field in parallel.
-        // This is safe, because no indecies are accessed multiple times
-        unsafe {
-            #[allow(mutable_transmutes)]
-            std::mem::transmute(r)
-        }
-    }
-
-    let charges_float_pos: Vec<([u32; 3], f32)> = charge_u32_pos(charges, lengths);
-
-    (0..n).into_par_iter().for_each(|i| {
-        let e_at = calculate_e(i, &charges_float_pos, lengths, def_ke);
-        deborrow(&e_field)[i as usize] = e_at[0];
-        deborrow(&e_field)[(i + n) as usize] = e_at[1];
-        deborrow(&e_field)[(i + (n * 2)) as usize] = e_at[2];
-    });
-
-    lbm.domains[0]
-        .e
-        .as_ref()
-        .expect("E buffer used but not initialized")
-        .write(&e_field)
-        .enq()
-        .unwrap();
-}
-
-#[allow(unused_mut)]
-// Variables are mutated with deborrow
+#[allow(unused_mut)] // Variables are mutated with deborrow
 /// Precomputes the magnetic field from a Vector of magnetic scalar potentials
-pub fn precompute_B(lbm: &Lbm, psi: Vec<f32>) {
+pub fn precompute_B(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) {
     // TODO: Make multi-domain compatible
+
+    let vec_psi = precompute::calculate_psi_field(&lbm, magnets);
 
     // Set variables
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
@@ -125,13 +114,13 @@ pub fn precompute_B(lbm: &Lbm, psi: Vec<f32>) {
     }
 
     (0..n).into_par_iter().for_each(|i| {
-        let b_at = calculate_b(i, &psi, lengths, def_mu0);
-        // Arbitrary factors for testing must remove
-        deborrow(&b_field)[i as usize] = b_at[0] * 10.0E9;
-        deborrow(&b_field)[(i + n) as usize] = b_at[1] * 10.0E9;
-        deborrow(&b_field)[(i + (n * 2)) as usize] = b_at[2] * 10.0E9;
+        let b_at = calculate_b_at(i, &vec_psi, lengths, def_mu0);
+        deborrow(&b_field)[i as usize] = b_at[0];
+        deborrow(&b_field)[(i + n) as usize] = b_at[1];
+        deborrow(&b_field)[(i + (n * 2)) as usize] = b_at[2];
     });
 
+    // Write to device
     lbm.domains[0]
         .b
         .as_ref()
@@ -141,70 +130,8 @@ pub fn precompute_B(lbm: &Lbm, psi: Vec<f32>) {
         .unwrap();
 }
 
-fn calculate_psi(
-    n: u64,
-    magnets: &[(u64, [f32; 3])],
-    lengths: (u32, u32, u32),
-) -> f32 {
-    // Compute current cell coordinates with padding
-    let coord_cell = coord(n, (lengths.0 + 2, lengths.1 + 2, lengths.2 + 2));
-
-    let mut psi_at_cell = 0.0f32;
-
-    // loop over all magnet cells
-    for &(i, magnetization) in magnets.iter() {
-        let coord_magnet = coord(i, lengths);
-        // Compute difference vector from cell to current magnet
-        let coord_diff = [
-            (coord_cell[0] as i32) - (coord_magnet[0] as i32 + 1),
-            (coord_cell[1] as i32) - (coord_magnet[1] as i32 + 1),
-            (coord_cell[2] as i32) - (coord_magnet[2] as i32 + 1),
-        ];
-        if !coord_diff.eq(&[0 as i32; 3]) {
-            let pre_psi = dotp_f32_i32(magnetization, coord_diff) / cb(length(coord_diff));
-            psi_at_cell += pre_psi;
-        }
-    }
-
-    psi_at_cell / (4.0 * PI)
-}
-
-#[allow(unused_mut)]
-pub fn calculate_psi_field_padded(
-    lbm: &Lbm,
-    magnets: Vec<(u64, [f32; 3])>,
-) -> Vec<f32> {
-    // Set variables
-    let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
-    let n = ((lengths.0 + 2) as u64) * ((lengths.1 + 2) as u64) * ((lengths.2 + 2) as u64);
-    // 1 padding on each side
-    let mut psi_field = vec![0.0f32; n as usize];
-
-    println!(
-        "Precomputing magnetic scalar potential for {} magnets and {} cells. (This may take a while)",
-        magnets.len(),
-        n,
-    );
-
-    fn deborrow<'b, T>(r: &T) -> &'b mut T {
-        // Needed to access b_field in parallel.
-        // This is safe, because no indecies are accessed multiple times
-        unsafe {
-            #[allow(mutable_transmutes)]
-            std::mem::transmute(r)
-        }
-    }
-
-    // get psi for all including padding
-    (0..n).into_par_iter().for_each(|i| {
-        deborrow(&psi_field)[i as usize] = calculate_psi(i, &magnets, lengths);
-    });
-
-    psi_field
-}
-
 #[allow(unused)]
-fn calculate_b(
+fn calculate_b_at(
     n: u64,
     psi: &[f32],
     lengths: (u32, u32, u32),
@@ -222,20 +149,91 @@ fn calculate_b(
     b
 }
 
+#[allow(unused_mut)]
+/// Calculate a psi field with one cell padding on all sides (Needed for nabla operator in B field)
+pub fn calculate_psi_field(
+    lbm: &Lbm,
+    magnets: Vec<(u64, [f32; 3])>,
+) -> Vec<f32> {
+    // Set variables
+    let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
+    let n = ((lengths.0 + 2) as u64) * ((lengths.1 + 2) as u64) * ((lengths.2 + 2) as u64);
+    // 1 padding on each side
+    let mut psi_field = vec![0.0f32; n as usize];
+
+    println!(
+        "Precomputing magnetic scalar potential for {} magnets and {} cells. (This may take a while)",
+        magnets.len(),
+        n,
+    );
+
+    let magnets_u32_3_pos: Vec<([u32; 3], [f32; 3])> = u32_3_pos(magnets, lengths);
+
+    // get psi for all including padding
+    psi_field.par_iter_mut().enumerate().for_each(|(i, item)| {
+        *item = calculate_psi_at(i as u64, &magnets_u32_3_pos, lengths);
+    });
+
+    psi_field
+}
+
+/// Calculate psi field at a cell
+fn calculate_psi_at(
+    n: u64,
+    magnets: &[([u32; 3], [f32; 3])],
+    lengths: (u32, u32, u32),
+) -> f32 {
+    // Compute current cell coordinates with padding
+    let coord_cell = coord(n, (lengths.0 + 2, lengths.1 + 2, lengths.2 + 2));
+
+    let mut psi_at_cell = 0.0f32;
+
+    // loop over all magnet cells
+    for &(coord_magnet, magnetization) in magnets.iter() {
+        // Compute difference vector from cell to current magnet
+        let coord_diff = [
+            (coord_cell[0] as i32) - (coord_magnet[0] as i32 + 1),
+            (coord_cell[1] as i32) - (coord_magnet[1] as i32 + 1),
+            (coord_cell[2] as i32) - (coord_magnet[2] as i32 + 1),
+        ];
+        if !coord_diff.eq(&[0 as i32; 3]) {
+            let pre_psi = dotp_f32_i32(magnetization, coord_diff) / cb(length(coord_diff));
+            psi_at_cell += pre_psi;
+        }
+    }
+
+    psi_at_cell / (4.0 * PI)
+}
+
+/// Converts u64 index positions to u32 coords in a vector
+fn u32_3_pos<T: Copy>(gen_vector: Vec<(u64, T)>, lengths: (u32, u32, u32)) -> Vec<([u32; 3], T)> {
+    let mut gen_vector_u32_3: Vec<([u32; 3], T)> = Vec::with_capacity(gen_vector.len());
+
+    // Precompute position vectors
+    for &(i, gent) in gen_vector.iter() {
+        let coord = coord(i, lengths);
+        gen_vector_u32_3.push((coord, gent))
+    }
+
+    gen_vector_u32_3
+}
+
 #[inline]
+/// Converts u64 index positions to u32 coords
 fn coord(n: u64, lengths: (u32, u32, u32)) -> [u32; 3] {
     [
-        (n % lengths.1 as u64) as u32,
-        (n / lengths.1 as u64 % lengths.2 as u64) as u32,
-        (n / lengths.1 as u64 / lengths.2 as u64) as u32,
+        (n % lengths.0 as u64) as u32,
+        (n / lengths.0 as u64 % lengths.1 as u64) as u32,
+        (n / lengths.0 as u64 / lengths.1 as u64) as u32,
     ]
 }
 
 #[inline]
 fn index_of(x: u32, y: u32, z:u32, lengths: (u32, u32, u32)) -> u64 {
-    (x as u64) + (y as u64) * (lengths.0 as u64) + (z as u64) * (lengths.0 as u64) * (lengths.1 as u64)
+    (x as u64) + (y as u64 + z as u64 * lengths.1 as u64) * (lengths.0 as u64)
 }
 
+/// Nabla operator. Returns gradient vector of a f32 field
 fn nabla(
     f: &[f32],
     lengths: (u32, u32, u32),
@@ -260,6 +258,7 @@ fn nabla(
 }
 
 #[inline]
+/// Dot product between f32 and i32 vectors
 fn dotp_f32_i32(a: [f32; 3], b: [i32; 3]) -> f32 {
     a[0] * (b[0] as f32) + a[1] * (b[1] as f32) + a[2] * (b[2] as f32)
 }
@@ -269,26 +268,6 @@ fn dotp_f32_i32(a: [f32; 3], b: [i32; 3]) -> f32 {
 fn len_sq_i32(v: [i32; 3]) -> f32 {
     sq(v[0] as f32) + sq(v[1] as f32) + sq(v[2] as f32)
 }
-
-/*
-#[inline]
-/// Fast vector normalization for a u32 vector. Returns f32 vector
-fn fast_normalize_i32(v: [i32; 3]) -> [f32; 3] {
-    let len = fast_inv_sqrt(len_sq_i32(v));
-    v.map(|x| x as f32 * len)
-}
-
-
-#[inline]
-/// Fast inverse square root algorithm
-fn fast_inv_sqrt(x: f32) -> f32 {
-    let i = x.to_bits();
-    let i = 0x5f3759df - (i >> 1);
-    let y = f32::from_bits(i);
-
-    y * (1.5 - 0.5 * x * y * y)
-}
-*/
 
 #[inline]
 fn length(v: [i32; 3]) -> f32 {
