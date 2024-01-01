@@ -211,18 +211,6 @@ fn calculate_b(
     b
 }
 
-fn magnet_u32_pos(magnets: Vec<(u64, [f32; 3])>, lengths: (u32, u32, u32)) -> Vec<([u32; 3], [f32; 3])> {
-    let mut magnets_vector_pos: Vec<([u32; 3], [f32; 3])> = Vec::with_capacity(magnets.len());
-
-    // Precompute position vectors
-    for &(i, magnet) in magnets.iter() {
-        let coord_magnet = coord(i, lengths);
-        magnets_vector_pos.push((coord_magnet, magnet));
-    }
-
-    magnets_vector_pos
-}
-
 #[inline]
 fn coord(n: u64, lengths: (u32, u32, u32)) -> [u32; 3] {
     [
@@ -271,12 +259,14 @@ fn len_sq_i32(v: [i32; 3]) -> f32 {
     sq(v[0] as f32) + sq(v[1] as f32) + sq(v[2] as f32)
 }
 
+/*
 #[inline]
 /// Fast vector normalization for a u32 vector. Returns f32 vector
 fn fast_normalize_i32(v: [i32; 3]) -> [f32; 3] {
     let len = fast_inv_sqrt(len_sq_i32(v));
     v.map(|x| x as f32 * len)
 }
+
 
 #[inline]
 /// Fast inverse square root algorithm
@@ -287,6 +277,7 @@ fn fast_inv_sqrt(x: f32) -> f32 {
 
     y * (1.5 - 0.5 * x * y * y)
 }
+*/
 
 #[inline]
 fn length(v: [i32; 3]) -> f32 {
