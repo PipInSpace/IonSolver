@@ -1,7 +1,5 @@
-
 use crate::*;
 use rayon::prelude::*;
-
 
 #[allow(unused_mut)] // Variables are mutated with deborrow
 /// Precomputes the electric field from a Vector of charges
@@ -55,7 +53,6 @@ fn calculate_e_at(
     lengths: (u32, u32, u32),
     def_ke: f32,
 ) -> [f32; 3] {
-
     // Compute current cell coordinates
     let coord_cell = coord(n, lengths);
     // Initialize field vector
@@ -71,7 +68,7 @@ fn calculate_e_at(
         ];
 
         // if not the cell we are checking
-        if !coord_diff.eq(&[0 as i32; 3]) {
+        if !coord_diff.eq(&[0_i32; 3]) {
             let pre_e = charge / cb(length(coord_diff));
             e_at_cell = [
                 e_at_cell[0] + coord_diff[0] as f32 * pre_e,
@@ -92,7 +89,7 @@ fn calculate_e_at(
 pub fn precompute_B(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) {
     // TODO: Make multi-domain compatible
 
-    let vec_psi = precompute::calculate_psi_field(&lbm, magnets);
+    let vec_psi = precompute::calculate_psi_field(lbm, magnets);
 
     // Set variables
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
@@ -131,16 +128,17 @@ pub fn precompute_B(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) {
 }
 
 #[allow(unused)]
-fn calculate_b_at(
-    n: u64,
-    psi: &[f32],
-    lengths: (u32, u32, u32),
-    def_mu0: f32,
-) -> [f32; 3] {
+fn calculate_b_at(n: u64, psi: &[f32], lengths: (u32, u32, u32), def_mu0: f32) -> [f32; 3] {
     let mut b = [0.0f32; 3];
 
     let coord = coord(n, lengths);
-    let pre_b = nabla(psi, (lengths.0 + 2, lengths.1 + 2, lengths.2 + 2), coord[0] + 1, coord[1] + 1, coord[2] + 1);
+    let pre_b = nabla(
+        psi,
+        (lengths.0 + 2, lengths.1 + 2, lengths.2 + 2),
+        coord[0] + 1,
+        coord[1] + 1,
+        coord[2] + 1,
+    );
 
     b[0] = -def_mu0 * pre_b[0];
     b[1] = -def_mu0 * pre_b[1];
@@ -151,10 +149,7 @@ fn calculate_b_at(
 
 #[allow(unused_mut)]
 /// Calculate a psi field with one cell padding on all sides (Needed for nabla operator in B field)
-pub fn calculate_psi_field(
-    lbm: &Lbm,
-    magnets: Vec<(u64, [f32; 3])>,
-) -> Vec<f32> {
+pub fn calculate_psi_field(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) -> Vec<f32> {
     // Set variables
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     let n = ((lengths.0 + 2) as u64) * ((lengths.1 + 2) as u64) * ((lengths.2 + 2) as u64);
@@ -178,11 +173,7 @@ pub fn calculate_psi_field(
 }
 
 /// Calculate psi field at a cell
-fn calculate_psi_at(
-    n: u64,
-    magnets: &[([u32; 3], [f32; 3])],
-    lengths: (u32, u32, u32),
-) -> f32 {
+fn calculate_psi_at(n: u64, magnets: &[([u32; 3], [f32; 3])], lengths: (u32, u32, u32)) -> f32 {
     // Compute current cell coordinates with padding
     let coord_cell = coord(n, (lengths.0 + 2, lengths.1 + 2, lengths.2 + 2));
 
@@ -196,7 +187,7 @@ fn calculate_psi_at(
             (coord_cell[1] as i32) - (coord_magnet[1] as i32 + 1),
             (coord_cell[2] as i32) - (coord_magnet[2] as i32 + 1),
         ];
-        if !coord_diff.eq(&[0 as i32; 3]) {
+        if !coord_diff.eq(&[0_i32; 3]) {
             let pre_psi = dotp_f32_i32(magnetization, coord_diff) / cb(length(coord_diff));
             psi_at_cell += pre_psi;
         }
@@ -229,18 +220,12 @@ fn coord(n: u64, lengths: (u32, u32, u32)) -> [u32; 3] {
 }
 
 #[inline]
-fn index_of(x: u32, y: u32, z:u32, lengths: (u32, u32, u32)) -> u64 {
+fn index_of(x: u32, y: u32, z: u32, lengths: (u32, u32, u32)) -> u64 {
     (x as u64) + (y as u64 + z as u64 * lengths.1 as u64) * (lengths.0 as u64)
 }
 
 /// Nabla operator. Returns gradient vector of a f32 field
-fn nabla(
-    f: &[f32],
-    lengths: (u32, u32, u32),
-    x: u32,
-    y: u32,
-    z: u32,
-) -> [f32; 3] {
+fn nabla(f: &[f32], lengths: (u32, u32, u32), x: u32, y: u32, z: u32) -> [f32; 3] {
     // assume padding goes to -1, shifting done outside
     let minus_x = index_of(x - 1, y, z, lengths);
     let plus_x = index_of(x + 1, y, z, lengths);

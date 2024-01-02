@@ -116,7 +116,7 @@ pub struct LbmConfig {
 
     pub ext_equilibrium_boudaries: bool, //Extensions
     pub ext_volume_force: bool,
-    pub ext_force_field: bool,    // Needs volume_force to work
+    pub ext_force_field: bool,   // Needs volume_force to work
     pub ext_electro_hydro: bool, // Needs volume_force to work
 
     pub graphics_config: GraphicsConfig,

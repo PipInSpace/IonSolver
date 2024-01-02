@@ -11,7 +11,7 @@ use crate::*;
 pub enum VecVisMode {
     U,
     E,
-    B
+    B,
 }
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
@@ -189,27 +189,27 @@ impl LbmDomain {
                 match graphics.vec_vis_mode {
                     VecVisMode::U => {
                         graphics
-                        .kernel_graphics_streamline
-                        .set_arg("u",&self.u)
-                        .unwrap();
-                    },
+                            .kernel_graphics_streamline
+                            .set_arg("u", &self.u)
+                            .unwrap();
+                    }
                     VecVisMode::E => {
                         graphics
-                        .kernel_graphics_streamline
-                        .set_arg(
-                            "u",
-                            self.e.as_ref().expect("E buffer used but not initialized"),
-                        )
-                        .unwrap();
+                            .kernel_graphics_streamline
+                            .set_arg(
+                                "u",
+                                self.e.as_ref().expect("E buffer used but not initialized"),
+                            )
+                            .unwrap();
                     }
                     VecVisMode::B => {
                         graphics
-                        .kernel_graphics_streamline
-                        .set_arg(
-                            "u",
-                            self.b.as_ref().expect("B buffer used but not initialized"),
-                        )
-                        .unwrap();
+                            .kernel_graphics_streamline
+                            .set_arg(
+                                "u",
+                                self.b.as_ref().expect("B buffer used but not initialized"),
+                            )
+                            .unwrap();
                     }
                 }
                 graphics.kernel_graphics_streamline.enq().unwrap();
@@ -218,27 +218,27 @@ impl LbmDomain {
                 match graphics.vec_vis_mode {
                     VecVisMode::U => {
                         graphics
-                        .kernel_graphics_field
-                        .set_arg("u",&self.u)
-                        .unwrap();
-                    },
+                            .kernel_graphics_field
+                            .set_arg("u", &self.u)
+                            .unwrap();
+                    }
                     VecVisMode::E => {
                         graphics
-                        .kernel_graphics_field
-                        .set_arg(
-                            "u",
-                            self.e.as_ref().expect("E buffer used but not initialized"),
-                        )
-                        .unwrap();
+                            .kernel_graphics_field
+                            .set_arg(
+                                "u",
+                                self.e.as_ref().expect("E buffer used but not initialized"),
+                            )
+                            .unwrap();
                     }
                     VecVisMode::B => {
                         graphics
-                        .kernel_graphics_field
-                        .set_arg(
-                            "u",
-                            self.b.as_ref().expect("B buffer used but not initialized"),
-                        )
-                        .unwrap();
+                            .kernel_graphics_field
+                            .set_arg(
+                                "u",
+                                self.b.as_ref().expect("B buffer used but not initialized"),
+                            )
+                            .unwrap();
                     }
                 }
                 graphics.kernel_graphics_field.enq().unwrap();

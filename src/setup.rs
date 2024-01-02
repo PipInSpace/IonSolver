@@ -20,7 +20,7 @@ pub fn setup() -> Lbm {
     lbm_config.n_y = 128;
     lbm_config.n_z = 256;
     lbm_config.d_x = 1;
-    lbm_config.nu = 0.2;//lbm_config.units.si_to_nu(1.48E-5);
+    lbm_config.nu = 0.2; //lbm_config.units.si_to_nu(1.48E-5);
     lbm_config.velocity_set = VelocitySet::D3Q19;
     // Extensions
     lbm_config.ext_volume_force = true;

@@ -3,11 +3,11 @@ extern crate ocl;
 use std::time::{Duration, Instant};
 use std::{f32::consts::PI, fs, sync::mpsc, thread};
 
-mod precompute;
 mod graphics;
 mod info;
 mod lbm;
 mod opencl;
+mod precompute;
 mod setup;
 mod units;
 use eframe::*;
@@ -495,7 +495,9 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                         (mn * 1000000) / time_per_step as u64
                     );
                 }
-                if i % state.frame_spacing == 0 && state.save && lbm.config.graphics_config.graphics_active
+                if i % state.frame_spacing == 0
+                    && state.save
+                    && lbm.config.graphics_config.graphics_active
                 {
                     // Saves frames if needed
                     lbm.draw_frame(true, sim_tx.clone(), &i);
@@ -516,7 +518,8 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
             println!("\nExiting Simulation Loop");
             break;
         }
-        if count % 500 == 0 { // To prevent spam-printing
+        if count % 500 == 0 {
+            // To prevent spam-printing
             print!("\rStep {}, Steps/s: 0, MLUP/s: 0                    ", i);
         }
         let recieve_result = ctrl_rx.try_recv();
