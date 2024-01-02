@@ -6,6 +6,14 @@ use ocl::{Buffer, Kernel, Program, Queue};
 
 use crate::*;
 
+#[allow(unused)]
+#[derive(Clone, Copy)]
+pub enum VecVisMode {
+    U,
+    E,
+    B
+}
+
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
 pub struct Graphics {
     kernel_clear: Kernel,
@@ -20,9 +28,8 @@ pub struct Graphics {
     kernel_graphics_q: Kernel,
 
     pub streamline_mode: bool,    // Draw streamline mode
-    pub vector_e_mode: bool,      // Streamline e field
-    pub vector_b_mode: bool,      // Streamline b field
     pub field_mode: bool,         // Draw field
+    pub vec_vis_mode: VecVisMode, // What Vector to visualize
     pub q_mode: bool,             // Draw q (vorticity)
     pub flags_mode: bool,         // Draw flags
     pub flags_surface_mode: bool, // Draw flags (surface)
@@ -158,13 +165,12 @@ impl Graphics {
             kernel_graphics_field,
             kernel_graphics_streamline,
             kernel_graphics_q,
-            streamline_mode: true,
-            vector_e_mode: false,
-            vector_b_mode: false,
-            field_mode: false,
-            q_mode: false,
-            flags_mode: false,
-            flags_surface_mode: false,
+            vec_vis_mode: lbm_config.graphics_config.vec_vis_mode,
+            streamline_mode: lbm_config.graphics_config.streamline_mode,
+            field_mode: lbm_config.graphics_config.field_mode,
+            q_mode: lbm_config.graphics_config.q_mode,
+            flags_mode: lbm_config.graphics_config.flags_mode,
+            flags_surface_mode: lbm_config.graphics_config.flags_surface_mode,
         }
     }
 }
@@ -175,57 +181,65 @@ impl LbmDomain {
             .graphics
             .as_ref()
             .expect("Graphics used but not initialized");
+        // Kernel enqueueing is unsafe
         unsafe {
             graphics.kernel_clear.enq().unwrap();
-            //if visualisation mode
             if graphics.streamline_mode {
-                // Streamlines can show velocity and e field
-                if graphics.vector_e_mode {
-                    graphics
+                // Streamlines can show velocity, E and B field
+                match graphics.vec_vis_mode {
+                    VecVisMode::U => {
+                        graphics
+                        .kernel_graphics_streamline
+                        .set_arg("u",&self.u)
+                        .unwrap();
+                    },
+                    VecVisMode::E => {
+                        graphics
                         .kernel_graphics_streamline
                         .set_arg(
                             "u",
                             self.e.as_ref().expect("E buffer used but not initialized"),
                         )
                         .unwrap();
-                } else if graphics.vector_b_mode {
-                    graphics
+                    }
+                    VecVisMode::B => {
+                        graphics
                         .kernel_graphics_streamline
                         .set_arg(
                             "u",
                             self.b.as_ref().expect("B buffer used but not initialized"),
                         )
                         .unwrap();
-                } else {
-                    graphics
-                        .kernel_graphics_streamline
-                        .set_arg("u", &self.u)
-                        .unwrap();
+                    }
                 }
                 graphics.kernel_graphics_streamline.enq().unwrap();
             }
             if graphics.field_mode {
-                if graphics.vector_e_mode {
-                    graphics
+                match graphics.vec_vis_mode {
+                    VecVisMode::U => {
+                        graphics
+                        .kernel_graphics_field
+                        .set_arg("u",&self.u)
+                        .unwrap();
+                    },
+                    VecVisMode::E => {
+                        graphics
                         .kernel_graphics_field
                         .set_arg(
                             "u",
                             self.e.as_ref().expect("E buffer used but not initialized"),
                         )
                         .unwrap();
-                } else if graphics.vector_b_mode {
-                    graphics
+                    }
+                    VecVisMode::B => {
+                        graphics
                         .kernel_graphics_field
                         .set_arg(
                             "u",
                             self.b.as_ref().expect("B buffer used but not initialized"),
                         )
                         .unwrap();
-                } else {
-                    graphics
-                        .kernel_graphics_field
-                        .set_arg("u", &self.u)
-                        .unwrap();
+                    }
                 }
                 graphics.kernel_graphics_field.enq().unwrap();
             }
@@ -248,9 +262,9 @@ pub struct Camera {
     pub height: u32,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 pub struct GraphicsConfig {
-    pub graphics: bool,
+    pub graphics_active: bool, // Activate graphics engine
     pub background_color: u32,
     pub camera_width: u32,
     pub camera_height: u32,
@@ -259,14 +273,19 @@ pub struct GraphicsConfig {
     pub f_max: f32,
     pub streamline_every: u32,
     pub stream_line_lenght: u32,
-    pub ray_transmittance: f32,
-    pub ray_colour: u32,
+    pub vec_vis_mode: VecVisMode,
+
+    pub streamline_mode: bool, // Active graphics modes
+    pub field_mode: bool,
+    pub q_mode: bool,
+    pub flags_mode: bool,
+    pub flags_surface_mode: bool,
 }
 
 impl GraphicsConfig {
     pub fn new() -> GraphicsConfig {
         GraphicsConfig {
-            graphics: true,
+            graphics_active: true,
             background_color: 0x000000,
             camera_width: 1920,
             camera_height: 1080,
@@ -275,8 +294,13 @@ impl GraphicsConfig {
             f_max: 0.002,
             streamline_every: 4,
             stream_line_lenght: 128,
-            ray_transmittance: 0.25,
-            ray_colour: 0x005F7F,
+            vec_vis_mode: VecVisMode::U,
+
+            streamline_mode: false,
+            field_mode: false,
+            q_mode: false,
+            flags_mode: false,
+            flags_surface_mode: false,
         }
     }
 }

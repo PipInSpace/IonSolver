@@ -94,7 +94,7 @@ pub enum VariableFloatBuffer {
 ///
 /// graphics_config: GraphicsConfig, // Grapics config struct
 /// ```
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct LbmConfig {
     // Holds init information about the simulation
     pub velocity_set: VelocitySet,
@@ -247,11 +247,9 @@ impl Lbm {
     #[allow(unused)]
     pub fn run(&mut self, steps: u64) {
         //Initialize, then run simulation for steps
-        //TODO: Display info in command line
         if !self.initialized {
             //Run initialization Kernel
             self.initialize();
-            //TODO: Display initialization info in comman line
         }
         for i in 0..steps {
             println!("Step {}", i);
@@ -413,7 +411,7 @@ impl LbmDomain {
             transfers,
             lbm_config.nu,
             lbm_config,
-        ) + &if lbm_config.graphics_config.graphics {
+        ) + &if lbm_config.graphics_config.graphics_active {
             graphics::get_graphics_defines(lbm_config.graphics_config)
         } else {
             "".to_string()
@@ -548,7 +546,7 @@ impl LbmDomain {
         println!("Kernels for domain compiled.");
         //TODO: allocate transfer buffers
 
-        let graphics: Option<graphics::Graphics> = if lbm_config.graphics_config.graphics {
+        let graphics: Option<graphics::Graphics> = if lbm_config.graphics_config.graphics_active {
             Some(graphics::Graphics::new(
                 lbm_config, &program, &queue, &flags, &u,
             ))
@@ -699,7 +697,7 @@ impl LbmDomain {
         +"\n	#define def_charge "+ &format!("{:.5}f", 0.005) // charge held per density unit
         } else {"".to_string()}
         + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
-        + if lbm_config.graphics_config.graphics {"\n	#define UPDATE_FIELDS"} else {""}
+        + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}
         //Extensions
     }
 

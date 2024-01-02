@@ -254,7 +254,6 @@ impl App for SimControl {
                     if response.dragged() {
                         let delta = response.drag_delta();
                         if delta != Vec2::ZERO {
-                            //TODO: send data to simulation thread for graphics
                             self.camera_rotation[0] += delta.x;
                             self.camera_rotation[1] =
                                 (self.camera_rotation[1] - delta.y).clamp(-90.0, 90.0);
@@ -329,7 +328,6 @@ fn main() {
     let exit_ctrl_tx = ctrl_tx.clone();
     // Start Simulation loop
     let handle = thread::spawn(move || {
-        //TODO: Setup mpsc messaging for data transmission
         simloop(sim_tx, ctrl_rx);
     });
 
@@ -387,7 +385,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     let now = std::time::Instant::now();
     println!("Starting initialize kernel");
     lbm.initialize();
-    println!("initialize kernel took: {}", now.elapsed().as_millis());
+    println!("initialize kernel took: {} ms", now.elapsed().as_millis());
 
     // get initial config from ui
     let recieve_result = ctrl_rx.try_recv();
@@ -405,7 +403,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     }
 
     // Create graphics thread with evil pointer hacks
-    if lbm.config.graphics_config.graphics {
+    if lbm.config.graphics_config.graphics_active {
         let lbm_ptr = &lbm as *const _ as usize;
         let state_ptr = &state as *const _ as usize;
         let i_ptr = &i as *const _ as usize;
@@ -456,7 +454,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     }
                 }
                 if (camera_changed || (!state.paused && frame_changed))
-                    && lbm.config.graphics_config.graphics
+                    && lbm.config.graphics_config.graphics_active
                 {
                     // Only draws frames, never saves them
                     lbm.draw_frame(false, sim_tx_g.clone(), i);
@@ -470,6 +468,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     }
 
     let mn = (lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64) / 1000000;
+    let mut count: u64 = 0;
     loop {
         //This is the master loop, cannot be paused
         if !state.paused {
@@ -496,7 +495,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                         (mn * 1000000) / time_per_step as u64
                     );
                 }
-                if i % state.frame_spacing == 0 && state.save && lbm.config.graphics_config.graphics
+                if i % state.frame_spacing == 0 && state.save && lbm.config.graphics_config.graphics_active
                 {
                     // Saves frames if needed
                     lbm.draw_frame(true, sim_tx.clone(), &i);
@@ -517,10 +516,13 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
             println!("\nExiting Simulation Loop");
             break;
         }
-        print!("\rStep {}, Steps/s: 0, MLUP/s: 0                    ", i);
+        if count % 500 == 0 { // To prevent spam-printing
+            print!("\rStep {}, Steps/s: 0, MLUP/s: 0                    ", i);
+        }
         let recieve_result = ctrl_rx.try_recv();
         if let Ok(recieve) = recieve_result {
             state = recieve;
         }
+        count += 1;
     }
 }

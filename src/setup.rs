@@ -26,27 +26,18 @@ pub fn setup() -> Lbm {
     lbm_config.ext_volume_force = true;
     lbm_config.ext_electro_hydro = true;
     // Graphics
-    lbm_config.graphics_config.graphics = true;
+    lbm_config.graphics_config.graphics_active = true;
+    lbm_config.graphics_config.background_color = 0x1c1b22;
     lbm_config.graphics_config.streamline_every = 8;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
+    lbm_config.graphics_config.streamline_mode = true;
 
-    let mut lbm = Lbm::new(lbm_config);
+    let lbm = Lbm::new(lbm_config);
 
-    // Setup test charges
+    // electric field
     let mut vec_q: Vec<(u64, f32)> = vec![];
     vec_q.push((1056824, 0.000000001));
     vec_q.push((1056840, -0.000000001));
-
-    //vec_q.push((1048576+8192, 0.00000001));
-    //vec_q.push((1048576+8192+127, -0.00000001));
-    // Pseudorandom generation
-    //let mut s: u64 = now.elapsed().as_nanos() as u64;
-    //for _i in 0..20 {
-    //    s = s.wrapping_add(0xA0761D6478BD642F);
-    //    let t = u128::from(s) * u128::from(s ^ 0xE7037ED1A0B428DB);
-    //    let r = (t as u64) ^ (t >> 64) as u64;
-    //    let f = r as f64 / u64::MAX as f64;
-    //    vec_q.push(((2097152.0 * f) as u64, -0.0000000001));
-    //}
     precompute::precompute_E(&lbm, vec_q);
 
     // magnetic field
@@ -59,39 +50,7 @@ pub fn setup() -> Lbm {
         vec_m.push((i * 41, [0.0, 0.0, 600000000.0]));
         vec_m.push((i * 41 + 2097152, [0.0, 0.0, 600000000.0]));
     }
-
     precompute::precompute_B(&lbm, vec_m);
-    lbm.setup_taylor_green();
-    lbm.domains[0]
-        .graphics
-        .as_mut()
-        .expect("grapics not enabled")
-        .streamline_mode = true;
-    // E-Field
-    
-    lbm.domains[0]
-        .graphics
-        .as_mut()
-        .expect("grapics not enabled")
-        .vector_e_mode = false;
-    
-    // B-Field
-    lbm.domains[0]
-        .graphics
-        .as_mut()
-        .expect("grapics not enabled")
-        .vector_b_mode = false;
-
-    lbm.domains[0]
-        .graphics
-        .as_mut()
-        .expect("grapics not enabled")
-        .field_mode = false;
-    lbm.domains[0]
-        .graphics
-        .as_mut()
-        .expect("grapics not enabled")
-        .q_mode = false;
 
     lbm
 }
