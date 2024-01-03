@@ -311,7 +311,8 @@ pub fn load_icon(icon_bytes: &[u8]) -> Option<eframe::IconData> {
 }
 
 fn main() {
-    println!("{}", info::LOGO_COLOR);
+    //println!("{}", info::LOGO_COLOR);
+    println!("IonSolver - © 2024\n");
 
     // UI params
     let icon_bytes = include_bytes!("../icons/IonSolver.png");
@@ -385,7 +386,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     let now = std::time::Instant::now();
     println!("Starting initialize kernel");
     lbm.initialize();
-    println!("initialize kernel took: {} ms", now.elapsed().as_millis());
+    println!("    initialize kernel took: {} ms\n", now.elapsed().as_millis());
 
     // get initial config from ui
     let recieve_result = ctrl_rx.try_recv();

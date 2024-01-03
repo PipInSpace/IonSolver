@@ -4,10 +4,16 @@ use ocl::{flags, Buffer, Device, Platform, Queue};
 pub fn device_selection(domains: u32) -> Vec<Device> {
     let devices = get_devices();
     if devices.is_empty() {
-        println!("No Device detected. Aborting...");
+        println!("No OpenCL Device detected. Aborting...");
         std::process::exit(1);
+    } else if devices.len() == 1 {
+        println!("1 OpenCL device detected");
+    } else {
+        println!("{} OpenCL devices detected", devices.len());
     }
-    println!("{} OpenCL device(s) detected", devices.len());
+    for dev in &devices {
+        println!("  - {}", dev.name().expect("Device should have name"))
+    }
     let mut device_infos: Vec<Device> = vec![devices[0]; domains as usize]; // Is completely overwritten
     let mut device_type_ids: Vec<Vec<Device>> = vec![]; // Device auto-selection
     for d in devices {

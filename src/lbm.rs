@@ -206,7 +206,7 @@ impl Lbm {
             let y = (d % (lbm_config.d_x * lbm_config.d_y)) / lbm_config.d_x;
             let z = d / (lbm_config.d_x * lbm_config.d_y);
             println!(
-                "Using device {} for domain {}",
+                "    Using \"{}\" for domain {}",
                 device_infos[d as usize].name().unwrap(),
                 d + 1
             );
@@ -218,7 +218,7 @@ impl Lbm {
                 z,
             ))
         }
-        println!("All domains initialized.");
+        println!("All domains initialized.\n");
 
         Lbm {
             domains: lbm_domains,
@@ -252,7 +252,7 @@ impl Lbm {
             self.initialize();
         }
         for i in 0..steps {
-            println!("Step {}", i);
+            //println!("Step {}", i);
             self.do_time_step();
         }
     }
@@ -425,7 +425,7 @@ impl LbmDomain {
             .build()
             .unwrap();
         let queue = Queue::new(&context, device, None).unwrap();
-        println!("Compiling Program...");
+        println!("    Compiling Program...");
         let program = Program::builder()
             .devices(device)
             .src(&ocl_code)
@@ -543,7 +543,7 @@ impl LbmDomain {
         let kernel_initialize: Kernel = kernel_initialize_builder.build().unwrap();
         let kernel_stream_collide: Kernel = kernel_stream_collide_builder.build().unwrap();
         let kernel_update_fields: Kernel = kernel_update_fields_builder.build().unwrap();
-        println!("Kernels for domain compiled.");
+        println!("    Kernels for domain compiled.");
         //TODO: allocate transfer buffers
 
         let graphics: Option<graphics::Graphics> = if lbm_config.graphics_config.graphics_active {
