@@ -29,10 +29,20 @@ pub fn setup() -> Lbm {
     lbm_config.graphics_config.graphics_active = true;
     lbm_config.graphics_config.background_color = 0x1c1b22;
     lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
     lbm_config.graphics_config.streamline_mode = true;
 
-    let lbm = Lbm::new(lbm_config);
+    let mut lbm = Lbm::new(lbm_config);
+
+    let mut flags: Vec<u8> = vec![0; 128*128*256];
+    let len = flags.len() - 1;
+    // Solid
+    for i in 0..(128*128*8) {
+        flags[i] = 0x01;
+        flags[len - i] = 0x01;
+    }
+    lbm.domains[0].flags.write(&flags).enq().unwrap();
+
 
     // electric field
     let mut vec_q: Vec<(u64, f32)> = vec![];
@@ -47,10 +57,12 @@ pub fn setup() -> Lbm {
     //vec_m.push((1056833, [1.0, 0.0, 0.0]));
     //vec_m.push((1056840, [1.0, 0.0, 0.0]));
     for i in 0..256 {
-        vec_m.push((i * 41, [0.0, 0.0, 600000000.0]));
-        vec_m.push((i * 41 + 2097152, [0.0, 0.0, 600000000.0]));
+        vec_m.push((i * 41, [0.0, 0.0, 4000000000.0]));
+        vec_m.push((i * 41 + 2097152*2, [0.0, 0.0, 4000000000.0]));
     }
     precompute::precompute_B(&lbm, vec_m);
+
+    lbm.setup_taylor_green();
 
     lbm
 }
