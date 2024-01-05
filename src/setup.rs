@@ -28,9 +28,11 @@ pub fn setup() -> Lbm {
     // Graphics
     lbm_config.graphics_config.graphics_active = true;
     lbm_config.graphics_config.background_color = 0x1c1b22;
-    lbm_config.graphics_config.streamline_every = 8;
+    lbm_config.graphics_config.streamline_every = 4;
     lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
     lbm_config.graphics_config.streamline_mode = true;
+    lbm_config.graphics_config.flags_surface_mode = true;
+    lbm_config.graphics_config.flags_mode = true;
 
     let mut lbm = Lbm::new(lbm_config);
 
@@ -56,13 +58,13 @@ pub fn setup() -> Lbm {
     //vec_m.push((1056832, [1.0, 0.0, 0.0]));
     //vec_m.push((1056833, [1.0, 0.0, 0.0]));
     //vec_m.push((1056840, [1.0, 0.0, 0.0]));
-    for i in 0..256 {
-        vec_m.push((i * 41, [0.0, 0.0, 4000000000.0]));
-        vec_m.push((i * 41 + 2097152*2, [0.0, 0.0, 4000000000.0]));
+    for i in 0..243 {
+        vec_m.push((i * 68, [0.0, 0.0, 64000000000.0]));
+        vec_m.push((i * 68 + 2097152*2, [0.0, 0.0, 64000000000.0]));
     }
     precompute::precompute_B(&lbm, vec_m);
 
-    lbm.setup_taylor_green();
+    lbm.setup_velocity_field((0.1, 0.01, 0.0));
 
     lbm
 }
@@ -164,5 +166,68 @@ impl Lbm {
         }
         println!();
         println!("Finished setting up Taylor-Green vorticies");
+    }
+
+    #[allow(unused)]
+    /// Sets all fluid cells to the specified velocity
+    fn setup_velocity_field(&mut self, velocity: (f32, f32, f32)) {
+        println!("Setting up velocity field");
+        let nx = self.config.n_x;
+        let ny = self.config.n_y;
+        let nz = self.config.n_z;
+        let domain_numbers: u32 = self.config.d_x * self.config.d_y * self.config.d_z;
+        let dx = self.config.d_x;
+        let dy = self.config.d_y;
+        let dz = self.config.d_z;
+        let dsx = nx as u64 / dx as u64 + (dx > 1u32) as u64 * 2; // Domain size on each axis
+        let dsy = ny as u64 / dy as u64 + (dy > 1u32) as u64 * 2; // Needs to account for halo offsets
+        let dsz = nz as u64 / dz as u64 + (dz > 1u32) as u64 * 2;
+        let dtotal = dsx * dsy * dsz;
+
+        print!("");
+        for d in 0..domain_numbers {
+            let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx * dsy * dsz * 3) as usize];
+            let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize];
+            for zi in 0..dsz {
+                // iterates over every cell in the domain, filling it with the velocity field
+                print!(
+                    "\r{}",
+                    info::progressbar(
+                        ((zi as f32 + 1.0) / dsz as f32) * (1.0 / domain_numbers as f32)
+                            + ((d as f32) / domain_numbers as f32)
+                    )
+                );
+                for yi in 0..dsy {
+                    for xi in 0..dsx {
+                        if !(((xi == 0 || xi == dsx - 1) && dx > 1)
+                            || ((yi == 0 || yi == dsy - 1) && dy > 1)
+                            || ((zi == 0 || zi == dsz - 1) && dz > 1))
+                        {
+                            //do not set at halo offsets
+                            let dn = (zi * dsx * dsy) + (yi * dsx) + xi; // Domain 1D index
+                            domain_vec_u[(dn) as usize] = velocity.0; // x
+                            domain_vec_u[(dn + dtotal) as usize] = velocity.1; // y;
+                            domain_vec_u[(dn + dtotal * 2) as usize] = velocity.2; // z
+                            domain_vec_rho[(dn) as usize] = 1.0;
+                        }
+                    }
+                }
+            }
+
+            // Write to domain buffers
+            self.domains[d as usize]
+                .u
+                .write(&domain_vec_u)
+                .enq()
+                .unwrap();
+            self.domains[d as usize]
+                .rho
+                .write(&domain_vec_rho)
+                .enq()
+                .unwrap();
+            self.domains[d as usize].queue.finish().unwrap();
+        }
+        println!();
+        println!("Finished setting up velocity field");
     }
 }

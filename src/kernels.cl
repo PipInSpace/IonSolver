@@ -761,9 +761,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		//	uxn*B[    def_N+(ulong)n] + uyn*B[                 n]
 		//};
 		// F = charge * (E + (U cross B))
-		fxn += rhon * def_charge * (E[                 n] + uyn*B[2ul*def_N+(ulong)n] + uzn*B[    def_N+(ulong)n]); // apply electric field * charge = force
-		fyn += rhon * def_charge * (E[    def_N+(ulong)n] + uzn*B[                 n] + uxn*B[2ul*def_N+(ulong)n]);
-		fzn += rhon * def_charge * (E[2ul*def_N+(ulong)n] + uxn*B[    def_N+(ulong)n] + uyn*B[                 n]);
+		fxn += rhon * def_charge * (E[                 n] + uyn*B[2ul*def_N+(ulong)n] - uzn*B[    def_N+(ulong)n]); // apply electric field * charge = force
+		fyn += rhon * def_charge * (E[    def_N+(ulong)n] + uzn*B[                 n] - uxn*B[2ul*def_N+(ulong)n]);
+		fzn += rhon * def_charge * (E[2ul*def_N+(ulong)n] + uxn*B[    def_N+(ulong)n] - uyn*B[                 n]);
 	}
 	#endif// ELECTRO_HYDRO
 
