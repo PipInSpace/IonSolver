@@ -103,20 +103,50 @@ impl Units {
         nu * self.s / (self.m * self.m)
     }
 
+    pub fn si_to_epsilon_0(&self) -> f32 {
+        // 8.8541878128E-12 F/m
+        // Unit: F/m  ==  A * s / V * m  ==  A * s / (kg*m^2/s^3 * A) * m  ==  s^4 * A^2 / kg * m^3
+        // Ampere can be ignored. Conversion factor is 1.
+        8.8541878128E-12 * to4(self.s) / (self.kg * sq(self.m))
+    }
+
     pub fn si_to_ke(&self) -> f32 {
         // 1 / (4 * pi * epsilon_0) = k_e (Coulombs constant)
         // epsilon_0 has the unit Farad/meter and needs to be converted to lattice units
         // 1 / (4 * 3.14159 * (8.8541878128 * 10^-12)) = 8.987552E9 (k_e)
-        8.987552E9 / (self.kg * cb(self.m) / (self.c * self.c * self.s * self.s))
+        //8.987552E9 / (self.kg * cb(self.m) / (self.c * self.c * self.s * self.s)) -- OLD
+        1.0 / (4.0 * std::f32::consts::PI * self.si_to_epsilon_0())
     }
 
     pub fn si_to_mu0(&self) -> f32 {
         // 1 / (epsilon_0 * c²) = mu_0 (Magnetic Field Constant)
-        1.25663706212E-6 / (self.kg * self.m / (self.c * self.c))
+        //1.25663706212E-6 / (self.kg * self.m / (self.c * self.c)) -- OLD
+        1.0 / (self.si_to_epsilon_0() * sq(2.99792458E8) * self.m / self.s)
     }
+
+    /// From lbm.n_x and velocity u
+    pub fn nu_from_Re(&self, Re: f32, x: f32, u: f32) -> f32 {
+        x * u / Re
+    }
+
+    pub fn print(&self) {
+        println!("Units:\n    1 meter = {} lenght LU\n    1 kg = {} dens LU\n    1 second = {} time steps", 1.0/self.m, 1.0/self.kg, 1.0/self.s);
+        println!("    epsilon_0 in LU is: {}", self.si_to_epsilon_0());
+        println!("    mu_0 in LU is: {}", self.si_to_mu0());
+    }
+}
+
+#[inline]
+fn sq(x: f32) -> f32 {
+    x * x
 }
 
 #[inline]
 fn cb(x: f32) -> f32 {
     x * x * x
+}
+
+#[inline]
+fn to4(x: f32) -> f32 {
+    x * x * x * x
 }

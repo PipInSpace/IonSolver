@@ -15,12 +15,15 @@ use crate::*;
 pub fn setup() -> Lbm {
     //let now = Instant::now();
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    lbm_config.units.print();
+    lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.0, 1.2250, 1.0);
+    lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
     lbm_config.n_z = 256;
     lbm_config.d_x = 1;
-    lbm_config.nu = 0.2; //lbm_config.units.si_to_nu(1.48E-5);
+    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
+    println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
     lbm_config.velocity_set = VelocitySet::D3Q19;
     // Extensions
     lbm_config.ext_volume_force = true;
@@ -34,18 +37,18 @@ pub fn setup() -> Lbm {
     lbm_config.graphics_config.flags_surface_mode = true;
     lbm_config.graphics_config.flags_mode = true;
 
-    let mut lbm = setup_from_file("b-field_spin.ion", lbm_config);
+    //let mut lbm = setup_from_file("b-field_spin.ion", lbm_config);
 
-    //let mut lbm = Lbm::new(lbm_config);
+    let mut lbm = Lbm::new(lbm_config);
 
-    //let mut flags: Vec<u8> = vec![0; 128 * 128 * 256];
-    //let len = flags.len() - 1;
-    //// Solid
-    //for i in 0..(128 * 128 * 8) {
-    //    flags[i] = 0x01;
-    //    flags[len - i] = 0x01;
-    //}
-    //lbm.domains[0].flags.write(&flags).enq().unwrap();
+    let mut flags: Vec<u8> = vec![0; 128 * 128 * 256];
+    let len = flags.len() - 1;
+    // Solid
+    for i in 0..(128 * 128 * 8) {
+        flags[i] = 0x01;
+        flags[len - i] = 0x01;
+    }
+    lbm.domains[0].flags.write(&flags).enq().unwrap();
 
     //// electric field
     //let mut vec_q: Vec<(u64, f32)> = vec![];
@@ -53,17 +56,17 @@ pub fn setup() -> Lbm {
     //vec_q.push((1056840, -0.000000001));
     //precompute::precompute_E(&lbm, vec_q);
 
-    //// magnetic field
-    //let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
-    ////vec_m.push((1056824, [1.0, 0.0, 0.0]));
-    ////vec_m.push((1056832, [1.0, 0.0, 0.0]));
-    ////vec_m.push((1056833, [1.0, 0.0, 0.0]));
-    ////vec_m.push((1056840, [1.0, 0.0, 0.0]));
-    //for i in 0..243 {
-    //    vec_m.push((i * 68, [0.0, 0.0, 64000000000.0]));
-    //    vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 64000000000.0]));
-    //}
-    //precompute::precompute_B(&lbm, vec_m);
+    // magnetic field
+    let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
+    //vec_m.push((1056824, [1.0, 0.0, 0.0]));
+    //vec_m.push((1056832, [1.0, 0.0, 0.0]));
+    //vec_m.push((1056833, [1.0, 0.0, 0.0]));
+    //vec_m.push((1056840, [1.0, 0.0, 0.0]));
+    for i in 0..243 {
+        vec_m.push((i * 68, [0.0, 0.0, 2000000.0]));
+        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 2000000.0]));
+    }
+    precompute::precompute_B(&lbm, vec_m);
 
     lbm.setup_velocity_field((0.1, 0.01, 0.0), 0.5);
 
@@ -83,7 +86,7 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
     // Extension is disabled when not needed
     let electro_hydro = vals.charges.len() > 0 || vals.magnets.len() > 0;
 
-    let lbm_config = LbmConfig {
+    let mut lbm_config = LbmConfig {
         n_x: vals.n_x,
         n_y: vals.n_y,
         n_z: vals.n_z,
@@ -97,6 +100,7 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
         ext_electro_hydro: electro_hydro,
         ..lbm_config
     };
+    lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.0, 1.225, 1.0);
 
     let lbm = Lbm::new(lbm_config);
     if vals.charges.len() > 0 {
