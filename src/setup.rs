@@ -78,6 +78,9 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
     let buffer: Vec<u8> = std::fs::read(path).expect("Location should exist");
     let vals = parse::decode(&buffer).unwrap();
 
+    // Extension is disabled when not needed
+    let electro_hydro = vals.charges.len() > 0 || vals.magnets.len() > 0;
+
     let lbm_config = LbmConfig {
         n_x: vals.n_x,
         n_y: vals.n_y,
@@ -88,13 +91,19 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
             s: vals.units_s,
             c: vals.units_c,
         },
-        ext_volume_force: true,
-        ext_electro_hydro: true,
+        ext_volume_force: electro_hydro,
+        ext_electro_hydro: electro_hydro,
         ..lbm_config
     };
 
     let lbm = Lbm::new(lbm_config);
-    precompute::precompute_E(&lbm, vals.charges);
+    if vals.charges.len() > 0 {
+        precompute::precompute_E(&lbm, vals.charges);
+    }
+    if vals.magnets.len() > 0 {
+        precompute::precompute_B(&lbm, vals.magnets);
+    }
+
     lbm.domains[0].flags.write(&vals.flags).enq().unwrap();
 
     lbm
