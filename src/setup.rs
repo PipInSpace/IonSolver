@@ -64,7 +64,39 @@ pub fn setup() -> Lbm {
     }
     precompute::precompute_B(&lbm, vec_m);
 
-    lbm.setup_velocity_field((0.1, 0.01, 0.0));
+    lbm.setup_velocity_field((0.1, 0.01, 0.0), 0.5);
+
+    lbm
+}
+
+#[allow(unused)]
+/// Set up Lbm from file. Requires LbmConfig for additional customization at compilation (Graphics etc.)
+/// Use in setup();
+/// 
+/// Format documented under https://github.com/PipInSpace/ionsolver-files/blob/main/src/FILE.txt
+pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
+    println!("Parsing from \"{}\"", path);
+    let buffer: Vec<u8> = std::fs::read(path).expect("Location should exist");
+    let vals = parse::decode(&buffer).unwrap();
+
+    let lbm_config = LbmConfig{
+        n_x: vals.n_x,
+        n_y: vals.n_y,
+        n_z: vals.n_z,
+        units: crate::units::Units {
+            m: vals.units_m,
+            kg: vals.units_kg,
+            s: vals.units_s,
+            c: vals.units_c,
+        },
+        ext_volume_force: true,
+        ext_electro_hydro: true,
+        ..lbm_config
+    };
+
+    let lbm = Lbm::new(lbm_config);
+    precompute::precompute_E(&lbm, vals.charges);
+    lbm.domains[0].flags.write(&vals.flags).enq().unwrap();
 
     lbm
 }
@@ -170,7 +202,7 @@ impl Lbm {
 
     #[allow(unused)]
     /// Sets all fluid cells to the specified velocity
-    fn setup_velocity_field(&mut self, velocity: (f32, f32, f32)) {
+    fn setup_velocity_field(&mut self, velocity: (f32, f32, f32), density: f32) {
         println!("Setting up velocity field");
         let nx = self.config.n_x;
         let ny = self.config.n_y;
@@ -208,7 +240,7 @@ impl Lbm {
                             domain_vec_u[(dn) as usize] = velocity.0; // x
                             domain_vec_u[(dn + dtotal) as usize] = velocity.1; // y;
                             domain_vec_u[(dn + dtotal * 2) as usize] = velocity.2; // z
-                            domain_vec_rho[(dn) as usize] = 1.0;
+                            domain_vec_rho[(dn) as usize] = density;
                         }
                     }
                 }

@@ -7,6 +7,7 @@ mod graphics;
 mod info;
 mod lbm;
 mod opencl;
+mod parse;
 mod precompute;
 mod setup;
 mod units;

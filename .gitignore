@@ -19,3 +19,6 @@ Cargo.lock
 /.vscode/**
 opencl-language-server.log
 .vscode/launch.json
+
+# Sim config file
+*.ion

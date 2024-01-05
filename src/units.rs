@@ -5,13 +5,13 @@
 #[allow(non_snake_case)]
 pub struct Units {
     /// meter
-    m: f32,
+    pub m: f32,
     /// kilogram
-    kg: f32,
+    pub kg: f32,
     /// second
-    s: f32,
+    pub s: f32,
     /// coulomb
-    c: f32,
+    pub c: f32,
 }
 
 impl Units {
