@@ -33,6 +33,7 @@ pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
     let n_x = to_u32(get_next_chunk(buffer, &mut pos));
     let n_y = to_u32(get_next_chunk(buffer, &mut pos));
     let n_z = to_u32(get_next_chunk(buffer, &mut pos));
+    println!("    Sim size: {}, {}, {}", n_x, n_y, n_z);
 
     let units_m = to_f32(get_next_chunk(buffer, &mut pos));
     let units_kg = to_f32(get_next_chunk(buffer, &mut pos));
@@ -40,6 +41,7 @@ pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
     let units_c = to_f32(get_next_chunk(buffer, &mut pos));
 
     // Walls
+    println!("    Parsing Flags...");
     let mut walls: Vec<u8> = vec![];
     for _ in 0..(n_x * n_y * n_z / (4 * 8)) {
         let chunk = get_next_chunk(buffer, &mut pos);
@@ -52,6 +54,7 @@ pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
 
     // Charges
     let len = to_u32(get_next_chunk(buffer, &mut pos));
+    println!("    Parsing {} Charges...", len);
     let mut charges: Vec<(u64, f32)> = Vec::with_capacity(len as usize);
     for _ in 0..len {
         let charge = to_f32(get_next_chunk(buffer, &mut pos));
@@ -62,6 +65,7 @@ pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
 
     // Magnets
     let len = to_u32(get_next_chunk(buffer, &mut pos));
+    println!("    Parsing {} Magnets...", len);
     let mut magnets: Vec<(u64, [f32; 3])> = Vec::with_capacity(len as usize);
     for _ in 0..len {
         magnets.push((
@@ -90,7 +94,7 @@ pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
         magnets,
     };
 
-    print!("    Completed reading file.");
+    println!("Completed reading file.");
 
     Ok(values)
 }

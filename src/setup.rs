@@ -34,34 +34,36 @@ pub fn setup() -> Lbm {
     lbm_config.graphics_config.flags_surface_mode = true;
     lbm_config.graphics_config.flags_mode = true;
 
-    let mut lbm = Lbm::new(lbm_config);
+    let mut lbm = setup_from_file("b-field_spin.ion", lbm_config);
 
-    let mut flags: Vec<u8> = vec![0; 128 * 128 * 256];
-    let len = flags.len() - 1;
-    // Solid
-    for i in 0..(128 * 128 * 8) {
-        flags[i] = 0x01;
-        flags[len - i] = 0x01;
-    }
-    lbm.domains[0].flags.write(&flags).enq().unwrap();
+    //let mut lbm = Lbm::new(lbm_config);
 
-    // electric field
-    let mut vec_q: Vec<(u64, f32)> = vec![];
-    vec_q.push((1056824, 0.000000001));
-    vec_q.push((1056840, -0.000000001));
-    precompute::precompute_E(&lbm, vec_q);
+    //let mut flags: Vec<u8> = vec![0; 128 * 128 * 256];
+    //let len = flags.len() - 1;
+    //// Solid
+    //for i in 0..(128 * 128 * 8) {
+    //    flags[i] = 0x01;
+    //    flags[len - i] = 0x01;
+    //}
+    //lbm.domains[0].flags.write(&flags).enq().unwrap();
 
-    // magnetic field
-    let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
-    //vec_m.push((1056824, [1.0, 0.0, 0.0]));
-    //vec_m.push((1056832, [1.0, 0.0, 0.0]));
-    //vec_m.push((1056833, [1.0, 0.0, 0.0]));
-    //vec_m.push((1056840, [1.0, 0.0, 0.0]));
-    for i in 0..243 {
-        vec_m.push((i * 68, [0.0, 0.0, 64000000000.0]));
-        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 64000000000.0]));
-    }
-    precompute::precompute_B(&lbm, vec_m);
+    //// electric field
+    //let mut vec_q: Vec<(u64, f32)> = vec![];
+    //vec_q.push((1056824, 0.000000001));
+    //vec_q.push((1056840, -0.000000001));
+    //precompute::precompute_E(&lbm, vec_q);
+
+    //// magnetic field
+    //let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
+    ////vec_m.push((1056824, [1.0, 0.0, 0.0]));
+    ////vec_m.push((1056832, [1.0, 0.0, 0.0]));
+    ////vec_m.push((1056833, [1.0, 0.0, 0.0]));
+    ////vec_m.push((1056840, [1.0, 0.0, 0.0]));
+    //for i in 0..243 {
+    //    vec_m.push((i * 68, [0.0, 0.0, 64000000000.0]));
+    //    vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 64000000000.0]));
+    //}
+    //precompute::precompute_B(&lbm, vec_m);
 
     lbm.setup_velocity_field((0.1, 0.01, 0.0), 0.5);
 
@@ -69,7 +71,7 @@ pub fn setup() -> Lbm {
 }
 
 #[allow(unused)]
-/// Set up Lbm from file. Requires LbmConfig for additional customization at compilation (Graphics etc.)
+/// Set up Lbm from file. Requires LbmConfig for additional customization at compilation (Graphics etc.).
 /// Use in setup();
 ///
 /// Format documented under https://github.com/PipInSpace/ionsolver-files/blob/main/src/FILE.txt
@@ -85,7 +87,7 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
         n_x: vals.n_x,
         n_y: vals.n_y,
         n_z: vals.n_z,
-        units: crate::units::Units {
+        units: units::Units {
             m: vals.units_m,
             kg: vals.units_kg,
             s: vals.units_s,
