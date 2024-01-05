@@ -36,15 +36,14 @@ pub fn setup() -> Lbm {
 
     let mut lbm = Lbm::new(lbm_config);
 
-    let mut flags: Vec<u8> = vec![0; 128*128*256];
+    let mut flags: Vec<u8> = vec![0; 128 * 128 * 256];
     let len = flags.len() - 1;
     // Solid
-    for i in 0..(128*128*8) {
+    for i in 0..(128 * 128 * 8) {
         flags[i] = 0x01;
         flags[len - i] = 0x01;
     }
     lbm.domains[0].flags.write(&flags).enq().unwrap();
-
 
     // electric field
     let mut vec_q: Vec<(u64, f32)> = vec![];
@@ -60,7 +59,7 @@ pub fn setup() -> Lbm {
     //vec_m.push((1056840, [1.0, 0.0, 0.0]));
     for i in 0..243 {
         vec_m.push((i * 68, [0.0, 0.0, 64000000000.0]));
-        vec_m.push((i * 68 + 2097152*2, [0.0, 0.0, 64000000000.0]));
+        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 64000000000.0]));
     }
     precompute::precompute_B(&lbm, vec_m);
 
@@ -72,14 +71,14 @@ pub fn setup() -> Lbm {
 #[allow(unused)]
 /// Set up Lbm from file. Requires LbmConfig for additional customization at compilation (Graphics etc.)
 /// Use in setup();
-/// 
+///
 /// Format documented under https://github.com/PipInSpace/ionsolver-files/blob/main/src/FILE.txt
 pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
     println!("Parsing from \"{}\"", path);
     let buffer: Vec<u8> = std::fs::read(path).expect("Location should exist");
     let vals = parse::decode(&buffer).unwrap();
 
-    let lbm_config = LbmConfig{
+    let lbm_config = LbmConfig {
         n_x: vals.n_x,
         n_y: vals.n_y,
         n_z: vals.n_z,

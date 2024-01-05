@@ -8,7 +8,7 @@ pub struct SimValues {
     pub units_c: f32,
     pub flags: Vec<u8>,
     pub charges: Vec<(u64, f32)>,
-    pub magnets: Vec<(u64, [f32; 3])>
+    pub magnets: Vec<(u64, [f32; 3])>,
 }
 
 pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
@@ -33,19 +33,19 @@ pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
     let n_x = to_u32(get_next_chunk(buffer, &mut pos));
     let n_y = to_u32(get_next_chunk(buffer, &mut pos));
     let n_z = to_u32(get_next_chunk(buffer, &mut pos));
-    
-    let units_m  = to_f32(get_next_chunk(buffer, &mut pos));
+
+    let units_m = to_f32(get_next_chunk(buffer, &mut pos));
     let units_kg = to_f32(get_next_chunk(buffer, &mut pos));
-    let units_s  = to_f32(get_next_chunk(buffer, &mut pos));
-    let units_c  = to_f32(get_next_chunk(buffer, &mut pos));
+    let units_s = to_f32(get_next_chunk(buffer, &mut pos));
+    let units_c = to_f32(get_next_chunk(buffer, &mut pos));
 
     // Walls
     let mut walls: Vec<u8> = vec![];
-    for _ in 0..(n_x*n_y*n_z/(4 * 8)) {
+    for _ in 0..(n_x * n_y * n_z / (4 * 8)) {
         let chunk = get_next_chunk(buffer, &mut pos);
         for byte in chunk {
             for bit in 0..8 {
-                walls.push((byte >> (7-bit)) & 1_u8);
+                walls.push((byte >> (7 - bit)) & 1_u8);
             }
         }
     }
@@ -74,7 +74,7 @@ pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
         units_c,
         flags: walls,
         charges,
-        magnets: vec![]
+        magnets: vec![],
     };
 
     print!("    Completed reading file.");
@@ -83,7 +83,7 @@ pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
 }
 
 fn get_next_chunk(buffer: &[u8], pos: &mut usize) -> [u8; 4] {
-    let mut v =  [0; 4];
+    let mut v = [0; 4];
     v[0] = buffer[*pos];
     v[1] = buffer[*pos + 1];
     v[2] = buffer[*pos + 2];
