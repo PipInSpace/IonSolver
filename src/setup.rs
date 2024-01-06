@@ -16,7 +16,7 @@ pub fn setup() -> Lbm {
     //let now = Instant::now();
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.print();
-    lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.0, 1.2250, 1.0);
+    lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.2250);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
@@ -94,13 +94,12 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
             m: vals.units_m,
             kg: vals.units_kg,
             s: vals.units_s,
-            c: vals.units_c,
         },
         ext_volume_force: electro_hydro,
         ext_electro_hydro: electro_hydro,
         ..lbm_config
     };
-    lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.0, 1.225, 1.0);
+    lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.225);
 
     let lbm = Lbm::new(lbm_config);
     if vals.charges.len() > 0 {

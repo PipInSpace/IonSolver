@@ -10,8 +10,6 @@ pub struct Units {
     pub kg: f32,
     /// second
     pub s: f32,
-    /// coulomb
-    pub c: f32,
 }
 
 impl Units {
@@ -20,7 +18,6 @@ impl Units {
             m: 1.0,
             kg: 1.0,
             s: 1.0,
-            c: 1.0,
         }
     }
 
@@ -29,16 +26,13 @@ impl Units {
         lbm_length: f32,
         lbm_velocity: f32,
         lbm_rho: f32,
-        c: f32,
         si_lenght: f32,
         si_velocity: f32,
         si_rho: f32,
-        si_c: f32,
     ) {
         self.m = si_lenght / lbm_length;
         self.kg = si_rho / lbm_rho * cb(self.m);
         self.s = lbm_velocity / si_velocity * self.m;
-        self.c = si_c / c;
     }
 
     // to si units from lattice units (need to be called after .set();)
@@ -60,10 +54,6 @@ impl Units {
 
     pub fn speed_to_si(&self, v: f32) -> f32 {
         v * (self.m / self.s)
-    }
-
-    pub fn charge_to_si(&self, q: f32) -> f32 {
-        q * self.c
     }
 
     pub fn force_to_si(&self, f: f32) -> f32 {
@@ -91,10 +81,6 @@ impl Units {
         v / (self.m / self.s)
     }
 
-    pub fn si_to_charge(&self, q: f32) -> f32 {
-        q / self.c
-    }
-
     pub fn si_to_force(&self, f: f32) -> f32 {
         f / (self.kg * self.m / (self.s * self.s))
     }
@@ -107,7 +93,7 @@ impl Units {
         // 8.8541878128E-12 F/m
         // Unit: F/m  ==  A * s / V * m  ==  A * s / (kg*m^2/s^3 * A) * m  ==  s^4 * A^2 / kg * m^3
         // Ampere can be ignored. Conversion factor is 1.
-        8.8541878128E-12 * to4(self.s) / (self.kg * sq(self.m))
+        8.8541878128E-12 * to4(self.s) / (self.kg * cb(self.m))
     }
 
     pub fn si_to_ke(&self) -> f32 {
@@ -118,7 +104,7 @@ impl Units {
         1.0 / (4.0 * std::f32::consts::PI * self.si_to_epsilon_0())
     }
 
-    pub fn si_to_mu0(&self) -> f32 {
+    pub fn si_to_mu_0(&self) -> f32 {
         // 1 / (epsilon_0 * c²) = mu_0 (Magnetic Field Constant)
         //1.25663706212E-6 / (self.kg * self.m / (self.c * self.c)) -- OLD
         1.0 / (self.si_to_epsilon_0() * sq(2.99792458E8) * self.m / self.s)
@@ -132,7 +118,7 @@ impl Units {
     pub fn print(&self) {
         println!("Units:\n    1 meter = {} lenght LU\n    1 kg = {} dens LU\n    1 second = {} time steps", 1.0/self.m, 1.0/self.kg, 1.0/self.s);
         println!("    epsilon_0 in LU is: {}", self.si_to_epsilon_0());
-        println!("    mu_0 in LU is: {}", self.si_to_mu0());
+        println!("    mu_0 in LU is: {}", self.si_to_mu_0());
     }
 }
 

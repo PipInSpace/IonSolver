@@ -95,7 +95,7 @@ pub fn precompute_B(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) {
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
     let mut b_field: Vec<f32> = vec![0.0; (n * 3) as usize];
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
-    let def_mu0 = lbm.config.units.si_to_mu0();
+    let def_mu0 = lbm.config.units.si_to_mu_0();
     println!(
         "Precomputing magnetic field for {} cells. (This may take a while)",
         n
