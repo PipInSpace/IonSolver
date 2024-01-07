@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 extern crate ocl;
+use std::io::Write;
 use std::time::{Duration, Instant};
 use std::{f32::consts::PI, fs, sync::mpsc, thread};
 
@@ -381,7 +382,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
         camera_rotation: vec![0.0; 2],
         camera_zoom: 3.0,
     };
-    let mut i: u32 = 0;
+    let mut step_count_total: u32 = 0;
 
     let mut lbm = setup::setup();
     let now = std::time::Instant::now();
@@ -411,13 +412,13 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     if lbm.config.graphics_config.graphics_active {
         let lbm_ptr = &lbm as *const _ as usize;
         let state_ptr = &state as *const _ as usize;
-        let i_ptr = &i as *const _ as usize;
+        let step_ptr = &step_count_total as *const _ as usize;
         let sim_tx_g = sim_tx.clone();
         thread::spawn(move || {
             let lbm = unsafe { &*(lbm_ptr as *const Lbm) };
             let state = unsafe { &*(state_ptr as *const SimControlTx) };
-            let i = unsafe { &*(i_ptr as *const u32) };
-            let mut graphics_i: u32 = 0;
+            let step_count = unsafe { &*(step_ptr as *const u32) };
+            let mut drawn_step: u32 = 0;
             let mut cached_rot: Vec<f32> = vec![0.0; 2];
             let mut cached_zoom = 0.0;
 
@@ -429,8 +430,8 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                 }
 
                 // If sim not paused, only draw frame when sim time step updated
-                let frame_changed = if i > &graphics_i {
-                    graphics_i = *i;
+                let frame_changed = if *step_count > drawn_step {
+                    drawn_step = *step_count;
                     true
                 } else {
                     false
@@ -462,7 +463,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     && lbm.config.graphics_config.graphics_active
                 {
                     // Only draws frames, never saves them
-                    lbm.draw_frame(false, sim_tx_g.clone(), i);
+                    lbm.draw_frame(false, sim_tx_g.clone(), step_count);
                 }
                 thread::sleep(Duration::from_millis(std::cmp::max(
                     0,
@@ -473,12 +474,12 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     }
 
     let mn = (lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64) / 1000000;
-    let mut count: u64 = 0;
+    let mut time_per_step = 0;
     loop {
         //This is the master loop, cannot be paused
         if !state.paused {
-            let mut j = 1;
-            let jnow = std::time::Instant::now();
+            let mut step_count_time = 1;
+            let loop_time = std::time::Instant::now();
             loop {
                 //This is the loop of the simulation. Can be paused by receiving a control message
                 let recieve_result = ctrl_rx.try_iter().last();
@@ -486,51 +487,48 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     state = recieve;
                 }
                 if state.paused || !state.active {
+                    print!(
+                        "\rStep {}, Last Steps/s: {}, Last MLUP/s: {}            ",
+                        step_count_total,
+                        1000000 / time_per_step,
+                        (mn * 1000000) / time_per_step as u64
+                    );
+                    _ = std::io::stdout().flush();
                     break;
                 }
 
                 lbm.do_time_step();
 
-                let time_per_step = (jnow.elapsed().as_micros() / j) as u32;
-                if i % 20 == 0 {
+                //Calculate simulation speed
+                time_per_step = (loop_time.elapsed().as_micros() / step_count_time) as u32;
+                if step_count_total % 20 == 0 {
                     print!(
-                        "\rStep {}, Steps/s: {}, MLUP/s: {}",
-                        i,
+                        "\rStep {}, Steps/s: {}, MLUP/s: {}              ",
+                        step_count_total,
                         1000000 / time_per_step,
                         (mn * 1000000) / time_per_step as u64
                     );
+                    _ = std::io::stdout().flush();
                 }
-                if i % state.frame_spacing == 0
+
+                // Saves frames if needed
+                if step_count_total % state.frame_spacing == 0
                     && state.save
                     && lbm.config.graphics_config.graphics_active
                 {
-                    // Saves frames if needed
-                    lbm.draw_frame(true, sim_tx.clone(), &i);
+                    lbm.draw_frame(true, sim_tx.clone(), &step_count_total);
                 }
-                i += 1;
-                j += 1;
-
-                // ##### SLOWDOWN #####
-                // #####  REMOVE  #####
-                // ##### SLOWDOWN #####
-                //thread::sleep(Duration::from_millis(3))
-                // ##### SLOWDOWN #####
-                // #####  REMOVE  #####
-                // ##### SLOWDOWN #####
+                step_count_total += 1;
+                step_count_time += 1;
             }
         }
         if !state.active {
             println!("\nExiting Simulation Loop");
             break;
         }
-        if count % 500 == 0 {
-            // To prevent spam-printing
-            print!("\rStep {}, Steps/s: 0, MLUP/s: 0                    ", i);
-        }
         let recieve_result = ctrl_rx.try_recv();
         if let Ok(recieve) = recieve_result {
             state = recieve;
         }
-        count += 1;
     }
 }

@@ -16,7 +16,7 @@ pub fn setup() -> Lbm {
     //let now = Instant::now();
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.print();
-    lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.2250);
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 1.2250);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
@@ -34,6 +34,7 @@ pub fn setup() -> Lbm {
     lbm_config.graphics_config.streamline_every = 4;
     lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
     lbm_config.graphics_config.streamline_mode = true;
+    lbm_config.graphics_config.q_mode = true;
     lbm_config.graphics_config.flags_surface_mode = true;
     lbm_config.graphics_config.flags_mode = true;
 
@@ -63,12 +64,12 @@ pub fn setup() -> Lbm {
     //vec_m.push((1056833, [1.0, 0.0, 0.0]));
     //vec_m.push((1056840, [1.0, 0.0, 0.0]));
     for i in 0..243 {
-        vec_m.push((i * 68, [0.0, 0.0, 2000000.0]));
-        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 2000000.0]));
+        vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000.0]));
+        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000.0]));
     }
     precompute::precompute_B(&lbm, vec_m);
 
-    lbm.setup_velocity_field((0.1, 0.01, 0.0), 0.5);
+    lbm.setup_velocity_field((0.1, 0.01, 0.0), 1.0);
 
     lbm
 }

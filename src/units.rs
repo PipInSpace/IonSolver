@@ -93,7 +93,7 @@ impl Units {
         // 8.8541878128E-12 F/m
         // Unit: F/m  ==  A * s / V * m  ==  A * s / (kg*m^2/s^3 * A) * m  ==  s^4 * A^2 / kg * m^3
         // Ampere can be ignored. Conversion factor is 1.
-        8.8541878128E-12 * to4(self.s) / (self.kg * cb(self.m))
+        8.8541878128E-12 / to4(self.s) * (self.kg / cb(self.m))
     }
 
     pub fn si_to_ke(&self) -> f32 {
@@ -107,7 +107,7 @@ impl Units {
     pub fn si_to_mu_0(&self) -> f32 {
         // 1 / (epsilon_0 * c²) = mu_0 (Magnetic Field Constant)
         //1.25663706212E-6 / (self.kg * self.m / (self.c * self.c)) -- OLD
-        1.0 / (self.si_to_epsilon_0() * sq(2.99792458E8) * self.m / self.s)
+        1.0 / (self.si_to_epsilon_0() * sq(2.99792458E8) / self.m * self.s)
     }
 
     /// From lbm.n_x and velocity u

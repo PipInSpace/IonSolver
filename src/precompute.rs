@@ -219,27 +219,20 @@ fn coord(n: u64, lengths: (u32, u32, u32)) -> [u32; 3] {
     ]
 }
 
-#[inline]
-fn index_of(x: u32, y: u32, z: u32, lengths: (u32, u32, u32)) -> u64 {
-    (x as u64) + (y as u64 + z as u64 * lengths.1 as u64) * (lengths.0 as u64)
-}
-
 /// Nabla operator. Returns gradient vector of a f32 field
 fn nabla(f: &[f32], lengths: (u32, u32, u32), x: u32, y: u32, z: u32) -> [f32; 3] {
     // assume padding goes to -1, shifting done outside
-    let minus_x = index_of(x - 1, y, z, lengths);
-    let plus_x = index_of(x + 1, y, z, lengths);
-    let minus_y = index_of(x, y - 1, z, lengths);
-    let plus_y = index_of(x, y + 1, z, lengths);
-    let minus_z = index_of(x, y, z - 1, lengths);
-    let plus_z = index_of(x, y, z + 1, lengths);
+    let coord =
+        (x as usize) + (y as usize + z as usize * lengths.1 as usize) * (lengths.0 as usize);
+    let y_off = lengths.0 as usize;
+    let z_off = (lengths.0 * lengths.1) as usize;
 
-    let mut grad = [0.0f32; 3];
-    grad[0] = (f[plus_x as usize] - f[minus_x as usize]) / 2.0;
-    grad[1] = (f[plus_y as usize] - f[minus_y as usize]) / 2.0;
-    grad[2] = (f[plus_z as usize] - f[minus_z as usize]) / 2.0;
-
-    grad
+    // Gradient vector
+    return [
+        (f[coord + 1] - f[coord - 1]) / 2.0,         // x
+        (f[coord + y_off] - f[coord - y_off]) / 2.0, // y
+        (f[coord + z_off] - f[coord - z_off]) / 2.0, // z
+    ];
 }
 
 #[inline]
