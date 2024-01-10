@@ -153,7 +153,6 @@ pub fn calculate_psi_field(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) -> Vec<f32>
     // Set variables
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     let n = ((lengths.0 + 2) as u64) * ((lengths.1 + 2) as u64) * ((lengths.2 + 2) as u64);
-    let meter = lbm.config.units.len_to_si(1.0);
     // 1 padding on each side
     let mut psi_field = vec![0.0f32; n as usize];
 
@@ -167,14 +166,14 @@ pub fn calculate_psi_field(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) -> Vec<f32>
 
     // get psi for all including padding
     psi_field.par_iter_mut().enumerate().for_each(|(i, item)| {
-        *item = calculate_psi_at(i as u64, &magnets_u32_3_pos, lengths, meter);
+        *item = calculate_psi_at(i as u64, &magnets_u32_3_pos, lengths);
     });
 
     psi_field
 }
 
 /// Calculate psi field at a cell
-fn calculate_psi_at(n: u64, magnets: &[([u32; 3], [f32; 3])], lengths: (u32, u32, u32), meter: f32) -> f32 {
+fn calculate_psi_at(n: u64, magnets: &[([u32; 3], [f32; 3])], lengths: (u32, u32, u32)) -> f32 {
     // Compute current cell coordinates with padding
     let coord_cell = coord(n, (lengths.0 + 2, lengths.1 + 2, lengths.2 + 2));
 
@@ -218,7 +217,7 @@ fn calculate_psi_at(n: u64, magnets: &[([u32; 3], [f32; 3])], lengths: (u32, u32
         */
     }
 
-    psi_at_cell * cb(meter) / (4.0 * PI)
+    psi_at_cell / (4.0 * PI)
 }
 
 /// Converts u64 index positions to u32 coords in a vector
