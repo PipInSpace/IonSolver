@@ -315,7 +315,8 @@ impl Lbm {
         let mut zbuffer: Vec<i32> = vec![0; (width * height) as usize];
         let mut bitmaps: Vec<Vec<i32>> =
             vec![vec![0; (width * height) as usize]; domain_numbers - 1]; // Holds later domain bitmaps
-        let mut zbuffers: Vec<Vec<i32>> = vec![];
+        let mut zbuffers: Vec<Vec<i32>> =
+            vec![vec![0; (width * height) as usize]; domain_numbers - 1];
         for d in 0..domain_numbers {
             self.domains[d].enqueue_draw_frame();
         }
@@ -396,7 +397,7 @@ impl Lbm {
                 pixels,
             };
             _ = sim_tx.send(SimState {
-                step: 1,
+                step: i,
                 img: color_image,
             }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
             if save {

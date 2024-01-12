@@ -98,21 +98,19 @@ impl SimControl {
             top: 0.0,
             bottom: 0.0,
         };
-        let small_left_margin = egui::Margin {
-            left: 0.0,
-            right: 0.0,
-            top: 1.0,
-            bottom: -1.0,
-        };
         let frame = egui::Frame {
             fill: Color32::WHITE,
-            inner_margin: small_left_margin,
+            inner_margin: zeromargin,
             outer_margin: zeromargin,
             ..Default::default()
         };
         let transparent_stroke = Stroke {
-            width: 0.0,
+            width: 1.0,
             color: Color32::TRANSPARENT,
+        };
+        let blue_stroke = Stroke {
+            width: 1.0,
+            color: Color32::from_rgb(0xCC, 0xE8, 0xFF),
         };
 
         egui::TopBottomPanel::top("top_controls")
@@ -120,14 +118,16 @@ impl SimControl {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     let spacing = egui::style::Spacing {
-                        item_spacing: egui::Vec2 { x: 0., y: 0. },
+                        button_padding: egui::Vec2 { x: 0., y: 0. },
                         ..Default::default()
                     };
                     ui.style_mut().spacing = spacing;
                     ui.style_mut().visuals.widgets.hovered.expansion = 0.0;
                     ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
-                        Color32::from_rgb(0xCC, 0xCC, 0xCC);
+                        Color32::from_rgb(0xE5, 0xF3, 0xFF);
+                    ui.style_mut().visuals.widgets.hovered.bg_stroke = blue_stroke;
                     ui.style_mut().visuals.widgets.hovered.rounding = 0.0.into();
+                    ui.style_mut().visuals.widgets.inactive.bg_stroke = transparent_stroke;
                     ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::WHITE;
                     ui.style_mut().visuals.widgets.inactive.rounding = 0.0.into();
                     ui.style_mut().visuals.widgets.active.rounding = 0.0.into();
@@ -135,55 +135,28 @@ impl SimControl {
                     if ui
                         .add_sized(
                             [40., 18.],
-                            egui::Button::new(if self.paused { "Play" } else { "Pause" })
-                                .rounding(0.0f32)
-                                .stroke(transparent_stroke),
+                            egui::Button::new(if self.paused { "Play" } else { "Pause" }),
                         )
                         .clicked()
                     {
                         self.paused = !self.paused;
                         *send_control = true;
                     }
-                    if ui
-                        .add(
-                            egui::Button::new("Reset")
-                                .rounding(0.0f32)
-                                .stroke(transparent_stroke),
-                        )
-                        .clicked()
-                    {
+                    if ui.add(egui::Button::new("Reset")).clicked() {
                         self.reset_sim();
                     }
                     if ui
-                        .add(
-                            egui::Button::new(if self.save {
-                                "Saving Enabled"
-                            } else {
-                                "Saving Disabled"
-                            })
-                            .rounding(0.0f32)
-                            .stroke(transparent_stroke),
-                        )
+                        .add(egui::Button::new(if self.save {
+                            "Saving Enabled"
+                        } else {
+                            "Saving Disabled"
+                        }))
                         .clicked()
                     {
                         self.save = !self.save;
                         *send_control = true;
                     }
-                    if ui
-                        .add(
-                            egui::Button::new(if self.clear_images {
-                                "Old Output Deleted"
-                            } else {
-                                "Old Output Kept"
-                            })
-                            .rounding(0.0f32)
-                            .stroke(transparent_stroke),
-                        )
-                        .clicked()
-                    {
-                        self.clear_images = !self.clear_images;
-                        *send_control = true;
-                    }
+                    ui.add(egui::Label::new("Saving interval:"));
                     let mut text = self.frame_spacing_str.clone();
                     if ui
                         .add(egui::TextEdit::singleline(&mut text).desired_width(50.0))
@@ -197,6 +170,13 @@ impl SimControl {
                                 *send_control = true;
                             }
                         }
+                    }
+                    if ui.add(egui::Button::new("Clear Output")).clicked() {
+                        match fs::remove_dir_all("out") {
+                            Ok(_) => (),
+                            Err(_) => println!("Did not find out folder. Creating it."),
+                        }
+                        fs::create_dir("out").unwrap();
                     }
                 })
             })
@@ -212,10 +192,12 @@ impl App for SimControl {
                 self.display_img =
                     Some(ctx.load_texture("sim", recieve.img.clone(), Default::default()))
             }
-            self.display_img
-                .as_mut()
-                .expect("Isn't TextureHandle")
-                .set(recieve.img, TextureOptions::default());
+            if recieve.step >= self.step {
+                self.display_img
+                    .as_mut()
+                    .expect("Isn't TextureHandle")
+                    .set(recieve.img, TextureOptions::default());
+            }
             self.step = recieve.step;
         }
 
@@ -339,7 +321,7 @@ fn main() {
         paused: true,
         save: false,
         step: 0,
-        clear_images: true,
+        clear_images: false,
         frame_spacing: 100,
         frame_spacing_str: "100".to_string(),
         display_img: None,
@@ -360,7 +342,7 @@ fn main() {
     _ = exit_ctrl_tx.send(SimControlTx {
         paused: true,
         save: false,
-        clear_images: true,
+        clear_images: false,
         frame_spacing: 10,
         active: false,
         camera_rotation: vec![0.0; 2],
@@ -501,9 +483,9 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
 
                 //Calculate simulation speed
                 time_per_step = (loop_time.elapsed().as_micros() / step_count_time) as u32;
-                if step_count_total % 20 == 0 {
+                if step_count_total % 200 == 0 {
                     print!(
-                        "\rStep {}, Steps/s: {}, MLUP/s: {}              ",
+                        "\rStep {}, Steps/s: {}, MLUP/s: {}                      ",
                         step_count_total,
                         1000000 / time_per_step,
                         (mn * 1000000) / time_per_step as u64
