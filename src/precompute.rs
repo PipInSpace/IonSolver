@@ -191,6 +191,31 @@ fn calculate_psi_at(n: u64, magnets: &[([u32; 3], [f32; 3])], lengths: (u32, u32
             let pre_psi = dotp_f32_i32(magnetization, coord_diff) / cb(length(coord_diff));
             psi_at_cell += pre_psi;
         }
+        
+        /*
+        if coord_cell.eq(&[31, 31, 31]) {
+            println!("PSI: {}", psi_at_cell/(4.0 * PI));
+        }
+
+        if coord_cell.eq(&[29, 30, 30]) {
+            println!("-x: {}", psi_at_cell/ (4.0 * PI));
+        }
+        if coord_cell.eq(&[31, 30, 30]) {
+            println!("+x: {}", psi_at_cell/ (4.0 * PI));
+        }
+        if coord_cell.eq(&[30, 31, 30]) {
+            println!("+y: {}", psi_at_cell/ (4.0 * PI));
+        }
+        if coord_cell.eq(&[30, 29, 30]) {
+            println!("-y: {}", psi_at_cell/ (4.0 * PI));
+        }
+        if coord_cell.eq(&[30, 30, 31]) {
+            println!("+z: {}", psi_at_cell/ (4.0 * PI));
+        }
+        if coord_cell.eq(&[30, 30, 29]) {
+            println!("-z: {}", psi_at_cell/ (4.0 * PI));
+        }
+        */
     }
 
     psi_at_cell / (4.0 * PI)
