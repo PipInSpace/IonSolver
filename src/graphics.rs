@@ -376,8 +376,8 @@ impl Lbm {
                 }
             }
 
-            let mut save_buffer: Vec<u8> = vec![];
-            let mut pixels: Vec<Color32> = vec![];
+            let mut save_buffer: Vec<u8> = Vec::with_capacity(bitmap.len());
+            let mut pixels: Vec<Color32> = Vec::with_capacity(bitmap.len());
             for pixel in &bitmap {
                 let color = pixel & 0xFFFFFF;
                 pixels.push(Color32::from_rgb(
@@ -404,7 +404,7 @@ impl Lbm {
                 thread::spawn(move || {
                     //Saving needs own thread for performance reasons
                     let imgbuffer: ImageBuffer<Rgb<u8>, _> =
-                        ImageBuffer::from_raw(1920, 1080, save_buffer).unwrap();
+                        ImageBuffer::from_raw(width, height, save_buffer).unwrap();
                     imgbuffer.save(format!(r"out/frame_{}.png", i)).unwrap();
                 });
             }

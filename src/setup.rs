@@ -20,7 +20,7 @@ pub fn setup() -> Lbm {
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
-    lbm_config.n_z = 256;
+    lbm_config.n_z = 128;
     lbm_config.d_x = 1;
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
@@ -30,13 +30,15 @@ pub fn setup() -> Lbm {
     lbm_config.ext_electro_hydro = true;
     // Graphics
     lbm_config.graphics_config.graphics_active = true;
-    lbm_config.graphics_config.background_color = 0x1c1b22;
-    lbm_config.graphics_config.streamline_every = 4;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+    //lbm_config.graphics_config.background_color = 0x1c1b22;
+    lbm_config.graphics_config.camera_width = 3840;
+    lbm_config.graphics_config.camera_height = 2160;
+    lbm_config.graphics_config.streamline_every = 8;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::E;
     lbm_config.graphics_config.streamline_mode = true;
-    lbm_config.graphics_config.q_mode = true;
-    lbm_config.graphics_config.flags_surface_mode = true;
-    lbm_config.graphics_config.flags_mode = true;
+    //lbm_config.graphics_config.q_mode = true;
+    //lbm_config.graphics_config.flags_surface_mode = true;
+    //lbm_config.graphics_config.flags_mode = true;
 
     //let mut lbm = setup_from_file("b-field_spin.ion", lbm_config);
 
@@ -49,13 +51,13 @@ pub fn setup() -> Lbm {
         flags[i] = 0x01;
         flags[len - i] = 0x01;
     }
-    lbm.domains[0].flags.write(&flags).enq().unwrap();
+    //lbm.domains[0].flags.write(&flags).enq().unwrap();
 
-    //// electric field
-    //let mut vec_q: Vec<(u64, f32)> = vec![];
-    //vec_q.push((1056824, 0.000000001));
-    //vec_q.push((1056840, -0.000000001));
-    //precompute::precompute_E(&lbm, vec_q);
+    // electric field
+    let mut vec_q: Vec<(u64, f32)> = vec![];
+    vec_q.push((1056824, 10.0));
+    vec_q.push((1056840, -10.0));
+    precompute::precompute_E(&lbm, vec_q);
 
     // magnetic field
     let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
