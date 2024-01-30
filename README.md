@@ -2,7 +2,7 @@
 <img src="https://github.com/PipInSpace/IonSolver/blob/main/icons/LogoIonSolver.png?raw=true)">
 
 
-This software will attempt to model magnetohydrodynamic processes with magnetic field-ionized gas interactions. It uses a lattice-boltzman-model for the fluid, initial kernel functions for the LBM where taken with permission from the software [FluidX3D](https://github.com/ProjectPhysX/FluidX3D) by Dr. Moritz Lehmann.
+This software will attempt to model magnetohydrodynamic processes with magnetic field-ionized gas interactions. It uses a lattice-boltzman-model for the fluid, initial kernel functions for the LBM where taken with permission from the software [FluidX3D](https://github.com/ProjectPhysX/FluidX3D) by Dr. Moritz Lehmann. IonSolver is still in development, with a GPU-accelerated fluid simulation implementation and the basics of magnetohydrodynamics + a basic GUI app functional. A more accurate coupled implementation of electrodynamic effects on the simulated fluids is in the works. 
 
 ## Usage
 <img src="https://github.com/PipInSpace/IonSolver/blob/main/icons/Screenshot.png?raw=true">
