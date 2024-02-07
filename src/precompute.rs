@@ -1,6 +1,29 @@
 use crate::*;
 use rayon::prelude::*;
 
+#[allow(unused)]
+/// sets the B-Field to a constant value
+pub fn constant_E(lbm: &Lbm, e: [f32; 3]) {
+    // Set variables
+    let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
+    let mut e_field: Vec<f32> = vec![0.0; (n * 3) as usize];
+
+    for i in 0..n {
+        e_field[i as usize] = e[0];
+        e_field[(i * 2) as usize] = e[1];
+        e_field[(i * 3) as usize] = e[2];
+    }
+    
+    // Write to device
+    lbm.domains[0]
+        .e
+        .as_ref()
+        .expect("E buffer used but not initialized")
+        .write(&e_field)
+        .enq()
+        .unwrap();
+}
+
 #[allow(unused_mut)] // Variables are mutated with deborrow
 /// Precomputes the electric field from a Vector of charges
 pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
@@ -82,6 +105,29 @@ fn calculate_e_at(
     e_at_cell[1] *= def_ke;
     e_at_cell[2] *= def_ke;
     e_at_cell
+}
+
+#[allow(unused)]
+/// sets the B-Field to a constant value
+pub fn constant_B(lbm: &Lbm, b: [f32; 3]) {
+    // Set variables
+    let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
+    let mut b_field: Vec<f32> = vec![0.0; (n * 3) as usize];
+
+    for i in 0..n {
+        b_field[i as usize] = b[0];
+        b_field[(i * 2) as usize] = b[1];
+        b_field[(i * 3) as usize] = b[2];
+    }
+    
+    // Write to device
+    lbm.domains[0]
+        .b
+        .as_ref()
+        .expect("B buffer used but not initialized")
+        .write(&b_field)
+        .enq()
+        .unwrap();
 }
 
 #[allow(unused_mut)] // Variables are mutated with deborrow
