@@ -21,6 +21,7 @@ pub struct Graphics {
     zbuffer: Buffer<i32>,
     pub camera_params: Buffer<f32>,
 
+    kernel_graphics_axies: Kernel, 
     kernel_graphics_flags: Kernel,
     kernel_graphics_flags_mc: Kernel,
     kernel_graphics_field: Kernel,
@@ -33,6 +34,7 @@ pub struct Graphics {
     pub q_mode: bool,             // Draw q (vorticity)
     pub flags_mode: bool,         // Draw flags
     pub flags_surface_mode: bool, // Draw flags (surface)
+    pub axies_mode: bool,         // Draw helper axies
 }
 
 impl Graphics {
@@ -62,6 +64,16 @@ impl Graphics {
             .unwrap();
 
         //Basic graphics kernels:
+        let kernel_graphics_axies = Kernel::builder()
+            .program(program)
+            .name("graphics_axies")
+            .queue(queue.clone())
+            .global_work_size(1)
+            .arg_named("camera_params", &camera_params)
+            .arg_named("bitmap", &bitmap)
+            .arg_named("zbuffer", &zbuffer)
+            .build()
+            .unwrap();
         let kernel_graphics_flags = Kernel::builder()
             .program(program)
             .name("graphics_flags")
@@ -160,6 +172,7 @@ impl Graphics {
             zbuffer,
             camera_params,
 
+            kernel_graphics_axies,
             kernel_graphics_flags,
             kernel_graphics_flags_mc,
             kernel_graphics_field,
@@ -171,6 +184,7 @@ impl Graphics {
             q_mode: lbm_config.graphics_config.q_mode,
             flags_mode: lbm_config.graphics_config.flags_mode,
             flags_surface_mode: lbm_config.graphics_config.flags_surface_mode,
+            axies_mode: lbm_config.graphics_config.axies_mode,
         }
     }
 }
@@ -184,6 +198,9 @@ impl LbmDomain {
         // Kernel enqueueing is unsafe
         unsafe {
             graphics.kernel_clear.enq().unwrap();
+            if graphics.axies_mode {
+                graphics.kernel_graphics_axies.enq().unwrap();
+            }
             if graphics.streamline_mode {
                 // Streamlines can show velocity, E and B field
                 match graphics.vec_vis_mode {
@@ -280,6 +297,7 @@ pub struct GraphicsConfig {
     pub q_mode: bool,
     pub flags_mode: bool,
     pub flags_surface_mode: bool,
+    pub axies_mode: bool,
 }
 
 impl GraphicsConfig {
@@ -301,6 +319,7 @@ impl GraphicsConfig {
             q_mode: false,
             flags_mode: false,
             flags_surface_mode: false,
+            axies_mode: false,
         }
     }
 }

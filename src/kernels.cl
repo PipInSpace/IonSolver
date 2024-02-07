@@ -1230,4 +1230,21 @@ kernel void graphics_q(const global uchar* flags, const global float* u, const g
 	}
 }
 
+kernel void graphics_axies(const global float* camera, global int* bitmap, global int* zbuffer) {
+	const int c_r = 0xFF0000;
+	const int c_g = 0x00FF00;
+	const int c_b = 0x0000FF;
+	const float3 origin = position((uint3)(0, 0, 0));
+	const float3 x = position((uint3)(def_Nx, 0, 0));
+	const float3 y = position((uint3)(0, def_Ny, 0));
+	const float3 z = position((uint3)(0, 0, def_Nz));
+
+	float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
+	for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
+
+	draw_line(origin, x, c_r, camera_cache, bitmap, zbuffer);
+	draw_line(origin, y, c_g, camera_cache, bitmap, zbuffer);
+	draw_line(origin, z, c_b, camera_cache, bitmap, zbuffer);
+}
+
 #endif // Graphics

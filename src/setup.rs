@@ -36,6 +36,7 @@ pub fn setup() -> Lbm {
     lbm_config.graphics_config.streamline_every = 8;
     lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::E;
     lbm_config.graphics_config.streamline_mode = true;
+    lbm_config.graphics_config.axies_mode = true;
     //lbm_config.graphics_config.q_mode = true;
     //lbm_config.graphics_config.flags_surface_mode = true;
     //lbm_config.graphics_config.flags_mode = true;
