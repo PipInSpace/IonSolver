@@ -11,3 +11,6 @@ egui = "0.22.0"
 image = "0.24.7"
 ocl = "0.19.4"
 rayon = "1.8.0"
+
+[features]
+headless = []

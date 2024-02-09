@@ -13,7 +13,7 @@ pub fn constant_E(lbm: &Lbm, e: [f32; 3]) {
         e_field[(i * 2) as usize] = e[1];
         e_field[(i * 3) as usize] = e[2];
     }
-    
+
     // Write to device
     lbm.domains[0]
         .e
@@ -119,7 +119,7 @@ pub fn constant_B(lbm: &Lbm, b: [f32; 3]) {
         b_field[(i * 2) as usize] = b[1];
         b_field[(i * 3) as usize] = b[2];
     }
-    
+
     // Write to device
     lbm.domains[0]
         .b
@@ -237,7 +237,7 @@ fn calculate_psi_at(n: u64, magnets: &[([u32; 3], [f32; 3])], lengths: (u32, u32
             let pre_psi = dotp_f32_i32(magnetization, coord_diff) / cb(length(coord_diff));
             psi_at_cell += pre_psi;
         }
-        
+
         /*
         if coord_cell.eq(&[31, 31, 31]) {
             println!("PSI: {}", psi_at_cell/(4.0 * PI));

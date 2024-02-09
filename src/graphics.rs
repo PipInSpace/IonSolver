@@ -1,6 +1,5 @@
 use std::{f32::consts::PI, sync::mpsc::Sender, thread};
 
-use egui::{Color32, ColorImage};
 use image::{ImageBuffer, Rgb};
 use ocl::{Buffer, Kernel, Program, Queue};
 
@@ -21,7 +20,7 @@ pub struct Graphics {
     zbuffer: Buffer<i32>,
     pub camera_params: Buffer<f32>,
 
-    kernel_graphics_axies: Kernel, 
+    kernel_graphics_axies: Kernel,
     kernel_graphics_flags: Kernel,
     kernel_graphics_flags_mc: Kernel,
     kernel_graphics_field: Kernel,
@@ -396,10 +395,15 @@ impl Lbm {
             }
 
             let mut save_buffer: Vec<u8> = Vec::with_capacity(bitmap.len());
-            let mut pixels: Vec<Color32> = Vec::with_capacity(bitmap.len());
+
+            #[cfg(not(feature = "headless"))]
+            let mut pixels: Vec<egui::Color32> = Vec::with_capacity(bitmap.len());
+
             for pixel in &bitmap {
                 let color = pixel & 0xFFFFFF;
-                pixels.push(Color32::from_rgb(
+
+                #[cfg(not(feature = "headless"))]
+                pixels.push(egui::Color32::from_rgb(
                     ((color >> 16) & 0xFF) as u8,
                     ((color >> 8) & 0xFF) as u8,
                     (color & 0xFF) as u8,
@@ -411,14 +415,19 @@ impl Lbm {
                     save_buffer.push((color & 0xFF) as u8);
                 }
             }
-            let color_image = ColorImage {
+
+            #[cfg(not(feature = "headless"))]
+            let color_image = egui::ColorImage {
                 size: [width as usize, height as usize],
                 pixels,
             };
+
             _ = sim_tx.send(SimState {
                 step: i,
+                #[cfg(not(feature = "headless"))]
                 img: color_image,
-            }); // This may fail if simulation is terminated, but a frame is still being generated. Can be ignored.
+            }); // This may fail if the simulation is terminated, but a frame is still being generated. Error can be ignored.
+
             if save {
                 thread::spawn(move || {
                     //Saving needs own thread for performance reasons
