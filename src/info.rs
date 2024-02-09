@@ -69,3 +69,13 @@ pub fn progressbar(fill: f32) -> String {
 
     string
 }
+
+pub fn sim_speed(step_c: u32, t_p_s: u32, mn: u64) {
+    print!(
+        "\rStep {}, Steps/s: {}, MLUP/s: {}                      ",
+        step_c,
+        1000000 / t_p_s,
+        (mn * 1000000) / t_p_s as u64
+    );
+    _ = std::io::Write::flush(&mut std::io::stdout());
+}

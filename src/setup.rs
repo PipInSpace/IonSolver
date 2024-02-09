@@ -31,8 +31,8 @@ pub fn setup() -> Lbm {
     // Graphics
     lbm_config.graphics_config.graphics_active = true;
     //lbm_config.graphics_config.background_color = 0x1c1b22;
-    lbm_config.graphics_config.camera_width = 3840;
-    lbm_config.graphics_config.camera_height = 2160;
+    lbm_config.graphics_config.camera_width = 1920;
+    lbm_config.graphics_config.camera_height = 1080;
     lbm_config.graphics_config.streamline_every = 8;
     lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::E;
     lbm_config.graphics_config.streamline_mode = true;
@@ -114,6 +114,59 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
     }
 
     lbm.domains[0].flags.write(&vals.flags).enq().unwrap();
+
+    lbm
+}
+
+// Complete setups
+#[allow(unused)]
+fn setup_bfield_spin() -> Lbm {
+    let mut lbm_config = LbmConfig::new();
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 1.2250);
+    lbm_config.units.print();
+    lbm_config.n_x = 128;
+    lbm_config.n_y = 128;
+    lbm_config.n_z = 256;
+    lbm_config.d_x = 1;
+    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
+    println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
+    lbm_config.velocity_set = VelocitySet::D3Q19;
+    // Extensions
+    lbm_config.ext_volume_force = true;
+    lbm_config.ext_electro_hydro = true;
+    // Graphics
+    lbm_config.graphics_config.graphics_active = true;
+    lbm_config.graphics_config.background_color = 0x1c1b22;
+    lbm_config.graphics_config.camera_width = 1920;
+    lbm_config.graphics_config.camera_height = 1080;
+    lbm_config.graphics_config.streamline_every = 8;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+    lbm_config.graphics_config.streamline_mode = true;
+    lbm_config.graphics_config.axies_mode = true;
+    lbm_config.graphics_config.q_mode = true;
+    lbm_config.graphics_config.flags_surface_mode = true;
+    lbm_config.graphics_config.flags_mode = true;
+
+    let mut lbm = Lbm::new(lbm_config);
+
+    let mut flags: Vec<u8> = vec![0; 128 * 128 * 256];
+    let len = flags.len() - 1;
+    // Solid
+    for i in 0..(128 * 128 * 8) {
+        flags[i] = 0x01;
+        flags[len - i] = 0x01;
+    }
+    lbm.domains[0].flags.write(&flags).enq().unwrap();
+
+    // magnetic field
+    let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
+    for i in 0..243 {
+        vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000.0]));
+        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000.0]));
+    }
+    precompute::precompute_B(&lbm, vec_m);
+
+    lbm.setup_velocity_field((0.1, 0.01, 0.0), 1.0);
 
     lbm
 }

@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 extern crate ocl;
-use std::io::Write;
 use std::time::{Duration, Instant};
 use std::{f32::consts::PI, fs, sync::mpsc, thread};
 
@@ -86,7 +85,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
         camera_rotation: vec![0.0; 2],
         camera_zoom: 3.0,
     };
-    let mut step_count_total: u32 = 0;
+    let mut step_c: u32 = 0;
 
     let mut lbm = setup::setup();
     lbm.initialize();
@@ -104,7 +103,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     if lbm.config.graphics_config.graphics_active {
         let lbm_ptr = &lbm as *const _ as usize;
         let state_ptr = &state as *const _ as usize;
-        let step_ptr = &step_count_total as *const _ as usize;
+        let step_ptr = &step_c as *const _ as usize;
         let sim_tx_g = sim_tx.clone();
         thread::spawn(move || {
             let lbm = unsafe { &*(lbm_ptr as *const Lbm) };
@@ -165,8 +164,8 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
         });
     }
 
-    let mn = (lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64) / 1000000;
-    let mut time_per_step = 0;
+    let mn = (lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64) / 1000000; // N / 10E6
+    let mut t_p_s = 0; // Time per step
     loop {
         //This is the master loop, cannot be paused
         if !state.paused {
@@ -174,43 +173,28 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
             let loop_time = std::time::Instant::now();
             loop {
                 //This is the loop of the simulation. Can be paused by receiving a control message
-                let recieve_result = ctrl_rx.try_iter().last();
-                if let Some(recieve) = recieve_result {
-                    state = recieve;
-                }
+                pull_state(&ctrl_rx, &mut state);
+
                 if state.paused || !state.active {
-                    print!(
-                        "\rStep {}, Last Steps/s: {}, Last MLUP/s: {}            ",
-                        step_count_total,
-                        1000000 / time_per_step,
-                        (mn * 1000000) / time_per_step as u64
-                    );
-                    _ = std::io::stdout().flush();
+                   info::sim_speed(step_c, t_p_s, mn);
                     break;
                 }
 
                 lbm.do_time_step();
-
+                t_p_s = (loop_time.elapsed().as_micros() / step_count_time) as u32;
                 //Calculate simulation speed
-                time_per_step = (loop_time.elapsed().as_micros() / step_count_time) as u32;
-                if step_count_total % 200 == 0 {
-                    print!(
-                        "\rStep {}, Steps/s: {}, MLUP/s: {}                      ",
-                        step_count_total,
-                        1000000 / time_per_step,
-                        (mn * 1000000) / time_per_step as u64
-                    );
-                    _ = std::io::stdout().flush();
+                if step_c % 200 == 0 {
+                    info::sim_speed(step_c, t_p_s, mn)
                 }
 
                 // Saves frames if needed
-                if step_count_total % state.frame_spacing == 0
+                if step_c % state.frame_spacing == 0
                     && state.save
                     && lbm.config.graphics_config.graphics_active
                 {
-                    lbm.draw_frame(true, sim_tx.clone(), &step_count_total);
+                    lbm.draw_frame(true, sim_tx.clone(), &step_c);
                 }
-                step_count_total += 1;
+                step_c += 1;
                 step_count_time += 1;
             }
         }
@@ -221,6 +205,16 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
         let recieve_result = ctrl_rx.try_recv();
         if let Ok(recieve) = recieve_result {
             state = recieve;
+        } else {
+            // Prevent spam polling while allowing smooth control of graphics
+            thread::sleep(Duration::from_millis(10))
         }
+    }
+}
+
+fn pull_state(rx: &mpsc::Receiver<SimControlTx>, state: &mut SimControlTx) {
+    let recieve_result = rx.try_iter().last();
+    if let Some(recieve) = recieve_result {
+        *state = recieve;
     }
 }
