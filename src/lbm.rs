@@ -119,6 +119,8 @@ pub struct LbmConfig {
     pub ext_force_field: bool,   // Needs volume_force to work
     pub ext_electro_hydro: bool, // Needs volume_force to work
 
+    pub induction_range: u8, // Range of the cells induction (Keep this small)
+
     pub graphics_config: GraphicsConfig,
 }
 
@@ -145,6 +147,8 @@ impl LbmConfig {
             ext_volume_force: false,
             ext_electro_hydro: false,
             ext_force_field: false,
+
+            induction_range: 5, // Range of the cells induction (Keep this small)
 
             graphics_config: graphics::GraphicsConfig::new(),
         }
@@ -266,6 +270,14 @@ impl Lbm {
         }
         //communicate_fi
         self.finish_queues();
+
+        if self.config.ext_electro_hydro {
+            for d in 0..self.get_domain_numbers() {
+                self.domains[d].enqueue_update_b_dyn().unwrap();
+            }
+            self.finish_queues();
+        }
+
         //for d in 0..self.get_domain_numbers() {
         //    self.domains[d].enqueue_update_fields().unwrap();
         //}
@@ -327,6 +339,8 @@ pub struct LbmDomain {
     kernel_stream_collide: Kernel,
     kernel_update_fields: Kernel,
 
+    kernel_update_b_dyn: Option<Kernel>, // Optional Kernels
+
     pub n_x: u32, // Domain size
     pub n_y: u32,
     pub n_z: u32,
@@ -341,6 +355,7 @@ pub struct LbmDomain {
     pub flags: Buffer<u8>,
     pub e: Option<Buffer<f32>>, // Optional Buffers
     pub b: Option<Buffer<f32>>, // Optional Buffers
+    pub b_dyn: Option<Buffer<f32>>,
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
 
@@ -467,8 +482,13 @@ impl LbmDomain {
         } else {
             None
         };
-        // Magnetic field buffer as 3D Vectors
+        // Magnetic field buffers as 3D Vectors
         let b: Option<Buffer<f32>> = if lbm_config.ext_electro_hydro {
+            Some(opencl::create_buffer(&queue, [n * 3], 0f32))
+        } else {
+            None
+        };
+        let b_dyn: Option<Buffer<f32>> = if lbm_config.ext_electro_hydro {
             Some(opencl::create_buffer(&queue, [n * 3], 0f32))
         } else {
             None
@@ -534,10 +554,38 @@ impl LbmDomain {
                 .arg_named("F", f.as_ref().expect("f buffer used but not initialized"));
         }
 
+        let mut kernel_update_b_dyn: Option<Kernel> = None;
+
         if lbm_config.ext_electro_hydro {
             kernel_stream_collide_builder
                 .arg_named("E", e.as_ref().expect("e buffer used but not initialized"))
-                .arg_named("B", b.as_ref().expect("b buffer used but not initialized"));
+                .arg_named("B", b.as_ref().expect("b buffer used but not initialized"))
+                .arg_named(
+                    "B_dyn",
+                    b_dyn
+                        .as_ref()
+                        .expect("b_dyn buffer used but not initialized"),
+                );
+
+            // Dynamic B kernel
+            kernel_update_b_dyn = Some(
+                Kernel::builder()
+                    .program(&program)
+                    .name("update_b_dynamic")
+                    .queue(queue.clone())
+                    .global_work_size([n])
+                    .arg_named("B", b.as_ref().expect("b buffer used but not initialized"))
+                    .arg_named(
+                        "B_dyn",
+                        b_dyn
+                            .as_ref()
+                            .expect("b_dyn buffer used but not initialized"),
+                    )
+                    .arg_named("u", &u)
+                    .arg_named("flags", &flags)
+                    .build()
+                    .unwrap(),
+            )
         }
 
         let kernel_initialize: Kernel = kernel_initialize_builder.build().unwrap();
@@ -561,6 +609,8 @@ impl LbmDomain {
             kernel_stream_collide,
             kernel_update_fields,
 
+            kernel_update_b_dyn,
+
             n_x,
             n_y,
             n_z,
@@ -575,6 +625,7 @@ impl LbmDomain {
             flags,
             e,
             b,
+            b_dyn,
             f,
             t,
 
@@ -695,6 +746,7 @@ impl LbmDomain {
         + &if lbm_config.ext_electro_hydro {"\n	        #define ELECTRO_HYDRO".to_owned()
         +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
         +"\n	#define def_charge "+ &format!("{:.5}f", 0.005) // charge held per density unit
+        +"\n	#define def_ind_r "+ &lbm_config.induction_range.to_string()
         } else {"".to_string()}
         + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}
@@ -730,6 +782,16 @@ impl LbmDomain {
             self.kernel_update_fields.set_arg("fy", self.fy)?;
             self.kernel_update_fields.set_arg("fz", self.fz)?;
             self.kernel_update_fields.cmd().enq()
+        }
+    }
+
+    fn enqueue_update_b_dyn(&self) -> ocl::Result<()> {
+        unsafe {
+            self.kernel_update_b_dyn
+                .as_ref()
+                .expect("kernel should be initialized")
+                .cmd()
+                .enq()
         }
     }
 

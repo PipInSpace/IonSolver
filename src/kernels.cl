@@ -39,6 +39,7 @@
 #define def_we (1.0f/36.0f)
 #define def_ke 8.9875517923E9f
 #define def_charge 0.1f // Electric charge of a cell
+#define def_ind_r 5 // Range of induction fill around cell
 
 #define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
 #define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
@@ -105,6 +106,20 @@ float half_to_float_custom(const ushort x) { // custom 16-bit floating-point for
 // cube of magnitude of v
 float cbmagnitude(uint3 v){
 	return sq(v.x) + sq(v.y) + sq(v.z);
+}
+int int_max(int x, int y) {
+	if (x > y) {
+		return x;
+	} else {
+		return y;
+	}
+}
+int int_min(int x, int y) {
+	if (x < y) {
+		return x;
+	} else {
+		return y;
+	}
 }
 
 // Line3D OpenCL C version (c) Moritz Lehmann
@@ -700,8 +715,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , const global float* F 
 #endif // FORCE_FIELD
 #ifdef ELECTRO_HYDRO
-, global float* E
-, global float* B
+, const global float* E
+, const global float* B
+, global float* B_dyn
 #endif // ELECTRO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -761,9 +777,14 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		//	uxn*B[    def_N+(ulong)n] + uyn*B[                 n]
 		//};
 		// F = charge * (E + (U cross B))
-		fxn += rhon * def_charge * (E[                 n] + uyn*B[2ul*def_N+(ulong)n] - uzn*B[    def_N+(ulong)n]); // apply electric field * charge = force
-		fyn += rhon * def_charge * (E[    def_N+(ulong)n] + uzn*B[                 n] - uxn*B[2ul*def_N+(ulong)n]);
-		fzn += rhon * def_charge * (E[2ul*def_N+(ulong)n] + uxn*B[    def_N+(ulong)n] - uyn*B[                 n]);
+		fxn += rhon * def_charge * (E[                 n] + uyn*B_dyn[2ul*def_N+(ulong)n] - uzn*B_dyn[    def_N+(ulong)n]); // apply electric field * charge = force
+		fyn += rhon * def_charge * (E[    def_N+(ulong)n] + uzn*B_dyn[                 n] - uxn*B_dyn[2ul*def_N+(ulong)n]);
+		fzn += rhon * def_charge * (E[2ul*def_N+(ulong)n] + uxn*B_dyn[    def_N+(ulong)n] - uyn*B_dyn[                 n]);
+
+		// Clear B_dyn with static B for recomputation
+		B_dyn[                 n] = B[                 n];
+		B_dyn[    def_N+(ulong)n] = B[    def_N+(ulong)n];
+		B_dyn[2ul*def_N+(ulong)n] = B[2ul*def_N+(ulong)n];
 	}
 	#endif// ELECTRO_HYDRO
 
@@ -850,11 +871,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     store_f(n, fhn, fi, j, t); // perform streaming (part 1)
 } // stream_collide()
 
-__kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags
-#ifdef ELECTRO_HYDRO
-
-#endif
-) {
+__kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute initialize() on halo
     uchar flagsn = flags[n];
@@ -914,6 +931,22 @@ kernel void update_fields(const global fpxx* fi, global float* rho, global float
 
 
 }
+
+#ifdef ELECTRO_HYDRO
+__kernel void update_b_dynamic(const global float* B, global float* B_dyn, const global float* u, const global uchar* flags) {
+	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
+    if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_b_dynamic() on halo
+    const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
+    const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
+    if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
+
+	uint3 coords = coordinates(n);
+	for (uint x = int_max(coords.x - def_ind_r, 0); x < int_min(coords.x + def_ind_r, def_Nx); x++) {
+
+	}
+
+}
+#endif
 
 // Graphics code
 #ifdef GRAPHICS

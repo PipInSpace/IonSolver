@@ -176,7 +176,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                 pull_state(&ctrl_rx, &mut state);
 
                 if state.paused || !state.active {
-                   info::sim_speed(step_c, t_p_s, mn);
+                    info::sim_speed(step_c, t_p_s, mn);
                     break;
                 }
 
