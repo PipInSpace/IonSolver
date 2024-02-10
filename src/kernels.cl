@@ -792,7 +792,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		fyn += rhon * def_charge * (E_dyn[    def_N+(ulong)n] + uzn*B_dyn[                 n] - uxn*B_dyn[2ul*def_N+(ulong)n]);
 		fzn += rhon * def_charge * (E_dyn[2ul*def_N+(ulong)n] + uxn*B_dyn[    def_N+(ulong)n] - uyn*B_dyn[                 n]);
 
-		// Clear dyn with static for recomputation
+		// Clear dynamic buffers with static buffers for recomputation
 		B_dyn[                 n] = B[                 n];
 		B_dyn[    def_N+(ulong)n] = B[    def_N+(ulong)n];
 		B_dyn[2ul*def_N+(ulong)n] = B[2ul*def_N+(ulong)n];
@@ -980,24 +980,22 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 		for (uint y = int_max(coord_n.y - def_ind_r, 0); y < y_upper; y++) {
 			for (uint z = int_max(coord_n.z - def_ind_r, 0); z < z_upper; z++) {
 
-				// _c vars are the surronding cells 
+				// _c vars describe surronding cells 
 				const uint n_c = x + (y + z * def_Nx) * def_Ny;
 				if (n != n_c) {
-					const uint3 coord_c = coordinates(n_c);
-					const float3 vec_r =  convert_float3((coord_c - coord_n)) / cbmagnitude(coord_c - coord_n);
-					//const float3 vec_r = {1.0, 1.0, 1.0};
+					// Use the Biot-Savart law
+					const uint3 vec_r_diff = coordinates(n_c) - coord_n;
+					const float3 vec_r =  convert_float3(vec_r_diff) / cbmagnitude(vec_r_diff);
 
 					const float3 e_c = def_ke * charge * vec_r;
-					E_dyn[n_c				  ] += e_c.x;
-					E_dyn[(ulong)n_c+def_N	  ] += e_c.y;
+					E_dyn[n_c                 ] += e_c.x;
+					E_dyn[(ulong)n_c+def_N    ] += e_c.y;
 					E_dyn[(ulong)n_c+def_N*2ul] += e_c.z;
 
 					const float3 b_c = def_kmu * charge * cross(v, vec_r);
-					B_dyn[n_c			      ] += b_c.x;
-					B_dyn[(ulong)n_c+def_N	  ] += b_c.y;
+					B_dyn[n_c                 ] += b_c.x;
+					B_dyn[(ulong)n_c+def_N    ] += b_c.y;
 					B_dyn[(ulong)n_c+def_N*2ul] += b_c.z;
-
-					// Use the Biot-Savart law
 				}
 			}
 		}

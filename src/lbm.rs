@@ -119,7 +119,8 @@ pub struct LbmConfig {
     pub ext_force_field: bool,   // Needs volume_force to work
     pub ext_magneto_hydro: bool, // Needs volume_force to work
 
-    pub induction_range: u8, // Range of the cells induction (Keep this small)
+    /// Cell range of each cells induction (Keep this small)
+    pub induction_range: u8,
 
     pub graphics_config: GraphicsConfig,
 }
@@ -271,9 +272,9 @@ impl Lbm {
         //communicate_fi
         self.finish_queues();
 
-        if self.config.ext_magneto_hydro {
+        if self.config.ext_magneto_hydro && self.config.induction_range != 0 {
             for d in 0..self.get_domain_numbers() {
-                self.domains[d].enqueue_update_b_dyn().unwrap();
+                self.domains[d].enqueue_update_e_b_dyn().unwrap();
             }
             self.finish_queues();
         }
@@ -818,7 +819,7 @@ impl LbmDomain {
         }
     }
 
-    fn enqueue_update_b_dyn(&self) -> ocl::Result<()> {
+    fn enqueue_update_e_b_dyn(&self) -> ocl::Result<()> {
         unsafe {
             self.kernel_update_e_b_dyn
                 .as_ref()
