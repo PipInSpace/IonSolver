@@ -792,7 +792,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		fyn += rhon * def_charge * (E_dyn[    def_N+(ulong)n] + uzn*B_dyn[                 n] - uxn*B_dyn[2ul*def_N+(ulong)n]);
 		fzn += rhon * def_charge * (E_dyn[2ul*def_N+(ulong)n] + uxn*B_dyn[    def_N+(ulong)n] - uyn*B_dyn[                 n]);
 
-		// Clear B_dyn with static B for recomputation
+		// Clear dyn with static for recomputation
 		B_dyn[                 n] = B[                 n];
 		B_dyn[    def_N+(ulong)n] = B[    def_N+(ulong)n];
 		B_dyn[2ul*def_N+(ulong)n] = B[2ul*def_N+(ulong)n];
@@ -885,7 +885,14 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     store_f(n, fhn, fi, j, t); // perform streaming (part 1)
 } // stream_collide()
 
-__kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags) {
+__kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags
+#ifdef MAGNETO_HYDRO
+, const global float* E
+, const global float* B
+, global float* E_dyn
+, global float* B_dyn
+#endif // MAGNETO_HYDRO
+) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute initialize() on halo
     uchar flagsn = flags[n];
@@ -912,7 +919,13 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
     calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
 	#ifdef MAGNETO_HYDRO
-		//calculate_E(n, q, E);
+		// Clear dyn with static for recomputation
+		B_dyn[                 n] = B[                 n];
+		B_dyn[    def_N+(ulong)n] = B[    def_N+(ulong)n];
+		B_dyn[2ul*def_N+(ulong)n] = B[2ul*def_N+(ulong)n];
+		E_dyn[                 n] = E[                 n];
+		E_dyn[    def_N+(ulong)n] = E[    def_N+(ulong)n];
+		E_dyn[2ul*def_N+(ulong)n] = E[2ul*def_N+(ulong)n];
 	#endif // ELECTRIC FORCE
 } // initialize()
 
@@ -972,6 +985,7 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 				if (n != n_c) {
 					const uint3 coord_c = coordinates(n_c);
 					const float3 vec_r =  convert_float3((coord_n - coord_c)) / cbmagnitude(coord_n - coord_c);
+					//const float3 vec_r = {1.0, 1.0, 1.0};
 
 					const float3 e_c = def_ke * charge * vec_r;
 					E_dyn[n					] += e_c.x;

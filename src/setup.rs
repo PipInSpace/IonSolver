@@ -30,12 +30,12 @@ pub fn setup() -> Lbm {
     lbm_config.ext_magneto_hydro = true;
     lbm_config.induction_range = 2;
     // Graphics
-    lbm_config.graphics_config.graphics_active = false;
+    lbm_config.graphics_config.graphics_active = true;
     //lbm_config.graphics_config.background_color = 0x1c1b22;
     lbm_config.graphics_config.camera_width = 1920;
     lbm_config.graphics_config.camera_height = 1080;
     lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::BDyn;
     lbm_config.graphics_config.streamline_mode = true;
     lbm_config.graphics_config.axies_mode = true;
     lbm_config.graphics_config.q_mode = true;

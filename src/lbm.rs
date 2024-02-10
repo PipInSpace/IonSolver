@@ -578,6 +578,21 @@ impl LbmDomain {
                         .as_ref()
                         .expect("b_dyn buffer used but not initialized"),
                 );
+            kernel_initialize_builder
+                .arg_named("E", e.as_ref().expect("e buffer used but not initialized"))
+                .arg_named("B", b.as_ref().expect("b buffer used but not initialized"))
+                .arg_named(
+                    "E_dyn",
+                    e_dyn
+                        .as_ref()
+                        .expect("e_dyn buffer used but not initialized"),
+                )
+                .arg_named(
+                    "B_dyn",
+                    b_dyn
+                        .as_ref()
+                        .expect("b_dyn buffer used but not initialized"),
+                );
 
             // Dynamic B kernel
             kernel_update_e_b_dyn = Some(
@@ -762,7 +777,7 @@ impl LbmDomain {
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
         + &if lbm_config.ext_magneto_hydro {"\n	        #define MAGNETO_HYDRO".to_owned()
         +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
-        +"\n	#define def_kmu "+ &format!("{:.5}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
+        +"\n	#define def_kmu "+ &format!("{}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
         +"\n	#define def_charge "+ &format!("{:.5}f", 0.005) // charge held per density unit
         +"\n	#define def_ind_r "+ &lbm_config.induction_range.to_string()
         } else {"".to_string()}

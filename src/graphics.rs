@@ -11,6 +11,8 @@ pub enum VecVisMode {
     U,
     E,
     B,
+    EDyn,
+    BDyn,
 }
 
 // Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
@@ -227,6 +229,24 @@ impl LbmDomain {
                             )
                             .unwrap();
                     }
+                    VecVisMode::EDyn => {
+                        graphics
+                            .kernel_graphics_streamline
+                            .set_arg(
+                                "u",
+                                self.e_dyn.as_ref().expect("E buffer used but not initialized"),
+                            )
+                            .unwrap();
+                    }
+                    VecVisMode::BDyn => {
+                        graphics
+                            .kernel_graphics_streamline
+                            .set_arg(
+                                "u",
+                                self.b_dyn.as_ref().expect("B buffer used but not initialized"),
+                            )
+                            .unwrap();
+                    }
                 }
                 graphics.kernel_graphics_streamline.enq().unwrap();
             }
@@ -243,7 +263,7 @@ impl LbmDomain {
                             .kernel_graphics_field
                             .set_arg(
                                 "u",
-                                self.e.as_ref().expect("E buffer used but not initialized"),
+                                self.e.as_ref().expect("E_dyn buffer used but not initialized"),
                             )
                             .unwrap();
                     }
@@ -252,7 +272,25 @@ impl LbmDomain {
                             .kernel_graphics_field
                             .set_arg(
                                 "u",
-                                self.b.as_ref().expect("B buffer used but not initialized"),
+                                self.b.as_ref().expect("B_dyn buffer used but not initialized"),
+                            )
+                            .unwrap();
+                    }
+                    VecVisMode::EDyn => {
+                        graphics
+                            .kernel_graphics_field
+                            .set_arg(
+                                "u",
+                                self.e_dyn.as_ref().expect("E_dyn buffer used but not initialized"),
+                            )
+                            .unwrap();
+                    }
+                    VecVisMode::BDyn => {
+                        graphics
+                            .kernel_graphics_field
+                            .set_arg(
+                                "u",
+                                self.b_dyn.as_ref().expect("B_dyn buffer used but not initialized"),
                             )
                             .unwrap();
                     }

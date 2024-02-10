@@ -107,7 +107,7 @@ impl Units {
     pub fn si_to_mu_0(&self) -> f32 {
         // 1 / (epsilon_0 * c²) = mu_0 (Magnetic Field Constant)
         //1.25663706212E-6 / (self.kg * self.m / (self.c * self.c)) -- OLD
-        1.0 / (self.si_to_epsilon_0() * sq(2.99792458E8) / self.m * self.s)
+        1.0 / (self.si_to_epsilon_0() * sq(2.99792458E8) / sq(self.m) * sq(self.s))
     }
 
     /// From lbm.n_x and velocity u
