@@ -778,7 +778,7 @@ impl LbmDomain {
         + &if lbm_config.ext_magneto_hydro {"\n	        #define MAGNETO_HYDRO".to_owned()
         +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
         +"\n	#define def_kmu "+ &format!("{}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
-        +"\n	#define def_charge "+ &format!("{:.5}f", 0.005) // charge held per density unit
+        +"\n	#define def_charge "+ &format!("{}f", 0.0000000005) // charge held per density unit
         +"\n	#define def_ind_r "+ &lbm_config.induction_range.to_string()
         } else {"".to_string()}
         + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
@@ -826,6 +826,66 @@ impl LbmDomain {
                 .cmd()
                 .enq()
         }
+    }
+
+    #[allow(unused)]
+    pub fn dump_cell(&self, c: usize) {
+        let n = self.n_x * self.n_y * self.n_z;
+
+        let c_x = c;
+        let c_y = c + n as usize;
+        let c_z = c + n as usize * 2;
+        let (x, y, z) = self.get_coordinates(c as u64);
+
+        let mut rho: Vec<f32> = vec![0.0; n as usize];
+        let mut u: Vec<f32> = vec![0.0; n as usize * 3];
+        let mut flags: Vec<u8> = vec![0; n as usize];
+        let mut e: Vec<f32> = vec![0.0; n as usize * 3];
+        let mut b: Vec<f32> = vec![0.0; n as usize * 3];
+        let mut e_dyn: Vec<f32> = vec![0.0; n as usize * 3];
+        let mut b_dyn: Vec<f32> = vec![0.0; n as usize * 3];
+
+        self.rho.read(&mut rho).enq().unwrap();
+        self.u.read(&mut u).enq().unwrap();
+        self.flags.read(&mut flags).enq().unwrap();
+        match &self.e {
+            Some(e_s) => {
+                e_s.read(&mut e).enq().unwrap();
+            }
+            None => {}
+        }
+        match &self.b {
+            Some(b_s) => {
+                b_s.read(&mut b).enq().unwrap();
+            }
+            None => {}
+        }
+        match &self.e_dyn {
+            Some(e_s) => {
+                e_s.read(&mut e_dyn).enq().unwrap();
+            }
+            None => {}
+        }
+        match &self.b_dyn {
+            Some(b_s) => {
+                b_s.read(&mut b_dyn).enq().unwrap();
+            }
+            None => {}
+        }
+        println!("Dumping cell {}:
+    x: {}, y: {}, z: {}
+    rho:   {}
+    u:     {}x, {}y {}z
+    flags: {}
+    e:     {}x, {}y {}z
+    b:     {}x, {}y {}z
+    e_dyn: {}x, {}y {}z
+    b_dyn: {}x, {}y {}z", 
+    c, x, y, z, rho[c], u[c_x], u[c_y], u[c_z], flags[c],
+    e[c_x], e[c_y], e[c_z],
+    b[c_x], b[c_y], b[c_z],
+    e_dyn[c_x], e_dyn[c_y], e_dyn[c_z],
+    b_dyn[c_x], b_dyn[c_y], b_dyn[c_z])
     }
 
     /// Get total simulation size.

@@ -981,21 +981,21 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 			for (uint z = int_max(coord_n.z - def_ind_r, 0); z < z_upper; z++) {
 
 				// _c vars are the surronding cells 
-				const uint n_c = x + (y + z * def_Ny) * def_Nz;
+				const uint n_c = x + (y + z * def_Nx) * def_Ny;
 				if (n != n_c) {
 					const uint3 coord_c = coordinates(n_c);
-					const float3 vec_r =  convert_float3((coord_n - coord_c)) / cbmagnitude(coord_n - coord_c);
+					const float3 vec_r =  convert_float3((coord_c - coord_n)) / cbmagnitude(coord_c - coord_n);
 					//const float3 vec_r = {1.0, 1.0, 1.0};
 
 					const float3 e_c = def_ke * charge * vec_r;
-					E_dyn[n					] += e_c.x;
-					E_dyn[(ulong)n+def_N	] += e_c.y;
-					E_dyn[(ulong)n+def_N*2ul] += e_c.z;
+					E_dyn[n_c				  ] += e_c.x;
+					E_dyn[(ulong)n_c+def_N	  ] += e_c.y;
+					E_dyn[(ulong)n_c+def_N*2ul] += e_c.z;
 
 					const float3 b_c = def_kmu * charge * cross(v, vec_r);
-					B_dyn[n					] += b_c.x;
-					B_dyn[(ulong)n+def_N	] += b_c.y;
-					B_dyn[(ulong)n+def_N*2ul] += b_c.z;
+					B_dyn[n_c			      ] += b_c.x;
+					B_dyn[(ulong)n_c+def_N	  ] += b_c.y;
+					B_dyn[(ulong)n_c+def_N*2ul] += b_c.z;
 
 					// Use the Biot-Savart law
 				}
