@@ -38,6 +38,7 @@
 #define def_ws (1.0f/9.0f)
 #define def_we (1.0f/36.0f)
 #define def_ke 8.9875517923E9f
+#define def_kmu 0.0f
 #define def_charge 0.1f // Electric charge of a cell
 #define def_ind_r 5 // Range of induction fill around cell
 
@@ -62,7 +63,7 @@
 
 #define EQUILIBRIUM_BOUNDARIES
 #define VOLUME_FORCE
-#define ELECTRO_HYDRO
+#define MAGNETO_HYDRO
 
 #define GRAPHICS
 #define def_streamline_sparse 4u
@@ -91,6 +92,12 @@
 float sq(const float x) {
 	return x*x;
 }
+uint uint_sq(const uint x) {
+	return x*x;
+}
+float cb(const float x) {
+	return x*x*x;
+}
 ushort float_to_half_custom(const float x) { // custom 16-bit floating-point format, 1-4-11, exp-15, +-1.99951168, +-6.10351562E-5, +-2.98023224E-8, 3.612 digits
 	const uint b = as_uint(x)+0x00000800; // round-to-nearest-even: add last bit after truncated mantissa
 	const uint e = (b&0x7F800000)>>23; // exponent
@@ -104,8 +111,11 @@ float half_to_float_custom(const ushort x) { // custom 16-bit floating-point for
 	return as_float((x&0x8000)<<16 | (e!=0)*((e+112)<<23|m) | ((e==0)&(m!=0))*((v-37)<<23|((m<<(150-v))&0x007FF000))); // sign : normalized : denormalized
 }
 // cube of magnitude of v
-float cbmagnitude(uint3 v){
+float sqmagnitude(uint3 v){
 	return sq(v.x) + sq(v.y) + sq(v.z);
+}
+float cbmagnitude(uint3 v){
+	return cb(sqrt((float)(uint_sq(v.x) + uint_sq(v.y) + uint_sq(v.z))));
 }
 int int_max(int x, int y) {
 	if (x > y) {
@@ -691,7 +701,7 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 }
 #endif // VOLUME_FORCE
 
-#ifdef ELECTRO_HYDRO
+#ifdef MAGNETO_HYDRO
 // this is unusable
 // n: cell id
 // q: float array for charges
@@ -714,11 +724,12 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 #ifdef FORCE_FIELD
 , const global float* F 
 #endif // FORCE_FIELD
-#ifdef ELECTRO_HYDRO
+#ifdef MAGNETO_HYDRO
 , const global float* E
 , const global float* B
+, global float* E_dyn
 , global float* B_dyn
-#endif // ELECTRO_HYDRO
+#endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute stream_collide() on halo
@@ -759,7 +770,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 	}
 	#endif
 
-	#ifdef ELECTRO_HYDRO
+	#ifdef MAGNETO_HYDRO
 	{
 		// Force = Electric field * ParticlesN * (elemental charge * ionization factor) 
 		// Force = E * (mass / molar mass) * (e * i_fac) 
@@ -777,16 +788,19 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		//	uxn*B[    def_N+(ulong)n] + uyn*B[                 n]
 		//};
 		// F = charge * (E + (U cross B))
-		fxn += rhon * def_charge * (E[                 n] + uyn*B_dyn[2ul*def_N+(ulong)n] - uzn*B_dyn[    def_N+(ulong)n]); // apply electric field * charge = force
-		fyn += rhon * def_charge * (E[    def_N+(ulong)n] + uzn*B_dyn[                 n] - uxn*B_dyn[2ul*def_N+(ulong)n]);
-		fzn += rhon * def_charge * (E[2ul*def_N+(ulong)n] + uxn*B_dyn[    def_N+(ulong)n] - uyn*B_dyn[                 n]);
+		fxn += rhon * def_charge * (E_dyn[                 n] + uyn*B_dyn[2ul*def_N+(ulong)n] - uzn*B_dyn[    def_N+(ulong)n]); // apply electric field * charge = force
+		fyn += rhon * def_charge * (E_dyn[    def_N+(ulong)n] + uzn*B_dyn[                 n] - uxn*B_dyn[2ul*def_N+(ulong)n]);
+		fzn += rhon * def_charge * (E_dyn[2ul*def_N+(ulong)n] + uxn*B_dyn[    def_N+(ulong)n] - uyn*B_dyn[                 n]);
 
 		// Clear B_dyn with static B for recomputation
 		B_dyn[                 n] = B[                 n];
 		B_dyn[    def_N+(ulong)n] = B[    def_N+(ulong)n];
 		B_dyn[2ul*def_N+(ulong)n] = B[2ul*def_N+(ulong)n];
+		E_dyn[                 n] = E[                 n];
+		E_dyn[    def_N+(ulong)n] = E[    def_N+(ulong)n];
+		E_dyn[2ul*def_N+(ulong)n] = E[2ul*def_N+(ulong)n];
 	}
-	#endif// ELECTRO_HYDRO
+	#endif// MAGNETO_HYDRO
 
 	#ifdef VOLUME_FORCE
 		const float rho2 = 0.5f/rhon; // apply external volume force (Guo forcing, Krueger p.233f)
@@ -897,7 +911,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
     float feq[def_velocity_set]; // f_equilibrium
     calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
-	#ifdef ELECTRO_HYDRO
+	#ifdef MAGNETO_HYDRO
 		//calculate_E(n, q, E);
 	#endif // ELECTRIC FORCE
 } // initialize()
@@ -932,17 +946,47 @@ kernel void update_fields(const global fpxx* fi, global float* rho, global float
 
 }
 
-#ifdef ELECTRO_HYDRO
-__kernel void update_b_dynamic(const global float* B, global float* B_dyn, const global float* u, const global uchar* flags) {
+#ifdef MAGNETO_HYDRO
+__kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* rho, const global float* u, const global uchar* flags) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_b_dynamic() on halo
+    if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
     const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
     const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
     if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
 
-	uint3 coords = coordinates(n);
-	for (uint x = int_max(coords.x - def_ind_r, 0); x < int_min(coords.x + def_ind_r, def_Nx); x++) {
+	const uint3 coord_n = coordinates(n); // Cell coordinate
+	const float charge = rho[n] * def_charge; // Cell charge
+	const float3 v = {u[n], u[(ulong)n+def_N], u[(ulong)n+def_N*2ul]}; // Cell velocity
 
+	const uint x_upper = int_min(coord_n.x + def_ind_r + 1, def_Nx);
+	const uint y_upper = int_min(coord_n.y + def_ind_r + 1, def_Ny);
+	const uint z_upper = int_min(coord_n.z + def_ind_r + 1, def_Nz);
+	
+
+	for (uint x = int_max(coord_n.x - def_ind_r, 0); x < x_upper; x++) {
+		for (uint y = int_max(coord_n.y - def_ind_r, 0); y < y_upper; y++) {
+			for (uint z = int_max(coord_n.z - def_ind_r, 0); z < z_upper; z++) {
+
+				// _c vars are the surronding cells 
+				const uint n_c = x + (y + z * def_Ny) * def_Nz;
+				if (n != n_c) {
+					const uint3 coord_c = coordinates(n_c);
+					const float3 vec_r =  convert_float3((coord_n - coord_c)) / cbmagnitude(coord_n - coord_c);
+
+					const float3 e_c = def_ke * charge * vec_r;
+					E_dyn[n					] += e_c.x;
+					E_dyn[(ulong)n+def_N	] += e_c.y;
+					E_dyn[(ulong)n+def_N*2ul] += e_c.z;
+
+					const float3 b_c = def_kmu * charge * cross(v, vec_r);
+					B_dyn[n					] += b_c.x;
+					B_dyn[(ulong)n+def_N	] += b_c.y;
+					B_dyn[(ulong)n+def_N*2ul] += b_c.z;
+
+					// Use the Biot-Savart law
+				}
+			}
+		}
 	}
 
 }

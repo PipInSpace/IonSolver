@@ -117,7 +117,7 @@ pub struct LbmConfig {
     pub ext_equilibrium_boudaries: bool, //Extensions
     pub ext_volume_force: bool,
     pub ext_force_field: bool,   // Needs volume_force to work
-    pub ext_electro_hydro: bool, // Needs volume_force to work
+    pub ext_magneto_hydro: bool, // Needs volume_force to work
 
     pub induction_range: u8, // Range of the cells induction (Keep this small)
 
@@ -145,7 +145,7 @@ impl LbmConfig {
 
             ext_equilibrium_boudaries: false,
             ext_volume_force: false,
-            ext_electro_hydro: false,
+            ext_magneto_hydro: false,
             ext_force_field: false,
 
             induction_range: 5, // Range of the cells induction (Keep this small)
@@ -271,7 +271,7 @@ impl Lbm {
         //communicate_fi
         self.finish_queues();
 
-        if self.config.ext_electro_hydro {
+        if self.config.ext_magneto_hydro {
             for d in 0..self.get_domain_numbers() {
                 self.domains[d].enqueue_update_b_dyn().unwrap();
             }
@@ -339,7 +339,7 @@ pub struct LbmDomain {
     kernel_stream_collide: Kernel,
     kernel_update_fields: Kernel,
 
-    kernel_update_b_dyn: Option<Kernel>, // Optional Kernels
+    kernel_update_e_b_dyn: Option<Kernel>, // Optional Kernels
 
     pub n_x: u32, // Domain size
     pub n_y: u32,
@@ -354,7 +354,8 @@ pub struct LbmDomain {
     pub u: Buffer<f32>,
     pub flags: Buffer<u8>,
     pub e: Option<Buffer<f32>>, // Optional Buffers
-    pub b: Option<Buffer<f32>>, // Optional Buffers
+    pub b: Option<Buffer<f32>>,
+    pub e_dyn: Option<Buffer<f32>>,
     pub b_dyn: Option<Buffer<f32>>,
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
@@ -477,18 +478,23 @@ impl LbmDomain {
             None
         };
         // Electric field buffer as 3D Vectors
-        let e: Option<Buffer<f32>> = if lbm_config.ext_electro_hydro {
+        let e: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
+            Some(opencl::create_buffer(&queue, [n * 3], 0f32))
+        } else {
+            None
+        };
+        let e_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
             Some(opencl::create_buffer(&queue, [n * 3], 0f32))
         } else {
             None
         };
         // Magnetic field buffers as 3D Vectors
-        let b: Option<Buffer<f32>> = if lbm_config.ext_electro_hydro {
+        let b: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
             Some(opencl::create_buffer(&queue, [n * 3], 0f32))
         } else {
             None
         };
-        let b_dyn: Option<Buffer<f32>> = if lbm_config.ext_electro_hydro {
+        let b_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
             Some(opencl::create_buffer(&queue, [n * 3], 0f32))
         } else {
             None
@@ -554,12 +560,18 @@ impl LbmDomain {
                 .arg_named("F", f.as_ref().expect("f buffer used but not initialized"));
         }
 
-        let mut kernel_update_b_dyn: Option<Kernel> = None;
+        let mut kernel_update_e_b_dyn: Option<Kernel> = None;
 
-        if lbm_config.ext_electro_hydro {
+        if lbm_config.ext_magneto_hydro {
             kernel_stream_collide_builder
                 .arg_named("E", e.as_ref().expect("e buffer used but not initialized"))
                 .arg_named("B", b.as_ref().expect("b buffer used but not initialized"))
+                .arg_named(
+                    "E_dyn",
+                    e_dyn
+                        .as_ref()
+                        .expect("e_dyn buffer used but not initialized"),
+                )
                 .arg_named(
                     "B_dyn",
                     b_dyn
@@ -568,19 +580,23 @@ impl LbmDomain {
                 );
 
             // Dynamic B kernel
-            kernel_update_b_dyn = Some(
+            kernel_update_e_b_dyn = Some(
                 Kernel::builder()
                     .program(&program)
-                    .name("update_b_dynamic")
+                    .name("update_e_b_dynamic")
                     .queue(queue.clone())
                     .global_work_size([n])
-                    .arg_named("B", b.as_ref().expect("b buffer used but not initialized"))
+                    .arg_named(
+                        "E_dyn",
+                        e_dyn.as_ref().expect("e_dyn buffer used but not initialized"),
+                    )
                     .arg_named(
                         "B_dyn",
                         b_dyn
                             .as_ref()
                             .expect("b_dyn buffer used but not initialized"),
                     )
+                    .arg_named("rho", &rho)
                     .arg_named("u", &u)
                     .arg_named("flags", &flags)
                     .build()
@@ -609,7 +625,7 @@ impl LbmDomain {
             kernel_stream_collide,
             kernel_update_fields,
 
-            kernel_update_b_dyn,
+            kernel_update_e_b_dyn,
 
             n_x,
             n_y,
@@ -625,6 +641,7 @@ impl LbmDomain {
             flags,
             e,
             b,
+            e_dyn,
             b_dyn,
             f,
             t,
@@ -743,8 +760,9 @@ impl LbmDomain {
         }
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
-        + &if lbm_config.ext_electro_hydro {"\n	        #define ELECTRO_HYDRO".to_owned()
+        + &if lbm_config.ext_magneto_hydro {"\n	        #define MAGNETO_HYDRO".to_owned()
         +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
+        +"\n	#define def_kmu "+ &format!("{:.5}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
         +"\n	#define def_charge "+ &format!("{:.5}f", 0.005) // charge held per density unit
         +"\n	#define def_ind_r "+ &lbm_config.induction_range.to_string()
         } else {"".to_string()}
@@ -787,7 +805,7 @@ impl LbmDomain {
 
     fn enqueue_update_b_dyn(&self) -> ocl::Result<()> {
         unsafe {
-            self.kernel_update_b_dyn
+            self.kernel_update_e_b_dyn
                 .as_ref()
                 .expect("kernel should be initialized")
                 .cmd()

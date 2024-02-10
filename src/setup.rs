@@ -27,9 +27,10 @@ pub fn setup() -> Lbm {
     lbm_config.velocity_set = VelocitySet::D3Q19;
     // Extensions
     lbm_config.ext_volume_force = true;
-    lbm_config.ext_electro_hydro = true;
+    lbm_config.ext_magneto_hydro = true;
+    lbm_config.induction_range = 2;
     // Graphics
-    lbm_config.graphics_config.graphics_active = true;
+    lbm_config.graphics_config.graphics_active = false;
     //lbm_config.graphics_config.background_color = 0x1c1b22;
     lbm_config.graphics_config.camera_width = 1920;
     lbm_config.graphics_config.camera_height = 1080;
@@ -100,7 +101,7 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
             s: vals.units_s,
         },
         ext_volume_force: electro_hydro,
-        ext_electro_hydro: electro_hydro,
+        ext_magneto_hydro: electro_hydro,
         ..lbm_config
     };
     lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.225);
@@ -133,7 +134,7 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.velocity_set = VelocitySet::D3Q19;
     // Extensions
     lbm_config.ext_volume_force = true;
-    lbm_config.ext_electro_hydro = true;
+    lbm_config.ext_magneto_hydro = true;
     // Graphics
     lbm_config.graphics_config.graphics_active = true;
     lbm_config.graphics_config.background_color = 0x1c1b22;
