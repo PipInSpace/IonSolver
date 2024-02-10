@@ -181,7 +181,8 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                 }
 
                 lbm.do_time_step();
-                thread::sleep(Duration::from_millis(1000));
+                lbm.domains[0].dump_cell(4000000, &lbm.config);
+                //thread::sleep(Duration::from_millis(1000));
                 t_p_s = (loop_time.elapsed().as_micros() / step_count_time) as u32;
                 //Calculate simulation speed
                 if step_c % 200 == 0 {

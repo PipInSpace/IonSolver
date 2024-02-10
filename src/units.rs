@@ -1,6 +1,10 @@
 #![allow(unused)]
 
-/// Unit conversion factors (Lattice unit * factor = si unit eg. lengthLU * m = length in meters)
+/// Unit conversion factors
+/// 
+/// Lattice unit * factor = SI unit eg. lengthLU * m = length in meters
+/// 
+/// SI unit / factor = Lattice unit eg. 1 meter / m = x lenghtLU
 #[derive(Clone, Copy, Default)]
 #[allow(non_snake_case)]
 pub struct Units {
@@ -58,6 +62,21 @@ impl Units {
 
     pub fn force_to_si(&self, f: f32) -> f32 {
         f * (self.kg * self.m / (self.s * self.s))
+    }
+
+    pub fn charge_to_si(&self, cl: f32) -> f32 {
+        // Unit: A/s, A fac is 1
+        cl / self.s
+    }
+
+    pub fn mag_flux_to_si(&self, b: f32) -> f32 {
+        // b unit is Tesla (T) = V * s / m^2 = ((kg * m^2 / (s^3 * A)) * s) / m^2 = kg / s^2
+        b * self.kg / sq(self.s)
+    }
+
+    pub fn e_field_to_si(&self, e: f32) -> f32 {
+        // E unit: V/m = (kg * m^2 / (s^3 * A)) / m = (m * kg) / s^3
+        e * ((self.m * self.kg) / cb(self.s))
     }
 
     // to lattice units from si units (need to be called after .set();)
@@ -119,6 +138,7 @@ impl Units {
         println!("Units:\n    1 meter = {} lenght LU\n    1 kg = {} dens LU\n    1 second = {} time steps", 1.0/self.m, 1.0/self.kg, 1.0/self.s);
         println!("    epsilon_0 in LU is: {}", self.si_to_epsilon_0());
         println!("    mu_0 in LU is: {}", self.si_to_mu_0());
+        println!("    ke in LU is: {}", self.si_to_ke());
     }
 }
 

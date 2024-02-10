@@ -830,7 +830,7 @@ impl LbmDomain {
     }
 
     #[allow(unused)]
-    pub fn dump_cell(&self, c: usize) {
+    pub fn dump_cell(&self, c: usize, cfg: &LbmConfig) {
         let n = self.n_x * self.n_y * self.n_z;
 
         let c_x = c;
@@ -873,20 +873,41 @@ impl LbmDomain {
             }
             None => {}
         }
+
+        let rho_si = cfg.units.mass_to_si(rho[c]);
+        let u_x_si = cfg.units.speed_to_si(u[c_x]);
+        let u_y_si = cfg.units.speed_to_si(u[c_y]);
+        let u_z_si = cfg.units.speed_to_si(u[c_z]);
+        let b_x_si = cfg.units.mag_flux_to_si(b[c_x]);
+        let b_y_si = cfg.units.mag_flux_to_si(b[c_y]);
+        let b_z_si = cfg.units.mag_flux_to_si(b[c_z]);
+        let b_dyn_x_si = cfg.units.mag_flux_to_si(b_dyn[c_x]);
+        let b_dyn_y_si = cfg.units.mag_flux_to_si(b_dyn[c_y]);
+        let b_dyn_z_si = cfg.units.mag_flux_to_si(b_dyn[c_z]);
+        let e_x_si = cfg.units.e_field_to_si(e[c_x]);
+        let e_y_si = cfg.units.e_field_to_si(e[c_y]);
+        let e_z_si = cfg.units.e_field_to_si(e[c_z]);
+        let e_dyn_x_si = cfg.units.e_field_to_si(e_dyn[c_x]);
+        let e_dyn_y_si = cfg.units.e_field_to_si(e_dyn[c_y]);
+        let e_dyn_z_si = cfg.units.e_field_to_si(e_dyn[c_z]);
+        let charge = cfg.units.charge_to_si(rho[c] * 0.0000000005);
+
         println!("Dumping cell {}:
     x: {}, y: {}, z: {}
-    rho:   {}
-    u:     {}x, {}y {}z
-    flags: {}
-    e:     {}x, {}y {}z
-    b:     {}x, {}y {}z
-    e_dyn: {}x, {}y {}z
-    b_dyn: {}x, {}y {}z", 
-    c, x, y, z, rho[c], u[c_x], u[c_y], u[c_z], flags[c],
-    e[c_x], e[c_y], e[c_z],
-    b[c_x], b[c_y], b[c_z],
-    e_dyn[c_x], e_dyn[c_y], e_dyn[c_z],
-    b_dyn[c_x], b_dyn[c_y], b_dyn[c_z])
+    rho:    {} / {} kg
+    u:      {}x, {}y {}z / {}x, {}y {}z m/s
+    flags:  {}
+    e:      {}x, {}y {}z / {}x, {}y {}z V/m
+    b:      {}x, {}y {}z / {}x, {}y {}z T
+    e_dyn:  {}x, {}y {}z / {}x, {}y {}z V/m
+    b_dyn:  {}x, {}y {}z / {}x, {}y {}z T
+    charge: {} / {} A/s", 
+    c, x, y, z, rho[c], rho_si, u[c_x], u[c_y], u[c_z], u_x_si, u_y_si, u_z_si, flags[c],
+    e[c_x], e[c_y], e[c_z], e_x_si, e_y_si, e_z_si,
+    b[c_x], b[c_y], b[c_z], b_x_si, b_y_si, b_z_si,
+    e_dyn[c_x], e_dyn[c_y], e_dyn[c_z], e_dyn_x_si, e_dyn_y_si, e_dyn_z_si,
+    b_dyn[c_x], b_dyn[c_y], b_dyn[c_z], b_dyn_x_si, b_dyn_y_si, b_dyn_z_si,
+    rho[c] * 0.0000000005, charge)
     }
 
     /// Get total simulation size.

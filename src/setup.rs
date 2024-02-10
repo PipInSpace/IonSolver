@@ -16,7 +16,7 @@ pub fn setup() -> Lbm {
     //let now = Instant::now();
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.print();
-    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 1.2250);
+    lbm_config.units.set(128.0, 10.0, 1.0, 1.0, 1.0, 1.2250);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
@@ -28,7 +28,7 @@ pub fn setup() -> Lbm {
     // Extensions
     lbm_config.ext_volume_force = true;
     lbm_config.ext_magneto_hydro = true;
-    lbm_config.induction_range = 5;
+    lbm_config.induction_range = 1;
     // Graphics
     lbm_config.graphics_config.graphics_active = true;
     //lbm_config.graphics_config.background_color = 0x1c1b22;
@@ -68,8 +68,8 @@ pub fn setup() -> Lbm {
     //vec_m.push((1056833, [1.0, 0.0, 0.0]));
     //vec_m.push((1056840, [1.0, 0.0, 0.0]));
     for i in 0..243 {
-        vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000.0]));
-        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000.0]));
+        vec_m.push((i * 68, [0.0, 0.0, 10000000000000000000000.0]));
+        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 10000000000000000000000.0]));
     }
     precompute::precompute_B(&lbm, vec_m);
 
