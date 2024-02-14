@@ -830,6 +830,9 @@ impl LbmDomain {
     }
 
     #[allow(unused)]
+    /// Debug function. Prints out all cell information in Lattice and SI units.
+    /// 
+    /// This is really slow.
     pub fn dump_cell(&self, c: usize, cfg: &LbmConfig) {
         let n = self.n_x * self.n_y * self.n_z;
 
