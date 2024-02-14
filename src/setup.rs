@@ -16,7 +16,7 @@ pub fn setup() -> Lbm {
     //let now = Instant::now();
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.print();
-    lbm_config.units.set(128.0, 10.0, 1.0, 1.0, 1.0, 1.2250);
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 10.0, 1.2250);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
@@ -24,11 +24,13 @@ pub fn setup() -> Lbm {
     lbm_config.d_x = 1;
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
+    lbm_config.charge_per_dens = 180000.0;
+    println!("    cpd in LU is: {}", lbm_config.units.si_to_charge_per_dens(180000.0));
     lbm_config.velocity_set = VelocitySet::D3Q19;
     // Extensions
     lbm_config.ext_volume_force = true;
     lbm_config.ext_magneto_hydro = true;
-    lbm_config.induction_range = 1;
+    lbm_config.induction_range = 0;
     // Graphics
     lbm_config.graphics_config.graphics_active = true;
     //lbm_config.graphics_config.background_color = 0x1c1b22;
@@ -37,6 +39,7 @@ pub fn setup() -> Lbm {
     lbm_config.graphics_config.streamline_every = 8;
     lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
     lbm_config.graphics_config.streamline_mode = true;
+    lbm_config.graphics_config.u_max = 0.1;
     lbm_config.graphics_config.axies_mode = true;
     lbm_config.graphics_config.q_mode = true;
     lbm_config.graphics_config.flags_surface_mode = true;
@@ -68,12 +71,12 @@ pub fn setup() -> Lbm {
     //vec_m.push((1056833, [1.0, 0.0, 0.0]));
     //vec_m.push((1056840, [1.0, 0.0, 0.0]));
     for i in 0..243 {
-        vec_m.push((i * 68, [0.0, 0.0, 10000000000000000000000.0]));
-        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 10000000000000000000000.0]));
+        vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000000.0]));
+        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000000.0]));
     }
     precompute::precompute_B(&lbm, vec_m);
 
-    lbm.setup_velocity_field((0.1, 0.01, 0.0), 1.0);
+    lbm.setup_velocity_field((0.01, 0.001, 0.0), 1.0);
 
     lbm
 }

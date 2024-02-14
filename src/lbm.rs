@@ -121,6 +121,8 @@ pub struct LbmConfig {
 
     /// Cell range of each cells induction (Keep this small)
     pub induction_range: u8,
+    /// Charge per density (unit: (A/s)/(kg/m^3))
+    pub charge_per_dens: f32,
 
     pub graphics_config: GraphicsConfig,
 }
@@ -150,6 +152,7 @@ impl LbmConfig {
             ext_force_field: false,
 
             induction_range: 5, // Range of the cells induction (Keep this small)
+            charge_per_dens: 0.0,
 
             graphics_config: graphics::GraphicsConfig::new(),
         }
@@ -733,9 +736,9 @@ impl LbmDomain {
         +"\n	#define def_Ay "+ &(n_z * n_x).to_string()+"u"
         +"\n	#define def_Az "+ &(n_x * n_y).to_string()+"u"
 
-        +"\n	#define def_domain_offset_x "+ &format!("{:.5}", (o_x as f32+(d_x>1) as i32 as f32 - 0.5*(d_x as f32 - 1.0) * (n_x - 2u32 * (d_x>1u32) as i32 as u32) as f32))+"f"
-        +"\n	#define def_domain_offset_y "+ &format!("{:.5}", (o_y as f32+(d_y>1) as i32 as f32 - 0.5*(d_y as f32 - 1.0) * (n_y - 2u32 * (d_y>1u32) as i32 as u32) as f32))+"f"
-        +"\n	#define def_domain_offset_z "+ &format!("{:.5}", (o_z as f32+(d_z>1) as i32 as f32 - 0.5*(d_z as f32 - 1.0) * (n_z - 2u32 * (d_z>1u32) as i32 as u32) as f32))+"f"
+        +"\n	#define def_domain_offset_x "+ &format!("{:?}", (o_x as f32+(d_x>1) as i32 as f32 - 0.5*(d_x as f32 - 1.0) * (n_x - 2u32 * (d_x>1u32) as i32 as u32) as f32))+"f"
+        +"\n	#define def_domain_offset_y "+ &format!("{:?}", (o_y as f32+(d_y>1) as i32 as f32 - 0.5*(d_y as f32 - 1.0) * (n_y - 2u32 * (d_y>1u32) as i32 as u32) as f32))+"f"
+        +"\n	#define def_domain_offset_z "+ &format!("{:?}", (o_z as f32+(d_z>1) as i32 as f32 - 0.5*(d_z as f32 - 1.0) * (n_z - 2u32 * (d_z>1u32) as i32 as u32) as f32))+"f"
 
         +"\n	#define D"+ &dimensions.to_string()+"Q"+ &velocity_set.to_string()+"" // D2Q9/D3Q15/D3Q19/D3Q27
         +"\n	#define def_velocity_set "+ &velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
@@ -743,7 +746,7 @@ impl LbmDomain {
         +"\n	#define def_transfers "+ &transfers.to_string()+"u" // number of DDFs that are transferred between multiple domains
 
         +"\n	#define def_c 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
-        +"\n	#define def_w " + &format!("{:.5}", 1.0f32/(3.0f32*nu+0.5f32))+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+        +"\n	#define def_w " + &format!("{:?}", 1.0f32/(3.0f32*nu+0.5f32))+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
         + match lbm_config.velocity_set {
             VelocitySet::D2Q9 => &d2q9,
             VelocitySet::D3Q15 => &d3q15,
@@ -777,9 +780,9 @@ impl LbmDomain {
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
         + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
         + &if lbm_config.ext_magneto_hydro {"\n	        #define MAGNETO_HYDRO".to_owned()
-        +"\n	#define def_ke "+ &format!("{:.5}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
-        +"\n	#define def_kmu "+ &format!("{}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
-        +"\n	#define def_charge "+ &format!("{}f", 0.0000000005) // charge held per density unit
+        +"\n	#define def_ke "+ &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
+        +"\n	#define def_kmu "+ &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
+        +"\n	#define def_charge "+ &format!("{:?}f", lbm_config.units.si_to_charge_per_dens(lbm_config.charge_per_dens)) // charge held per density unit
         +"\n	#define def_ind_r "+ &lbm_config.induction_range.to_string()
         } else {"".to_string()}
         + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
