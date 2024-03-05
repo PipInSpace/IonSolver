@@ -138,18 +138,33 @@ int int_min(int x, int y) {
 // draw_circle(...)   : draw 3D circle
 // draw_line(...)     : draw 3D line
 // draw_triangle(...) : draw 3D triangle
-// iron_color(...)    : convert float in [0,255] to iron spectrum int color
+// iron_colormap(...)    : convert float in [0, 1] to iron colormap int color
 // graphics_clear()   : kernel to reset bitmap and zbuffer
 #ifdef GRAPHICS
 int color_average(const int c1, const int c2) { // (c1+c2)/s
 	const uchar4 cc1=as_uchar4(c1), cc2=as_uchar4(c2);
 	return as_int((uchar4)((uchar)((cc1.x+cc2.x)/2u), (uchar)((cc1.y+cc2.y)/2u), (uchar)((cc1.z+cc2.z)/2u), (uchar)0u));
 }
+int color_mix(const int c1, const int c2, const float w) { // w*c1+(1-w)*c2
+	const uchar4 cc1=as_uchar4(c1), cc2=as_uchar4(c2);
+	const float3 fc1=(float3)((float)cc1.x, (float)cc1.y, (float)cc1.z), fc2=(float3)((float)cc2.x, (float)cc2.y, (float)cc2.z);
+	const float3 fcm = fma(w, fc1, fma(1.0f-w, fc2, (float3)(0.5f, 0.5f, 0.5f)));
+	return as_int((uchar4)((uchar)fcm.x, (uchar)fcm.y, (uchar)fcm.z, (uchar)0u));
+}
 int color_mix_3(const int c0, const int c1, const int c2, const float w0, const float w1, const float w2) { // w1*c1+w2*c2+w3*c3, w0+w1+w2 = 1
 	const uchar4 cc0=as_uchar4(c0), cc1=as_uchar4(c1), cc2=as_uchar4(c2);
 	const float3 fc0=(float3)((float)cc0.x, (float)cc0.y, (float)cc0.z),  fc1=(float3)((float)cc1.x, (float)cc1.y, (float)cc1.z), fc2=(float3)((float)cc2.x, (float)cc2.y, (float)cc2.z);
 	const float3 fcm = fma(w0, fc0, fma(w1, fc1, fma(w2, fc2, (float3)(0.5f, 0.5f, 0.5f))));
 	return as_int((uchar4)((uchar)fcm.x, (uchar)fcm.y, (uchar)fcm.z, (uchar)0u));
+}
+int color_multiply(const int c, const float x) { // c*x
+	const int r = min((int)fma((float)((c>>16)&255), x, 0.5f), 255);
+	const int g = min((int)fma((float)((c>> 8)&255), x, 0.5f), 255);
+	const int b = min((int)fma((float)( c     &255), x, 0.5f), 255);
+	return r<<16|g<<8|b;
+}
+int color_from_floats(const float red, const float green, const float blue) {
+	return clamp((int)fma(255.0f, red, 0.5f), 0, 255)<<16|clamp((int)fma(255.0f, green, 0.5f), 0, 255)<<8|clamp((int)fma(255.0f, blue, 0.5f), 0, 255);
 }
 int shading(const int c, const float3 p, const float3 normal, const float* camera_cache) {
     const float zoom = camera_cache[ 0]; // fetch camera parameters (rotation matrix, camera position, etc.)
@@ -159,9 +174,7 @@ int shading(const int c, const float3 p, const float3 normal, const float* camer
 	const float3 d = p-Rz*(dis/zoom)-pos; // distance vector between p and camera position
     const float nl2 = sq(normal.x)+sq(normal.y)+sq(normal.z); // only one native_sqrt instead of two
     const float dl2 = sq(d.x)+sq(d.y)+sq(d.z);
-	const float br = max(1.5f*fabs(dot(normal, d))*rsqrt(nl2*dl2), 0.3f);
-	const float cr=(float)((c>>16)&255), cg=(float)((c>>8)&255), cb=(float)(c&255);
-    return min((int)(br*cr), 255)<<16|min((int)(br*cg), 255)<<8|min((int)(br*cb), 255);
+	return color_multiply(c, max(1.5f*fabs(dot(normal, d))*rsqrt(nl2*dl2), 0.3f));
 }
 bool is_off_screen(const int x, const int y, const int stereo) {
 	switch(stereo) {
@@ -1006,48 +1019,56 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 
 // Graphics code
 #ifdef GRAPHICS
-int iron_color(float x) { // coloring scheme (float 0-255 -> int color)
-	x = clamp(360.0f-x*360.0f/255.0f, 0.0f, 360.0f);
-	float r=255.0f, g=0.0f, b=0.0f;
-	if(x<60.0f) { // white - yellow
-		g = 255.0f;
-		b = 255.0f-255.0f*x/60.0f;
-	} else if(x<180.0f) { // yellow - red
-		g = 255.0f-255.0f*(x-60.0f)/120.0f;
-	} else if(x<270.0f) { // red - violet
-		r = 255.0f-255.0f*(x-180.0f)/180.0f;
-		b = 255.0f*(x-180.0f)/90.0f;
+int iron_colormap(float x) { // coloring scheme (float [0, 1]-> int color)
+	x = clamp(4.0f*(1.0f-x), 0.0f, 4.0f);
+	float r=1.0f, g=0.0f, b=0.0f;
+	if(x<0.66666667f) { // white - yellow
+		g = 1.0f;
+		b = 1.0f-x*1.5f;
+	} else if(x<2.0f) { // yellow - red
+		g = 1.5f-x*0.75f;
+	} else if(x<3.0f) { // red - violet
+		r = 2.0f-x*0.5f;
+		b = x-2.0f;
 	} else { // violet - black
-		r = 255.0f-255.0f*(x-180.0f)/180.0f;
-		b = 255.0f-255.0f*(x-270.0f)/90.0f;
+		r = 2.0f-x*0.5f;
+		b = 4.0f-x;
 	}
-	return (((int)r)<<16)|(((int)g)<<8)|((int)b);
+	return color_from_floats(r, g, b);
 }
-int rainbow_color(float x) { // coloring scheme (float 0-255 -> int color)
-	x = clamp(360.0f-x*360.0f/255.0f, 0.0f, 360.0f);
+int rainbow_colormap(float x) { // coloring scheme (float [0, 1]-> int color)
+	x = clamp(6.0f*(1.0f-x), 0.0f, 6.0f);
 	float r=0.0f, g=0.0f, b=0.0f; // black
-	if(x<60.0f) { // red - yellow
-		r = 255.0f;
-		g = 255.0f*x/60.0f;
-	} else if(x>=60.0f&&x<120.0f) { // yellow - green
-		r = 255.0f-255.0f*(x-60.0f)/60.0f;
-		g = 255.0f;
-	} else if(x>=120.0f&&x<180.0f) { // green - cyan
-		g = 255.0f;
-		b = 255.0f*(x-120.0f)/60.0f;
-	} else if(x>=180.0f&&x<240.0f) { // cyan - blue
-		g = 255.0f-255.0f*(x-180.0f)/60.0f;
-		b = 255.0f;
-	} else if(x>=240.0f&&x<300.0f) { // blue - violet
-		r = (255.0f*(x-240.0f)/60.0f)/2.0f;
-		b = 255.0f;
+	if(x<1.2f) { // red - yellow
+		r = 1.0f;
+		g = x*0.83333333f;
+	} else if(x>=1.2f&&x<2.0f) { // yellow - green
+		r = 2.5f-x*1.25f;
+		g = 1.0f;
+	} else if(x>=2.0f&&x<3.0f) { // green - cyan
+		g = 1.0f;
+		b = x-2.0f;
+	} else if(x>=3.0f&&x<4.0f) { // cyan - blue
+		g = 4.0f-x;
+		b = 1.0f;
+	} else if(x>=4.0f&&x<5.0f) { // blue - violet
+		r = x*0.4f-1.6f;
+		b = 3.0f-x*0.5f;
 	} else { // violet - black
-		r = (255.0f-255.0f*(x-300.0f)/60.0f)/2.0f;
-		b = 255.0f-255.0f*(x-300.0f)/60.0f;
+		r = 2.4f-x*0.4f;
+		b = 3.0f-x*0.5f;
 	}
-	return (((int)r)<<16)|(((int)g)<<8)|((int)b);
+	return color_from_floats(r, g, b);
 }
-kernel void graphics_flags(const global uchar* flags, const global float* camera, global int* bitmap, global int* zbuffer) {
+int coolwarm_colormap(float x) { // coloring scheme (float [0, 1]-> int color)
+	return x>0.5f ? color_mix(0xB40426, 0xF2F2F2, clamp(2.0f*x-1.0f, 0.0f, 1.0f)) : color_mix(0xF2F2F2, 0x3B4CC0, clamp(2.0f*x, 0.0f, 1.0f)); // Bent cool warm colormap
+}
+/// Flags as a grid
+kernel void graphics_flags(const global uchar* flags, const global float* camera, global int* bitmap, global int* zbuffer
+#ifdef FORCE_FIELD
+, const global float* F
+#endif // FORCE_FIELD
+) {
     const uint n = get_global_id(0);
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute graphics_flags() on halo
     const uchar flagsn = flags[n]; // cache flags
@@ -1101,9 +1122,23 @@ kernel void graphics_flags(const global uchar* flags, const global float* camera
     if(!(not_xp||not_zm)) draw_line(p3, p6, c, camera_cache, bitmap, zbuffer);
     if(!(not_xm||not_yp)) draw_line(p4, p7, c, camera_cache, bitmap, zbuffer);
     if(!(not_xp||not_ym)) draw_line(p5, p6, c, camera_cache, bitmap, zbuffer);
+	#ifdef FORCE_FIELD
+	if(flagsn_bo==TYPE_S) {
+		const float3 Fn = def_scale_F*(float3)(F[n], F[def_N+(ulong)n], F[2ul*def_N+(ulong)n]);
+		const float Fnl = length(Fn);
+		if(Fnl>0.0f) {
+			const int c = iron_colormap(Fnl); // color boundaries depending on the force on them
+			draw_line(p, p+Fn, c, camera_cache, bitmap, zbuffer); // draw colored force vectors
+		}
+	}
+	#endif
 }
-
-kernel void graphics_flags_mc(const global uchar* flags, const global float* camera, global int* bitmap, global int* zbuffer) {
+/// Flags as marching cubes mesh
+kernel void graphics_flags_mc(const global uchar* flags, const global float* camera, global int* bitmap, global int* zbuffer
+#ifdef FORCE_FIELD
+, const global float* F
+#endif // FORCE_FIELD
+) {
     const uint n = get_global_id(0);
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute graphics_flags() on halo
     const uint3 xyz = coordinates(n);
@@ -1133,17 +1168,40 @@ kernel void graphics_flags_mc(const global uchar* flags, const global float* cam
     float3 triangles[15]; // maximum of 5 triangles with 3 vertices each
     const uint tn = marching_cubes(v, 0.5f, triangles); // run marching cubes algorithm
     if(tn==0u) return;
+
+	#ifdef FORCE_FIELD
+		float3 Fj[8];
+		for(uint i=0u; i<8u; i++) Fj[i] = v[i]==1.0f ? (float3)(F[j[i]], F[def_N+(ulong)j[i]], F[2ul*def_N+(ulong)j[i]]) : (float3)(0.0f, 0.0f, 0.0f);
+	#endif // FORCE_FIELD
+
     for(uint i=0u; i<tn; i++) { // TODO: make compatible with FORCE_FIELD
 	    const float3 p0 = triangles[3u*i   ];
 	    const float3 p1 = triangles[3u*i+1u];
 	    const float3 p2 = triangles[3u*i+2u];
 	    const float3 normal = normalize(cross(p1-p0, p2-p0));
-
-        const int c = shading(0xDFDFDF, p+(p0+p1+p2)/3.0f, normal, camera_cache); // 0xDFDFDF;
-		draw_triangle(p+p0, p+p1, p+p2, c, camera_cache, bitmap, zbuffer);
+		
+		#ifdef FORCE_FIELD
+			int c0, c1, c2; {
+				const float x1=p0.x, y1=p0.y, z1=p0.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
+				const float3 Fi = (x0*y0*z0)*Fj[0]+(x1*y0*z0)*Fj[1]+(x1*y0*z1)*Fj[2]+(x0*y0*z1)*Fj[3]+(x0*y1*z0)*Fj[4]+(x1*y1*z0)*Fj[5]+(x1*y1*z1)*Fj[6]+(x0*y1*z1)*Fj[7]; // perform trilinear interpolation
+				c0 = shading(rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal)), p0+offset, normal, camera_cache); // rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal));
+			} {
+				const float x1=p1.x, y1=p1.y, z1=p1.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
+				const float3 Fi = (x0*y0*z0)*Fj[0]+(x1*y0*z0)*Fj[1]+(x1*y0*z1)*Fj[2]+(x0*y0*z1)*Fj[3]+(x0*y1*z0)*Fj[4]+(x1*y1*z0)*Fj[5]+(x1*y1*z1)*Fj[6]+(x0*y1*z1)*Fj[7]; // perform trilinear interpolation
+				c1 = shading(rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal)), p1+offset, normal, camera_cache); // rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal));
+			} {
+				const float x1=p2.x, y1=p2.y, z1=p2.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
+				const float3 Fi = (x0*y0*z0)*Fj[0]+(x1*y0*z0)*Fj[1]+(x1*y0*z1)*Fj[2]+(x0*y0*z1)*Fj[3]+(x0*y1*z0)*Fj[4]+(x1*y1*z0)*Fj[5]+(x1*y1*z1)*Fj[6]+(x0*y1*z1)*Fj[7]; // perform trilinear interpolation
+				c2 = shading(rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal)), p2+offset, normal, camera_cache); // rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal));
+			}
+			draw_triangle_interpolated(p0+offset, p1+offset, p2+offset, c0, c1, c2, camera_cache, bitmap, zbuffer); // draw triangle with interpolated colors
+		#else // FORCE_FIELD
+			const int c = shading(0xDFDFDF, p+(p0+p1+p2)/3.0f, normal, camera_cache); // 0xDFDFDF;
+			draw_triangle(p+p0, p+p1, p+p2, c, camera_cache, bitmap, zbuffer);
+		#endif // FORCE_FIELD
     }
 }
-
+/// Vector field as individual lines
 kernel void graphics_field(const global uchar* flags, const global float* u, const global float* camera, global int* bitmap, global int* zbuffer, const int slice_mode, const int slice_x, const int slice_y, const int slice_z) {
 	const uint n = get_global_id(0);
 	if(n>=(uint)def_N||is_halo(n)) return; // don't execute graphics_field() on halo
@@ -1160,11 +1218,11 @@ kernel void graphics_field(const global uchar* flags, const global float* u, con
     float3 un = load_u(n, u); // cache velocity
     const float ul = length(un);
     if(def_scale_u*ul<0.1f) return; // don't draw lattice points where the velocity is lower than this threshold
-    const int c = iron_color(255.0f*def_scale_u*ul); // coloring by velocity
+    const int c = iron_colormap(def_scale_u*ul); // coloring by velocity
     draw_line(p-(0.5f/ul)*un, p+(0.5f/ul)*un, c, camera_cache, bitmap, zbuffer);
 
 }
-
+/// Vector field as streamlines
 kernel void graphics_streamline(const global uchar* flags, const global float* u, const global float* camera, global int* bitmap, global int* zbuffer, const int slice_mode, const int slice_x, const int slice_y, const int slice_z) {
     const uint n = get_global_id(0);
 	const float3 slice = position((uint3)(slice_x, slice_y, slice_z));
@@ -1205,7 +1263,7 @@ kernel void graphics_streamline(const global uchar* flags, const global float* u
     		p0 = p1;
     		p1 += (dt/ul)*un; // integrate forward in time
     		if(def_scale_u*ul<0.1f||p1.x<-hLx||p1.x>hLx||p1.y<-hLy||p1.y>hLy||p1.z<-hLz||p1.z>hLz) break;
-            const int c = iron_color(255.0f*def_scale_u*ul);
+            const int c = iron_colormap(def_scale_u*ul);
             draw_line(p0, p1, c, camera_cache, bitmap, zbuffer);
         }
     }
@@ -1223,7 +1281,7 @@ kernel void graphics_q_field(const global uchar* flags, const global float* u, c
     const float ul = length(un);
     const float Q = calculate_Q(n, u);
     if(Q<def_scale_Q_min||ul==0.0f) return; // don't draw lattice points where the velocity is very low
-    const int c = rainbow_color(255.0f*def_scale_u*ul); // coloring by velocity
+    const int c = rainbow_colormap(def_scale_u*ul); // coloring by velocity
     draw_line(p-(0.5f/ul)*un, p+(0.5f/ul)*un, c, camera_cache, bitmap, zbuffer);
 }
 
@@ -1305,21 +1363,21 @@ kernel void graphics_q(const global uchar* flags, const global float* u, const g
 		int c0, c1, c2; {
 			const float x1=p0.x, y1=p0.y, z1=p0.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c0 = shading(rainbow_color(255.0f*def_scale_u*length(ui)), p+p0, normal, camera_cache); // rainbow_color(255.0f*def_scale_u*length(ui));
+			c0 = shading(rainbow_colormap(def_scale_u*length(ui)), p+p0, normal, camera_cache); // rainbow_colormap(def_scale_u*length(ui));
 		} {
 			const float x1=p1.x, y1=p1.y, z1=p1.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c1 = shading(rainbow_color(255.0f*def_scale_u*length(ui)), p+p1, normal, camera_cache); // rainbow_color(255.0f*def_scale_u*length(ui));
+			c1 = shading(rainbow_colormap(def_scale_u*length(ui)), p+p1, normal, camera_cache); // rainbow_colormap(def_scale_u*length(ui));
 		} {
 			const float x1=p2.x, y1=p2.y, z1=p2.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c2 = shading(rainbow_color(255.0f*def_scale_u*length(ui)), p+p2, normal, camera_cache); // rainbow_color(255.0f*def_scale_u*length(ui));
+			c2 = shading(rainbow_colormap(def_scale_u*length(ui)), p+p2, normal, camera_cache); // rainbow_colormap(def_scale_u*length(ui));
 		}
 		draw_triangle_interpolated(p+p0, p+p1, p+p2, c0, c1, c2, camera_cache, bitmap, zbuffer); // draw triangle with interpolated colors
 	}
 }
 
-kernel void graphics_axies(const global float* camera, global int* bitmap, global int* zbuffer) {
+kernel void graphics_axes(const global float* camera, global int* bitmap, global int* zbuffer) {
 	const int c_r = 0xFF0000;
 	const int c_g = 0x00FF00;
 	const int c_b = 0x0000FF;

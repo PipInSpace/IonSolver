@@ -38,10 +38,12 @@ pub fn setup() -> Lbm {
     lbm_config.graphics_config.camera_height = 1080;
     lbm_config.graphics_config.streamline_every = 8;
     lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
-    lbm_config.graphics_config.streamline_mode = true;
-    lbm_config.graphics_config.u_max = 0.1;
-    lbm_config.graphics_config.axies_mode = true;
-    lbm_config.graphics_config.q_mode = true;
+    //lbm_config.graphics_config.streamline_mode = true;
+    lbm_config.graphics_config.u_max = 0.032;
+    lbm_config.graphics_config.q_min = 0.00001;
+    lbm_config.graphics_config.axes_mode = true;
+    //lbm_config.graphics_config.q_mode = true;
+    lbm_config.graphics_config.q_field_mode = true;
     lbm_config.graphics_config.flags_surface_mode = true;
     lbm_config.graphics_config.flags_mode = true;
 
@@ -146,7 +148,7 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.graphics_config.streamline_every = 8;
     lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
     lbm_config.graphics_config.streamline_mode = true;
-    lbm_config.graphics_config.axies_mode = true;
+    lbm_config.graphics_config.axes_mode = true;
     lbm_config.graphics_config.q_mode = true;
     lbm_config.graphics_config.flags_surface_mode = true;
     lbm_config.graphics_config.flags_mode = true;

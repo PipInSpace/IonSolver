@@ -7,6 +7,7 @@ use crate::*;
 
 #[allow(unused)]
 #[derive(Clone, Copy)]
+/// The vector field used in visualizations like field and streamline
 pub enum VecVisMode {
     U,
     E,
@@ -15,27 +16,86 @@ pub enum VecVisMode {
     BDyn,
 }
 
-// Each LbmDomain renders its own frame. Frames are stitched back together in the Lbm drawFrame function.
+#[derive(Clone, Copy)]
+/// Bundles arguments for graphics initialization
+pub struct GraphicsConfig {
+    pub graphics_active: bool, // Activate graphics engine
+    pub background_color: u32,
+    pub camera_width: u32,
+    pub camera_height: u32,
+    pub u_max: f32,
+    pub q_min: f32,
+    pub f_max: f32,
+    pub streamline_every: u32,
+    pub stream_line_lenght: u32,
+    /// The vector field used in visualizations like field and streamline
+    pub vec_vis_mode: VecVisMode,
+
+    /// Visualize a vector field as streamlines
+    pub streamline_mode: bool, // Active graphics modes
+    /// Visualize a vector field as individual vector lines
+    pub field_mode: bool,
+    /// Visualize vorticity
+    pub q_mode: bool,
+    pub q_field_mode: bool,
+    /// Visualize simulation flags as wireframe
+    pub flags_mode: bool,
+    /// Visualize simulation flags with marching cubes surface reconstruction
+    pub flags_surface_mode: bool,
+    /// Visualize coordinate system axes
+    pub axes_mode: bool,
+}
+
+impl GraphicsConfig {
+    pub fn new() -> GraphicsConfig {
+        GraphicsConfig {
+            graphics_active: true,
+            background_color: 0x000000,
+            camera_width: 1920,
+            camera_height: 1080,
+            u_max: 0.25,
+            q_min: 0.0001,
+            f_max: 0.002,
+            streamline_every: 4,
+            stream_line_lenght: 128,
+            vec_vis_mode: VecVisMode::U,
+
+            streamline_mode: false,
+            field_mode: false,
+            q_mode: false,
+            q_field_mode: false,
+            flags_mode: false,
+            flags_surface_mode: false,
+            axes_mode: false,
+        }
+    }
+}
+
+/// LbmDomain Graphics struct used to render itself to a color and z buffer.
+/// 
+/// Each LbmDomain renders its own frame. Different domain frames are stitched back together in the Lbm draw_frame function.
 pub struct Graphics {
     kernel_clear: Kernel,
     bitmap: Buffer<i32>,
     zbuffer: Buffer<i32>,
     pub camera_params: Buffer<f32>,
 
-    kernel_graphics_axies: Kernel,
+    kernel_graphics_axes: Kernel,
     kernel_graphics_flags: Kernel,
     kernel_graphics_flags_mc: Kernel,
     kernel_graphics_field: Kernel,
     kernel_graphics_streamline: Kernel,
     kernel_graphics_q: Kernel,
+    kernel_graphics_q_field: Kernel,
 
     pub streamline_mode: bool,    // Draw streamline mode
     pub field_mode: bool,         // Draw field
     pub vec_vis_mode: VecVisMode, // What Vector to visualize
     pub q_mode: bool,             // Draw q (vorticity)
+    pub q_field_mode: bool,
     pub flags_mode: bool,         // Draw flags
     pub flags_surface_mode: bool, // Draw flags (surface)
-    pub axies_mode: bool,         // Draw helper axies
+    pub axes_mode: bool,         // Draw helper axes
 }
 
 impl Graphics {
@@ -65,9 +125,9 @@ impl Graphics {
             .unwrap();
 
         //Basic graphics kernels:
-        let kernel_graphics_axies = Kernel::builder()
+        let kernel_graphics_axes = Kernel::builder()
             .program(program)
-            .name("graphics_axies")
+            .name("graphics_axes")
             .queue(queue.clone())
             .global_work_size(1)
             .arg_named("camera_params", &camera_params)
@@ -166,6 +226,18 @@ impl Graphics {
             .arg_named("zbuffer", &zbuffer)
             .build()
             .unwrap();
+        let kernel_graphics_q_field = Kernel::builder()
+            .program(program)
+            .name("graphics_q_field")
+            .queue(queue.clone())
+            .global_work_size([n]) //TODO: this is incorrect, need own dimension size
+            .arg_named("flags", flags)
+            .arg_named("u", u)
+            .arg_named("camera_params", &camera_params)
+            .arg_named("bitmap", &bitmap)
+            .arg_named("zbuffer", &zbuffer)
+            .build()
+            .unwrap();
 
         Graphics {
             kernel_clear,
@@ -173,190 +245,21 @@ impl Graphics {
             zbuffer,
             camera_params,
 
-            kernel_graphics_axies,
+            kernel_graphics_axes,
             kernel_graphics_flags,
             kernel_graphics_flags_mc,
             kernel_graphics_field,
             kernel_graphics_streamline,
             kernel_graphics_q,
+            kernel_graphics_q_field,
             vec_vis_mode: lbm_config.graphics_config.vec_vis_mode,
             streamline_mode: lbm_config.graphics_config.streamline_mode,
             field_mode: lbm_config.graphics_config.field_mode,
             q_mode: lbm_config.graphics_config.q_mode,
+            q_field_mode: lbm_config.graphics_config.q_field_mode,
             flags_mode: lbm_config.graphics_config.flags_mode,
             flags_surface_mode: lbm_config.graphics_config.flags_surface_mode,
-            axies_mode: lbm_config.graphics_config.axies_mode,
-        }
-    }
-}
-
-impl LbmDomain {
-    fn enqueue_draw_frame(&self) {
-        let graphics = self
-            .graphics
-            .as_ref()
-            .expect("Graphics used but not initialized");
-        // Kernel enqueueing is unsafe
-        unsafe {
-            graphics.kernel_clear.enq().unwrap();
-            if graphics.axies_mode {
-                graphics.kernel_graphics_axies.enq().unwrap();
-            }
-            if graphics.streamline_mode {
-                // Streamlines can show velocity, E and B field
-                match graphics.vec_vis_mode {
-                    VecVisMode::U => {
-                        graphics
-                            .kernel_graphics_streamline
-                            .set_arg("u", &self.u)
-                            .unwrap();
-                    }
-                    VecVisMode::E => {
-                        graphics
-                            .kernel_graphics_streamline
-                            .set_arg(
-                                "u",
-                                self.e.as_ref().expect("E buffer used but not initialized"),
-                            )
-                            .unwrap();
-                    }
-                    VecVisMode::B => {
-                        graphics
-                            .kernel_graphics_streamline
-                            .set_arg(
-                                "u",
-                                self.b.as_ref().expect("B buffer used but not initialized"),
-                            )
-                            .unwrap();
-                    }
-                    VecVisMode::EDyn => {
-                        graphics
-                            .kernel_graphics_streamline
-                            .set_arg(
-                                "u",
-                                self.e_dyn.as_ref().expect("E buffer used but not initialized"),
-                            )
-                            .unwrap();
-                    }
-                    VecVisMode::BDyn => {
-                        graphics
-                            .kernel_graphics_streamline
-                            .set_arg(
-                                "u",
-                                self.b_dyn.as_ref().expect("B buffer used but not initialized"),
-                            )
-                            .unwrap();
-                    }
-                }
-                graphics.kernel_graphics_streamline.enq().unwrap();
-            }
-            if graphics.field_mode {
-                match graphics.vec_vis_mode {
-                    VecVisMode::U => {
-                        graphics
-                            .kernel_graphics_field
-                            .set_arg("u", &self.u)
-                            .unwrap();
-                    }
-                    VecVisMode::E => {
-                        graphics
-                            .kernel_graphics_field
-                            .set_arg(
-                                "u",
-                                self.e.as_ref().expect("E_dyn buffer used but not initialized"),
-                            )
-                            .unwrap();
-                    }
-                    VecVisMode::B => {
-                        graphics
-                            .kernel_graphics_field
-                            .set_arg(
-                                "u",
-                                self.b.as_ref().expect("B_dyn buffer used but not initialized"),
-                            )
-                            .unwrap();
-                    }
-                    VecVisMode::EDyn => {
-                        graphics
-                            .kernel_graphics_field
-                            .set_arg(
-                                "u",
-                                self.e_dyn.as_ref().expect("E_dyn buffer used but not initialized"),
-                            )
-                            .unwrap();
-                    }
-                    VecVisMode::BDyn => {
-                        graphics
-                            .kernel_graphics_field
-                            .set_arg(
-                                "u",
-                                self.b_dyn.as_ref().expect("B_dyn buffer used but not initialized"),
-                            )
-                            .unwrap();
-                    }
-                }
-                graphics.kernel_graphics_field.enq().unwrap();
-            }
-            if graphics.q_mode {
-                graphics.kernel_graphics_q.enq().unwrap();
-            }
-            if graphics.flags_mode {
-                graphics.kernel_graphics_flags.enq().unwrap();
-            }
-            if graphics.flags_surface_mode {
-                graphics.kernel_graphics_flags_mc.enq().unwrap();
-            }
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct Camera {
-    pub width: u32,
-    pub height: u32,
-}
-
-#[derive(Clone, Copy)]
-pub struct GraphicsConfig {
-    pub graphics_active: bool, // Activate graphics engine
-    pub background_color: u32,
-    pub camera_width: u32,
-    pub camera_height: u32,
-    pub u_max: f32,
-    pub q_min: f32,
-    pub f_max: f32,
-    pub streamline_every: u32,
-    pub stream_line_lenght: u32,
-    pub vec_vis_mode: VecVisMode,
-
-    pub streamline_mode: bool, // Active graphics modes
-    pub field_mode: bool,
-    pub q_mode: bool,
-    pub flags_mode: bool,
-    pub flags_surface_mode: bool,
-    pub axies_mode: bool,
-}
-
-impl GraphicsConfig {
-    pub fn new() -> GraphicsConfig {
-        GraphicsConfig {
-            graphics_active: true,
-            background_color: 0x000000,
-            camera_width: 1920,
-            camera_height: 1080,
-            u_max: 0.25,
-            q_min: 0.0001,
-            f_max: 0.002,
-            streamline_every: 4,
-            stream_line_lenght: 128,
-            vec_vis_mode: VecVisMode::U,
-
-            streamline_mode: false,
-            field_mode: false,
-            q_mode: false,
-            flags_mode: false,
-            flags_surface_mode: false,
-            axies_mode: false,
+            axes_mode: lbm_config.graphics_config.axes_mode,
         }
     }
 }
@@ -478,7 +381,64 @@ impl Lbm {
     }
 }
 
+// enqueue_draw_frame function for LbmDomain
+impl LbmDomain {
+    fn enqueue_draw_frame(&self) {
+        let graphics = self
+            .graphics
+            .as_ref()
+            .expect("Graphics used but not initialized");
+        // Kernel enqueueing is unsafe
+        unsafe {
+            graphics.kernel_clear.enq().unwrap();
+            if graphics.axes_mode {
+                graphics.kernel_graphics_axes.enq().unwrap();
+            }
+            if graphics.streamline_mode {
+                // Streamlines can show velocity, dynamic and static E and B field
+                graphics.kernel_graphics_streamline.set_arg("u", match graphics.vec_vis_mode {
+                    VecVisMode::U => &self.u,
+                    VecVisMode::E => self.e.as_ref().expect("E buffer used but not initialized"),
+                    VecVisMode::B => self.b.as_ref().expect("B buffer used but not initialized"),
+                    VecVisMode::EDyn => self.e_dyn.as_ref().expect("E_dyn buffer used but not initialized"),
+                    VecVisMode::BDyn => self.b_dyn.as_ref().expect("B_dyn buffer used but not initialized"),
+                }).unwrap();
+                graphics.kernel_graphics_streamline.enq().unwrap();
+            }
+            if graphics.field_mode {
+                graphics.kernel_graphics_field.set_arg("u", match graphics.vec_vis_mode {
+                    VecVisMode::U => &self.u,
+                    VecVisMode::E => self.e.as_ref().expect("E buffer used but not initialized"),
+                    VecVisMode::B => self.b.as_ref().expect("B buffer used but not initialized"),
+                    VecVisMode::EDyn => self.e_dyn.as_ref().expect("E_dyn buffer used but not initialized"),
+                    VecVisMode::BDyn => self.b_dyn.as_ref().expect("B_dyn buffer used but not initialized"),
+                }).unwrap();
+                graphics.kernel_graphics_field.enq().unwrap();
+            }
+            if graphics.q_mode {
+                graphics.kernel_graphics_q.enq().unwrap();
+            }
+            if graphics.q_field_mode {
+                graphics.kernel_graphics_q_field.enq().unwrap();
+            }
+            if graphics.flags_mode {
+                graphics.kernel_graphics_flags.enq().unwrap();
+            }
+            if graphics.flags_surface_mode {
+                graphics.kernel_graphics_flags_mc.enq().unwrap();
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Camera {
+    pub width: u32,
+    pub height: u32,
+}
+
 #[rustfmt::skip]
+/// Returns a string of OpenCL C `#define`s from the provided arguments that are appended to the base OpenCl code at runtime.
 pub fn get_graphics_defines(graphics_config: GraphicsConfig) -> String {
     "\n	#define GRAPHICS".to_owned()
     +"\n	#define def_background_color "  + &graphics_config.background_color.to_string()
