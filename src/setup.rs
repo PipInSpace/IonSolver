@@ -131,7 +131,7 @@ fn setup_domain_test() -> Lbm {
     lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 10.0, 1.2250);
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
-    lbm_config.n_z = 256;
+    lbm_config.n_z = 128;
     lbm_config.d_z = 2; // Two domains on z-axis (128 cells long each)
 
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
@@ -147,7 +147,7 @@ fn setup_domain_test() -> Lbm {
 
     let mut lbm = Lbm::new(lbm_config.clone());
 
-    let velocity: Vec<f32> = vec![0.001; (lbm_config.n_x * lbm_config.n_y * (lbm_config.n_z / lbm_config.d_z)) as usize * 3];
+    let velocity: Vec<f32> = vec![0.01; (lbm_config.n_x * lbm_config.n_y * (lbm_config.n_z / lbm_config.d_z)) as usize * 3];
     lbm.domains[0].u.write(&velocity).enq().unwrap();
 
     lbm

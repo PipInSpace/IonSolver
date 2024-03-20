@@ -474,10 +474,12 @@ bool is_in_camera_frustrum(const float3 p, const float* camera_cache) { // retur
 float3 position(const uint3 xyz) { // 3D coordinates to 3D position
 	return (float3)((float)xyz.x+0.5f-0.5f*(float)def_Nx, (float)xyz.y+0.5f-0.5f*(float)def_Ny, (float)xyz.z+0.5f-0.5f*(float)def_Nz);
 }
-
 uint3 coordinates(const uint n) { // disassemble 1D index to 3D coordinates (n -> x,y,z)
 	const uint t = n%(def_Nx*def_Ny);
 	return (uint3)(t%def_Nx, t/def_Nx, n/(def_Nx*def_Ny)); // n = x+(y+z*Ny)*Nx
+}
+uint index(const uint3 xyz) { // assemble 1D index from 3D coordinates (x,y,z -> n)
+	return xyz.x+(xyz.y+xyz.z*def_Ny)*def_Nx; // n = x+(y+z*Ny)*Nx
 }
 bool is_halo(const uint n) {
 	const uint3 xyz = coordinates(n);
