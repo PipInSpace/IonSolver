@@ -1,3 +1,5 @@
+use std::cmp;
+
 use crate::*;
 use crate::{graphics::GraphicsConfig, units::Units};
 use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
@@ -21,6 +23,26 @@ pub enum VelocitySet {
     D3Q19,
     /// 3D highest precision
     D3Q27,
+}
+
+impl VelocitySet {
+    fn get_transfers(&self) -> usize {
+        match self {
+            VelocitySet::D2Q9 => 3_usize,
+            VelocitySet::D3Q15 => 5_usize,
+            VelocitySet::D3Q19 => 5_usize,
+            VelocitySet::D3Q27 => 9_usize,
+        }
+    }
+    fn get_set_values(&self) -> (u8, u8, u8) {
+        match self {
+            //Set dimensions/velocitys/transfers from Enum
+            VelocitySet::D2Q9 => (2, 9, 3),
+            VelocitySet::D3Q15 => (3, 15, 5),
+            VelocitySet::D3Q19 => (3, 19, 5),
+            VelocitySet::D3Q27 => (3, 27, 9),
+        }
+    }
 }
 
 /// LBM relaxation time type.
@@ -60,6 +82,16 @@ pub enum FloatType {
     FP32,
 }
 
+impl FloatType {
+    fn size_of(&self) -> usize {
+        match self {
+            FloatType::FP16S => 2_usize,
+            FloatType::FP16C => 2_usize,
+            FloatType::FP32 => 4_usize,
+        }
+    }
+}
+
 /// Enum representing a buffer of variable [`FloatType`]
 ///
 /// [`FloatType`]: crate::lbm::FloatType
@@ -67,6 +99,13 @@ pub enum FloatType {
 pub enum VariableFloatBuffer {
     U16(Buffer<u16>), // Buffers for variable float types
     F32(Buffer<f32>),
+}
+
+/// Enum to identify a field transfered between domain boundaries
+#[derive(Clone, Copy)]
+enum TransferField {
+    Fi,
+    RhoUFlags,
 }
 
 /// Struct used to bundle arguments for LBM simulation setup.
@@ -183,11 +222,6 @@ impl Lbm {
     /// Returns new `Lbm` struct from pre-configured `LbmConfig` struct. `LbmDomain` setup is handled automatically.
     /// Configures Domains
     pub fn new(mut lbm_config: LbmConfig) -> Lbm {
-        // TODO: Multi-domain support:
-        if lbm_config.d_x * lbm_config.d_y * lbm_config.d_z > 1 {
-            panic!("Attempted to start with more than one domain. Multi-domain support is not yet implemented!");
-        }
-
         let n_d_x: u32 = (lbm_config.n_x / lbm_config.d_x) * lbm_config.d_x;
         let n_d_y: u32 = (lbm_config.n_y / lbm_config.d_y) * lbm_config.d_y;
         let n_d_z: u32 = (lbm_config.n_z / lbm_config.d_z) * lbm_config.d_z;
@@ -267,25 +301,20 @@ impl Lbm {
 
     /// Executes one LBM time step.
     /// Executes `kernel_stream_collide` Kernels for every `LbmDomain` and updates domain transfer buffers.
+    /// Updates the dynamic E and B fields. 
     pub fn do_time_step(&mut self) {
         // call kernel stream_collide to perform one LBM time step
-        for d in 0..self.get_domain_numbers() {
-            self.domains[d].enqueue_stream_collide().unwrap();
+        self.stream_collide();
+        if self.config.graphics_config.graphics_active {
+            self.communicate_rho_u_flags();
         }
-        //communicate_fi
-        self.finish_queues();
-
+        self.communicate_fi();
+        
         if self.config.ext_magneto_hydro && self.config.induction_range != 0 {
-            for d in 0..self.get_domain_numbers() {
-                self.domains[d].enqueue_update_e_b_dyn().unwrap();
-            }
-            self.finish_queues();
+            self.update_e_b_dynamic();
         }
 
-        //for d in 0..self.get_domain_numbers() {
-        //    self.domains[d].enqueue_update_fields().unwrap();
-        //}
-        //self.finish_queues();
+        self.finish_queues();
         self.increment_timestep(1);
     }
 
@@ -296,15 +325,83 @@ impl Lbm {
         }
     }
 
+    /// Execute stream_collide kernel on all domains
+    fn stream_collide(&self) {
+        for d in 0..self.get_domain_numbers() {
+            self.domains[d].enqueue_stream_collide().unwrap();
+        }
+    }
+
+    /// Execute E and B dynamic update kernel on all domains
+    fn update_e_b_dynamic(&self) {
+        for d in 0..self.get_domain_numbers() {
+            self.domains[d].enqueue_update_e_b_dyn().unwrap();
+        }
+    }
+
+    // Domain communication
+    /// Communicate a field across domain barriers
+    #[rustfmt::skip]
+    fn communicate_field(&mut self, field: TransferField, bytes_per_cell: usize) {
+        let d_x = self.config.d_x as usize;
+        let d_y = self.config.d_y as usize;
+        let d_z = self.config.d_z as usize;
+        let d_n = self.get_domain_numbers();
+
+        if d_x > 1 { // Communicate x-axis
+            for d in 0..d_n {self.domains[d].enqueue_transfer_extract_field(field, 0, bytes_per_cell).unwrap();} // Extract into transfer buffers
+            self.finish_queues(); // Synchronize domains
+            for d in 0..d_n { // Swap transfer buffers at domain boundaries
+                let (x, y, z) = ((d % (d_x * d_y)) % d_x, (d % (d_x * d_y)) / d_x, d / (d_x * d_y)); // Domain x, y and z coord
+                let dxp = ((x + 1) % d_x) + (y + z * d_y) * d_x; // domain index of domain at x+1
+                unsafe {std::ptr::swap(&mut self.domains[d].transfer_p_host as *mut _, &mut self.domains[dxp].transfer_m_host as *mut _);} // Swap transfer buffers without copying them
+            }
+            for d in 0..d_n {self.domains[d].enqueue_transfer_insert_field(field, 0, bytes_per_cell).unwrap();} // Insert from transfer buffers
+        }
+        if d_y > 1 { // Communicate y-axis
+            for d in 0..d_n {self.domains[d].enqueue_transfer_extract_field(field, 1, bytes_per_cell).unwrap();} // Extract into transfer buffers
+            self.finish_queues(); // Synchronize domains
+            for d in 0..d_n { // Swap transfer buffers at domain boundaries
+                let (x, y, z) = ((d % (d_x * d_y)) % d_x, (d % (d_x * d_y)) / d_x, d / (d_x * d_y)); // Domain x, y and z coord
+                let dyp = x + (((y + 1) % d_y) + z * d_y) * d_x; // domain index of domain at y+1
+                unsafe {std::ptr::swap(&mut self.domains[d].transfer_p_host as *mut _, &mut self.domains[dyp].transfer_m_host as *mut _);} // Swap transfer buffers without copying them
+            }
+            for d in 0..d_n {self.domains[d].enqueue_transfer_insert_field(field, 1, bytes_per_cell).unwrap();} // Insert from transfer buffers
+        }
+        if d_z > 1 { // Communicate z-axis
+            for d in 0..d_n {self.domains[d].enqueue_transfer_extract_field(field, 2, bytes_per_cell).unwrap();} // Extract into transfer buffers
+            self.finish_queues(); // Synchronize domains
+            for d in 0..d_n { // Swap transfer buffers at domain boundaries
+                let (x, y, z) = ((d % (d_x * d_y)) % d_x, (d % (d_x * d_y)) / d_x, d / (d_x * d_y)); // Domain x, y and z coord
+                let dzp = x + (y + ((z + 1) % d_z) * d_y) * d_x; // domain index of domain at z+1
+                unsafe {std::ptr::swap(&mut self.domains[d].transfer_p_host as *mut _, &mut self.domains[dzp].transfer_m_host as *mut _);} // Swap transfer buffers without copying them
+            }
+            for d in 0..d_n {self.domains[d].enqueue_transfer_insert_field(field, 2, bytes_per_cell).unwrap();} // Insert from transfer buffers
+        }
+    }
+
+    /// Communicate Fi across domain boundaries
+    fn communicate_fi(&mut self) {
+        let bytes_per_cell =
+            self.config.float_type.size_of() * self.config.velocity_set.get_transfers();
+        self.communicate_field(TransferField::Fi, bytes_per_cell);
+    }
+    /// Communicate rho, u and flags across domain boundaries (needed for graphics)
+    fn communicate_rho_u_flags(&mut self) {
+        self.communicate_field(TransferField::RhoUFlags, 17);
+    }
+
+    // Helper functions
+
     /// Increments time steps variable for every `LbmDomain`
-    pub fn increment_timestep(&mut self, steps: u32) {
+    fn increment_timestep(&mut self, steps: u32) {
         for d in 0..self.domains.len() {
             self.domains[d].t += steps as u64;
         }
     }
 
     /// Resets tims steps variable for every `LbmDomain`
-    pub fn reset_timestep(&mut self) {
+    fn reset_timestep(&mut self) {
         for d in 0..self.domains.len() {
             self.domains[d].t = 0;
         }
@@ -342,6 +439,7 @@ pub struct LbmDomain {
     kernel_initialize: Kernel, // Basic Kernels
     kernel_stream_collide: Kernel,
     kernel_update_fields: Kernel,
+    transfer_kernels: [[Kernel; 2]; 2],
 
     kernel_update_e_b_dyn: Option<Kernel>, // Optional Kernels
 
@@ -357,6 +455,12 @@ pub struct LbmDomain {
     pub rho: Buffer<f32>,
     pub u: Buffer<f32>,
     pub flags: Buffer<u8>,
+
+    pub transfer_p: Buffer<u8>, // Transfer buffers positive/negative
+    pub transfer_m: Buffer<u8>, // Size is maximum of (17 bytes (rho, u and flags) or bytes needed for fi)
+    pub transfer_p_host: Vec<u8>,
+    pub transfer_m_host: Vec<u8>,
+
     pub e: Option<Buffer<f32>>, // Optional Buffers
     pub b: Option<Buffer<f32>>,
     pub e_dyn: Option<Buffer<f32>>,
@@ -386,33 +490,7 @@ impl LbmDomain {
         let o_y = (y * n_y / d_y) as i32 - (lbm_config.d_y > 1u32) as i32;
         let o_z = (z * n_z / d_z) as i32 - (lbm_config.d_z > 1u32) as i32;
 
-        let dimensions;
-        let velocity_set;
-        let transfers;
-
-        match lbm_config.velocity_set {
-            //Set dimensions/velocitys/transfers from Enum
-            VelocitySet::D2Q9 => {
-                dimensions = 2;
-                velocity_set = 9;
-                transfers = 3;
-            }
-            VelocitySet::D3Q15 => {
-                dimensions = 3;
-                velocity_set = 15;
-                transfers = 5;
-            }
-            VelocitySet::D3Q19 => {
-                dimensions = 3;
-                velocity_set = 19;
-                transfers = 5;
-            }
-            VelocitySet::D3Q27 => {
-                dimensions = 3;
-                velocity_set = 27;
-                transfers = 9;
-            }
-        }
+        let (dimensions, velocity_set, transfers) = lbm_config.velocity_set.get_set_values();
 
         let t = 0;
 
@@ -607,7 +685,9 @@ impl LbmDomain {
                     .global_work_size([n])
                     .arg_named(
                         "E_dyn",
-                        e_dyn.as_ref().expect("e_dyn buffer used but not initialized"),
+                        e_dyn
+                            .as_ref()
+                            .expect("e_dyn buffer used but not initialized"),
                     )
                     .arg_named(
                         "B_dyn",
@@ -626,6 +706,114 @@ impl LbmDomain {
         let kernel_initialize: Kernel = kernel_initialize_builder.build().unwrap();
         let kernel_stream_collide: Kernel = kernel_stream_collide_builder.build().unwrap();
         let kernel_update_fields: Kernel = kernel_update_fields_builder.build().unwrap();
+
+        // Multi-Domain-Transfers:
+        // Transfer buffer initializaton:
+        let mut a_max: usize = 0;
+        if lbm_config.d_x > 1 {
+            a_max = cmp::max(a_max, n_y as usize * n_z as usize);
+        } // Ax
+        if lbm_config.d_y > 1 {
+            a_max = cmp::max(a_max, n_x as usize * n_z as usize);
+        } // Ay
+        if lbm_config.d_z > 1 {
+            a_max = cmp::max(a_max, n_x as usize * n_y as usize);
+        } // Az
+        let transfer_buffer_size =
+            a_max * cmp::max(17, transfers as usize * lbm_config.float_type.size_of());
+
+        let transfer_p = opencl::create_buffer(&queue, transfer_buffer_size, 0_u8); // Size is maxiumum 17 bytes or bytes needed for fi
+        let transfer_m = opencl::create_buffer(&queue, transfer_buffer_size, 0_u8); // Size is maxiumum 17 bytes or bytes needed for fi
+        let transfer_p_host: Vec<u8> = vec![0_u8; transfer_buffer_size];
+        let transfer_m_host: Vec<u8> = vec![0_u8; transfer_buffer_size];
+
+        // Transfer kernels
+        let transfer_kernels = [
+            [
+                match &fi {
+                    VariableFloatBuffer::U16(fi_u16) => Kernel::builder()
+                        .program(&program)
+                        .name("transfer_extract_fi")
+                        .queue(queue.clone())
+                        .global_work_size(0)
+                        .arg_named("direction", 0)
+                        .arg_named("time_step", 0)
+                        .arg_named("transfer_buffer_p", &transfer_p)
+                        .arg_named("transfer_buffer_m", &transfer_m)
+                        .arg_named("fi", fi_u16)
+                        .build()
+                        .unwrap(),
+                    VariableFloatBuffer::F32(fi_f32) => Kernel::builder()
+                        .program(&program)
+                        .name("transfer_extract_fi")
+                        .queue(queue.clone())
+                        .global_work_size(0)
+                        .arg_named("direction", 0)
+                        .arg_named("time_step", 0)
+                        .arg_named("transfer_buffer_p", &transfer_p)
+                        .arg_named("transfer_buffer_m", &transfer_m)
+                        .arg_named("fi", fi_f32)
+                        .build()
+                        .unwrap(),
+                }, // Extract Fi
+                match &fi {
+                    VariableFloatBuffer::U16(fi_u16) => Kernel::builder()
+                        .program(&program)
+                        .name("transfer__insert_fi")
+                        .queue(queue.clone())
+                        .global_work_size(0)
+                        .arg_named("direction", 0)
+                        .arg_named("time_step", 0)
+                        .arg_named("transfer_buffer_p", &transfer_p)
+                        .arg_named("transfer_buffer_m", &transfer_m)
+                        .arg_named("fi", fi_u16)
+                        .build()
+                        .unwrap(),
+                    VariableFloatBuffer::F32(fi_f32) => Kernel::builder()
+                        .program(&program)
+                        .name("transfer__insert_fi")
+                        .queue(queue.clone())
+                        .global_work_size(0)
+                        .arg_named("direction", 0)
+                        .arg_named("time_step", 0)
+                        .arg_named("transfer_buffer_p", &transfer_p)
+                        .arg_named("transfer_buffer_m", &transfer_m)
+                        .arg_named("fi", fi_f32)
+                        .build()
+                        .unwrap(),
+                }, // Insert Fi
+            ], // Fi
+            [
+                Kernel::builder()
+                    .program(&program)
+                    .name("transfer_extract_rho_u_flags")
+                    .queue(queue.clone())
+                    .global_work_size(0)
+                    .arg_named("direction", 0)
+                    .arg_named("time_step", 0)
+                    .arg_named("transfer_buffer_p", &transfer_p)
+                    .arg_named("transfer_buffer_m", &transfer_m)
+                    .arg_named("rho", &rho)
+                    .arg_named("u", &u)
+                    .arg_named("flags", &flags)
+                    .build()
+                    .unwrap(), // Extract rho, u, flags
+                Kernel::builder()
+                    .program(&program)
+                    .name("transfer__insert_rho_u_flags")
+                    .queue(queue.clone())
+                    .global_work_size(0)
+                    .arg_named("direction", 0)
+                    .arg_named("time_step", 0)
+                    .arg_named("transfer_buffer_p", &transfer_p)
+                    .arg_named("transfer_buffer_m", &transfer_m)
+                    .arg_named("rho", &rho)
+                    .arg_named("u", &u)
+                    .arg_named("flags", &flags)
+                    .build()
+                    .unwrap(), // Extract rho, u, flags
+            ], // Rho, u and flags (needed for graphics)
+        ];
         println!("    Kernels for domain compiled.");
         //TODO: allocate transfer buffers
 
@@ -643,6 +831,7 @@ impl LbmDomain {
             kernel_initialize,
             kernel_stream_collide,
             kernel_update_fields,
+            transfer_kernels,
 
             kernel_update_e_b_dyn,
 
@@ -658,6 +847,12 @@ impl LbmDomain {
             rho,
             u,
             flags,
+
+            transfer_p,
+            transfer_m,
+            transfer_p_host,
+            transfer_m_host,
+
             e,
             b,
             e_dyn,
@@ -832,9 +1027,74 @@ impl LbmDomain {
         }
     }
 
+    // Transfer fields
+    fn get_area(&self, direction: u32) -> usize {
+        let a = [
+            self.n_y as usize * self.n_z as usize,
+            self.n_x as usize * self.n_z as usize,
+            self.n_x as usize * self.n_y as usize,
+        ];
+        a[direction as usize]
+    }
+    /// Extract field
+    fn enqueue_transfer_extract_field(
+        &mut self,
+        field: TransferField,
+        direction: u32,
+        bytes_per_cell: usize,
+    ) -> ocl::Result<()> {
+        // Enqueue extraction kernel
+        let kernel = &self.transfer_kernels[field as usize][0]; // [0] is the extraction kernel
+        kernel.set_arg("direction", direction)?;
+        kernel.set_arg("time_step", self.t)?;
+        unsafe {
+            kernel
+                .cmd()
+                .global_work_size(self.get_area(direction))
+                .enq()?;
+        }
+        // Read result into host transfer buffers
+        let field_lenght = self.get_area(direction) * bytes_per_cell;
+        self.transfer_p
+            .create_sub_buffer(None, 0, field_lenght)?
+            .read(&mut self.transfer_p_host)
+            .enq()?;
+        self.transfer_m
+            .create_sub_buffer(None, 0, field_lenght)?
+            .read(&mut self.transfer_m_host)
+            .enq()
+    }
+
+    /// Insert field
+    fn enqueue_transfer_insert_field(
+        &mut self,
+        field: TransferField,
+        direction: u32,
+        bytes_per_cell: usize,
+    ) -> ocl::Result<()> {
+        let field_lenght = self.get_area(direction) * bytes_per_cell;
+        self.transfer_p
+            .create_sub_buffer(None, 0, field_lenght)?
+            .write(&self.transfer_p_host)
+            .enq()?;
+        self.transfer_m
+            .create_sub_buffer(None, 0, field_lenght)?
+            .write(&self.transfer_m_host)
+            .enq()?;
+        let kernel = &self.transfer_kernels[field as usize][1]; // [1] is the insertion kernel
+        kernel.set_arg("direction", direction)?;
+        kernel.set_arg("time_step", self.t)?;
+        unsafe {
+            kernel
+                .cmd()
+                .global_work_size(self.get_area(direction))
+                .enq()
+        }
+    }
+
     #[allow(unused)]
     /// Debug function. Prints out all cell information in Lattice and SI units.
-    /// 
+    ///
     /// This is really slow.
     pub fn dump_cell(&self, c: usize, cfg: &LbmConfig) {
         let n = self.n_x * self.n_y * self.n_z;
@@ -898,7 +1158,8 @@ impl LbmDomain {
         let e_dyn_z_si = cfg.units.e_field_to_si(e_dyn[c_z]);
         let charge = cfg.units.charge_to_si(rho[c] * 0.0000000005);
 
-        println!("Dumping cell {}:
+        println!(
+            "Dumping cell {}:
     x: {}, y: {}, z: {}
     rho:    {} / {} kg
     u:      {}x, {}y {}z / {}x, {}y {}z m/s
@@ -907,13 +1168,47 @@ impl LbmDomain {
     b:      {}x, {}y {}z / {}x, {}y {}z T
     e_dyn:  {}x, {}y {}z / {}x, {}y {}z V/m
     b_dyn:  {}x, {}y {}z / {}x, {}y {}z T
-    charge: {} / {} A/s", 
-    c, x, y, z, rho[c], rho_si, u[c_x], u[c_y], u[c_z], u_x_si, u_y_si, u_z_si, flags[c],
-    e[c_x], e[c_y], e[c_z], e_x_si, e_y_si, e_z_si,
-    b[c_x], b[c_y], b[c_z], b_x_si, b_y_si, b_z_si,
-    e_dyn[c_x], e_dyn[c_y], e_dyn[c_z], e_dyn_x_si, e_dyn_y_si, e_dyn_z_si,
-    b_dyn[c_x], b_dyn[c_y], b_dyn[c_z], b_dyn_x_si, b_dyn_y_si, b_dyn_z_si,
-    rho[c] * 0.0000000005, charge)
+    charge: {} / {} A/s",
+            c,
+            x,
+            y,
+            z,
+            rho[c],
+            rho_si,
+            u[c_x],
+            u[c_y],
+            u[c_z],
+            u_x_si,
+            u_y_si,
+            u_z_si,
+            flags[c],
+            e[c_x],
+            e[c_y],
+            e[c_z],
+            e_x_si,
+            e_y_si,
+            e_z_si,
+            b[c_x],
+            b[c_y],
+            b[c_z],
+            b_x_si,
+            b_y_si,
+            b_z_si,
+            e_dyn[c_x],
+            e_dyn[c_y],
+            e_dyn[c_z],
+            e_dyn_x_si,
+            e_dyn_y_si,
+            e_dyn_z_si,
+            b_dyn[c_x],
+            b_dyn[c_y],
+            b_dyn[c_z],
+            b_dyn_x_si,
+            b_dyn_y_si,
+            b_dyn_z_si,
+            rho[c] * 0.0000000005,
+            charge
+        )
     }
 
     /// Get total simulation size.

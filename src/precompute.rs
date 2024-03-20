@@ -299,11 +299,11 @@ fn nabla(f: &[f32], lengths: (u32, u32, u32), x: u32, y: u32, z: u32) -> [f32; 3
     let z_off = (lengths.0 * lengths.1) as usize;
 
     // Gradient vector
-    return [
+    [
         (f[coord + 1] - f[coord - 1]) / 2.0,         // x
         (f[coord + y_off] - f[coord - y_off]) / 2.0, // y
         (f[coord + z_off] - f[coord - z_off]) / 2.0, // z
-    ];
+    ]
 }
 
 #[inline]

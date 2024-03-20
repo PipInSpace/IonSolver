@@ -94,7 +94,7 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
     let vals = parse::decode(&buffer).unwrap();
 
     // Extension is disabled when not needed
-    let electro_hydro = vals.charges.len() > 0 || vals.magnets.len() > 0;
+    let electro_hydro = !vals.charges.is_empty() || !vals.magnets.is_empty();
 
     let mut lbm_config = LbmConfig {
         n_x: vals.n_x,
@@ -112,10 +112,10 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
     lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.225);
 
     let lbm = Lbm::new(lbm_config);
-    if vals.charges.len() > 0 {
+    if !vals.charges.is_empty() {
         precompute::precompute_E(&lbm, vals.charges);
     }
-    if vals.magnets.len() > 0 {
+    if !vals.magnets.is_empty() {
         precompute::precompute_B(&lbm, vals.magnets);
     }
 

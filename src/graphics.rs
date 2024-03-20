@@ -72,7 +72,7 @@ impl GraphicsConfig {
 }
 
 /// LbmDomain Graphics struct used to render itself to a color and z buffer.
-/// 
+///
 /// Each LbmDomain renders its own frame. Different domain frames are stitched back together in the Lbm draw_frame function.
 pub struct Graphics {
     kernel_clear: Kernel,
@@ -95,7 +95,7 @@ pub struct Graphics {
     pub q_field_mode: bool,
     pub flags_mode: bool,         // Draw flags
     pub flags_surface_mode: bool, // Draw flags (surface)
-    pub axes_mode: bool,         // Draw helper axes
+    pub axes_mode: bool,          // Draw helper axes
 }
 
 impl Graphics {
@@ -382,6 +382,7 @@ impl Lbm {
 }
 
 // enqueue_draw_frame function for LbmDomain
+#[rustfmt::skip]
 impl LbmDomain {
     fn enqueue_draw_frame(&self) {
         let graphics = self
