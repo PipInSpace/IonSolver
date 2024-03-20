@@ -126,6 +126,34 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
 
 // Complete setups
 #[allow(unused)]
+fn setup_domain_test() -> Lbm {
+    let mut lbm_config = LbmConfig::new();
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 10.0, 1.2250);
+    lbm_config.n_x = 128;
+    lbm_config.n_y = 128;
+    lbm_config.n_z = 256;
+    lbm_config.d_z = 2; // Two domains on z-axis (128 cells long each)
+
+    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
+    println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
+
+    // Graphics
+    lbm_config.graphics_config.graphics_active = true;
+    lbm_config.graphics_config.streamline_every = 8;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+    lbm_config.graphics_config.streamline_mode = true;
+    lbm_config.graphics_config.u_max = 0.032;
+    lbm_config.graphics_config.axes_mode = true;
+
+    let mut lbm = Lbm::new(lbm_config.clone());
+
+    let velocity: Vec<f32> = vec![0.001; (lbm_config.n_x * lbm_config.n_y * (lbm_config.n_z / lbm_config.d_z)) as usize * 3];
+    lbm.domains[0].u.write(&velocity).enq().unwrap();
+
+    lbm
+}
+
+#[allow(unused)]
 fn setup_bfield_spin() -> Lbm {
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 1.2250);

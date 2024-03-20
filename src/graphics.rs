@@ -19,16 +19,25 @@ pub enum VecVisMode {
 #[derive(Clone, Copy)]
 /// Bundles arguments for graphics initialization
 pub struct GraphicsConfig {
-    pub graphics_active: bool, // Activate graphics engine
+    /// Is the graphics engine active (default: false)
+    pub graphics_active: bool,
+    /// Background color (default: 0x000000 (black))
     pub background_color: u32,
+    /// Camera width (default: 1920)
     pub camera_width: u32,
+    /// Camera height (default: 1080)
     pub camera_height: u32,
+    /// Velocity visualization maximum (default: 0.25)
     pub u_max: f32,
+    /// Vorticity visualization minimum (default: 0.0001)
     pub q_min: f32,
+    /// Force visualization maximum (default: 0.002)
     pub f_max: f32,
+    /// Draw streamlines every (x) cells (default: 4)
     pub streamline_every: u32,
+    /// Length of streamlines (default: 128)
     pub stream_line_lenght: u32,
-    /// The vector field used in visualizations like field and streamline
+    /// The vector field used in visualizations like field and streamline (default: U)
     pub vec_vis_mode: VecVisMode,
 
     /// Visualize a vector field as streamlines
