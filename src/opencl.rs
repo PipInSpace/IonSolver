@@ -63,11 +63,16 @@ pub fn get_devices() -> Vec<Device> {
     Device::list_all(platform).expect("Cannot find devices")
 }
 
+/// Combines the graphics and simulation source files and
+/// removes embedded default defines needed for syntax highlighting 
 pub fn get_opencl_code() -> String {
-    let string: Vec<&str> = include_str!("kernels.cl")
+    let sim_source: Vec<&str> = include_str!("sim_kernels.cl")
         .split("EndTempDefines%")
         .collect();
-    string[1].to_string() // Removes embedded default defines needed for syntax highlighting etc.
+    let graphics_source: Vec<&str> = include_str!("sim_kernels.cl")
+        .split("EndTempDefines%")
+        .collect();
+    sim_source[1].to_string() + graphics_source[1]
 }
 
 pub fn create_buffer<T: ocl::OclPrm, I: Into<ocl::SpatialDims> + Clone>(
