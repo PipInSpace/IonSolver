@@ -314,7 +314,7 @@ impl Lbm {
                     .as_ref()
                     .expect("graphics not enabled")
                     .bitmap
-                    .read(&mut bitmaps[d])
+                    .read(&mut bitmaps[d - 1])
                     .enq()
                     .unwrap();
                 self.domains[d]
@@ -322,7 +322,7 @@ impl Lbm {
                     .as_ref()
                     .expect("graphics not enabled")
                     .zbuffer
-                    .read(&mut zbuffers[d])
+                    .read(&mut zbuffers[d - 1])
                     .enq()
                     .unwrap();
             }

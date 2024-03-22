@@ -735,9 +735,9 @@ impl LbmDomain {
                         .program(&program)
                         .name("transfer_extract_fi")
                         .queue(queue.clone())
-                        .global_work_size(0)
-                        .arg_named("direction", 0)
-                        .arg_named("time_step", 0)
+                        .global_work_size(1)
+                        .arg_named("direction", 0_u32)
+                        .arg_named("time_step", 0_u64)
                         .arg_named("transfer_buffer_p", &transfer_p)
                         .arg_named("transfer_buffer_m", &transfer_m)
                         .arg_named("fi", fi_u16)
@@ -747,9 +747,9 @@ impl LbmDomain {
                         .program(&program)
                         .name("transfer_extract_fi")
                         .queue(queue.clone())
-                        .global_work_size(0)
-                        .arg_named("direction", 0)
-                        .arg_named("time_step", 0)
+                        .global_work_size(1)
+                        .arg_named("direction", 0_u32)
+                        .arg_named("time_step", 0_u64)
                         .arg_named("transfer_buffer_p", &transfer_p)
                         .arg_named("transfer_buffer_m", &transfer_m)
                         .arg_named("fi", fi_f32)
@@ -761,9 +761,9 @@ impl LbmDomain {
                         .program(&program)
                         .name("transfer__insert_fi")
                         .queue(queue.clone())
-                        .global_work_size(0)
-                        .arg_named("direction", 0)
-                        .arg_named("time_step", 0)
+                        .global_work_size(1)
+                        .arg_named("direction", 0_u32)
+                        .arg_named("time_step", 0_u64)
                         .arg_named("transfer_buffer_p", &transfer_p)
                         .arg_named("transfer_buffer_m", &transfer_m)
                         .arg_named("fi", fi_u16)
@@ -773,9 +773,9 @@ impl LbmDomain {
                         .program(&program)
                         .name("transfer__insert_fi")
                         .queue(queue.clone())
-                        .global_work_size(0)
-                        .arg_named("direction", 0)
-                        .arg_named("time_step", 0)
+                        .global_work_size(1)
+                        .arg_named("direction", 0_u32)
+                        .arg_named("time_step", 0_u64)
                         .arg_named("transfer_buffer_p", &transfer_p)
                         .arg_named("transfer_buffer_m", &transfer_m)
                         .arg_named("fi", fi_f32)
@@ -788,9 +788,9 @@ impl LbmDomain {
                     .program(&program)
                     .name("transfer_extract_rho_u_flags")
                     .queue(queue.clone())
-                    .global_work_size(0)
-                    .arg_named("direction", 0)
-                    .arg_named("time_step", 0)
+                    .global_work_size(1)
+                    .arg_named("direction", 0_u32)
+                    .arg_named("time_step", 0_u64)
                     .arg_named("transfer_buffer_p", &transfer_p)
                     .arg_named("transfer_buffer_m", &transfer_m)
                     .arg_named("rho", &rho)
@@ -802,9 +802,9 @@ impl LbmDomain {
                     .program(&program)
                     .name("transfer__insert_rho_u_flags")
                     .queue(queue.clone())
-                    .global_work_size(0)
-                    .arg_named("direction", 0)
-                    .arg_named("time_step", 0)
+                    .global_work_size(1)
+                    .arg_named("direction", 0_u32)
+                    .arg_named("time_step", 0_u64)
                     .arg_named("transfer_buffer_p", &transfer_p)
                     .arg_named("transfer_buffer_m", &transfer_m)
                     .arg_named("rho", &rho)
@@ -1054,13 +1054,14 @@ impl LbmDomain {
                 .enq()?;
         }
         // Read result into host transfer buffers
-        let field_lenght = self.get_area(direction) * bytes_per_cell;
+        let field_length = self.get_area(direction) * bytes_per_cell;
+        println!("Field_length: {}, Len: {}, Dir: {}", field_length, self.transfer_p_host.len(), direction);
         self.transfer_p
-            .create_sub_buffer(None, 0, field_lenght)?
+            //.create_sub_buffer(None, [0], field_length).unwrap()
             .read(&mut self.transfer_p_host)
-            .enq()?;
+            .enq().unwrap();
         self.transfer_m
-            .create_sub_buffer(None, 0, field_lenght)?
+            //.create_sub_buffer(None, [0], field_length)?
             .read(&mut self.transfer_m_host)
             .enq()
     }
@@ -1072,13 +1073,13 @@ impl LbmDomain {
         direction: u32,
         bytes_per_cell: usize,
     ) -> ocl::Result<()> {
-        let field_lenght = self.get_area(direction) * bytes_per_cell;
+        let field_length = self.get_area(direction) * bytes_per_cell;
         self.transfer_p
-            .create_sub_buffer(None, 0, field_lenght)?
+            //.create_sub_buffer(None, [0], field_length)?
             .write(&self.transfer_p_host)
             .enq()?;
         self.transfer_m
-            .create_sub_buffer(None, 0, field_lenght)?
+            //.create_sub_buffer(None, [0], field_length)?
             .write(&self.transfer_m_host)
             .enq()?;
         let kernel = &self.transfer_kernels[field as usize][1]; // [1] is the insertion kernel
