@@ -1093,17 +1093,17 @@ void insert_fi(const uint a, const uint A, const uint n, const uint side, const 
 		fi[index] = transfer_buffer[b*A+a]; // fpxx_copy allows direct copying without decompression+compression
 	}
 }
-kernel void transfer_extract_fi(const uint direction, const ulong t, global fpxx_copy* transfer_buffer_p, global fpxx_copy* transfer_buffer_m, const global fpxx_copy* fi) {
+kernel void transfer_extract_fi(const uint direction, const ulong t, global uchar* transfer_buffer_p, global uchar* transfer_buffer_m, const global fpxx_copy* fi) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	extract_fi(a, A, index_extract_p(a, direction), 2u*direction+0u, t, transfer_buffer_p, fi);
-	extract_fi(a, A, index_extract_m(a, direction), 2u*direction+1u, t, transfer_buffer_m, fi);
+	extract_fi(a, A, index_extract_p(a, direction), 2u*direction+0u, t, (global fpxx_copy*) transfer_buffer_p, fi);
+	extract_fi(a, A, index_extract_m(a, direction), 2u*direction+1u, t, (global fpxx_copy*) transfer_buffer_m, fi);
 }
-kernel void transfer__insert_fi(const uint direction, const ulong t, const global fpxx_copy* transfer_buffer_p, const global fpxx_copy* transfer_buffer_m, global fpxx_copy* fi) {
+kernel void transfer__insert_fi(const uint direction, const ulong t, const global uchar* transfer_buffer_p, const global uchar* transfer_buffer_m, global fpxx_copy* fi) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	insert_fi(a, A, index_insert_p(a, direction), 2u*direction+0u, t, transfer_buffer_p, fi);
-	insert_fi(a, A, index_insert_m(a, direction), 2u*direction+1u, t, transfer_buffer_m, fi);
+	insert_fi(a, A, index_insert_p(a, direction), 2u*direction+0u, t, (global fpxx_copy*) transfer_buffer_p, fi);
+	insert_fi(a, A, index_insert_m(a, direction), 2u*direction+1u, t, (global fpxx_copy*) transfer_buffer_m, fi);
 }
 // Rho, u and flags (needed if graphics are active)
 void extract_rho_u_flags(const uint a, const uint A, const uint n, global char* transfer_buffer, const global float* rho, const global float* u, const global uchar* flags) {
@@ -1120,17 +1120,17 @@ void insert_rho_u_flags(const uint a, const uint A, const uint n, const global c
 	u[2ul*def_N+(ulong)n] = ((const global float*)transfer_buffer)[ 3u*A+a];
 	flags[             n] = ((const global uchar*)transfer_buffer)[16u*A+a];
 }
-kernel void transfer_extract_rho_u_flags(const uint direction, const ulong t, global char* transfer_buffer_p, global char* transfer_buffer_m, const global float* rho, const global float* u, const global uchar* flags) {
+kernel void transfer_extract_rho_u_flags(const uint direction, const ulong t, global uchar* transfer_buffer_p, global uchar* transfer_buffer_m, const global float* rho, const global float* u, const global uchar* flags) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	extract_rho_u_flags(a, A, index_extract_p(a, direction), transfer_buffer_p, rho, u, flags);
-	extract_rho_u_flags(a, A, index_extract_m(a, direction), transfer_buffer_m, rho, u, flags);
+	extract_rho_u_flags(a, A, index_extract_p(a, direction), (global char*) transfer_buffer_p, rho, u, flags);
+	extract_rho_u_flags(a, A, index_extract_m(a, direction), (global char*) transfer_buffer_m, rho, u, flags);
 }
-kernel void transfer__insert_rho_u_flags(const uint direction, const ulong t, const global char* transfer_buffer_p, const global char* transfer_buffer_m, global float* rho, global float* u, global uchar* flags) {
+kernel void transfer__insert_rho_u_flags(const uint direction, const ulong t, const global uchar* transfer_buffer_p, const global uchar* transfer_buffer_m, global float* rho, global float* u, global uchar* flags) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	insert_rho_u_flags(a, A, index_insert_p(a, direction), transfer_buffer_p, rho, u, flags);
-	insert_rho_u_flags(a, A, index_insert_m(a, direction), transfer_buffer_m, rho, u, flags);
+	insert_rho_u_flags(a, A, index_insert_p(a, direction), (global char*) transfer_buffer_p, rho, u, flags);
+	insert_rho_u_flags(a, A, index_insert_m(a, direction), (global char*) transfer_buffer_m, rho, u, flags);
 }
 
 // Graphics code
