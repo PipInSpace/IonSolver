@@ -1,10 +1,3 @@
-
-#if defined(FP16S) || defined(FP16C)
-#define fpxx ushort
-#else // FP32
-#define fpxx float
-#endif // FP32
-
 //THESE ARE TO BE REMOVED
 #define def_Nx 20u
 #define def_Ny 20u
@@ -15,32 +8,11 @@
 #define def_Dy 1u
 #define def_Dz 1u
 
-#define def_Ox 1 // offsets are signed integer!
-#define def_Oy 1
-#define def_Oz 1
-
-#define def_Ax 1u
-#define def_Ay 1u
-#define def_Az 1u
-
 #define def_domain_offset_x 0.0f
 #define def_domain_offset_y 0.0f
 #define def_domain_offset_z 0.0f
 
-#define D "D2Q9" // D2Q9/D3Q15/D3Q19/D3Q27
-#define def_velocity_set 9u // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
-#define def_dimensions 2u // number spatial dimensions (2D or 3D)
-#define def_transfers 3u // number of DDFs that are transferred between multiple domains
-
-#define def_c 0.57735027f // lattice speed of sound c = 1/sqrt(3)*dt
-#define def_w 2.0f // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
-#define def_w0 (1.0f/2.25f)
-#define def_ws (1.0f/9.0f)
-#define def_we (1.0f/36.0f)
-#define def_ke 8.9875517923E9f
-#define def_kmu 0.0f
-#define def_charge 0.1f // Electric charge of a cell
-#define def_ind_r 5 // Range of induction fill around cell
+#define D "D2Q9" // D2Q9/D3Q15/D3Q19/D3Q2
 
 #define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
 #define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
@@ -57,13 +29,8 @@
 #define TYPE_GI 0x38 // 0b00111000 // change from gas to interface
 #define TYPE_SU 0x38 // 0b00111000 // any flag bit used for SURFACE
 
-#define fpxx_copy ushort
 #define load(p,o) half_to_float_custom(p[o])
 #define store(p,o,x) p[o]=float_to_half_custom(x)
-
-#define EQUILIBRIUM_BOUNDARIES
-#define VOLUME_FORCE
-#define MAGNETO_HYDRO
 
 #define GRAPHICS
 #define def_streamline_sparse 4u

@@ -1,11 +1,10 @@
-
+//THESE ARE TO BE REMOVED
 #if defined(FP16S) || defined(FP16C)
 #define fpxx ushort
 #else // FP32
 #define fpxx float
 #endif // FP32
 
-//THESE ARE TO BE REMOVED
 #define def_Nx 20u
 #define def_Ny 20u
 #define def_Nz 20u
@@ -15,17 +14,9 @@
 #define def_Dy 1u
 #define def_Dz 1u
 
-#define def_Ox 1 // offsets are signed integer!
-#define def_Oy 1
-#define def_Oz 1
-
 #define def_Ax 1u
 #define def_Ay 1u
 #define def_Az 1u
-
-#define def_domain_offset_x 0.0f
-#define def_domain_offset_y 0.0f
-#define def_domain_offset_z 0.0f
 
 #define D "D2Q9" // D2Q9/D3Q15/D3Q19/D3Q27
 #define def_velocity_set 9u // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
@@ -64,27 +55,6 @@
 #define EQUILIBRIUM_BOUNDARIES
 #define VOLUME_FORCE
 #define MAGNETO_HYDRO
-
-#define GRAPHICS
-#define def_streamline_sparse 4u
-#define def_streamline_length 128u
-#define def_screen_width 1920u
-#define def_screen_height 1080u
-#define def_scale_u 1.0f
-#define def_scale_Q_min 0.0001f
-#define def_background_color 0x000000
-
-#define COLOR_S (127<<16|127<<8|127)
-#define COLOR_E (  0<<16|255<<8|  0)
-#define COLOR_M (255<<16|  0<<8|255)
-#define COLOR_T (255<<16|  0<<8|  0)
-#define COLOR_F (  0<<16|  0<<8|255)
-#define COLOR_I (  0<<16|255<<8|255)
-#define COLOR_0 (127<<16|127<<8|127)
-#define COLOR_X (255<<16|127<<8|  0)
-#define COLOR_Y (255<<16|255<<8|  0)
-#define COLOR_P (255<<16|255<<8|191)
-
 //These defines are for code completion only and are removed from the code before compilation 
 #define EndTempDefines%
 
