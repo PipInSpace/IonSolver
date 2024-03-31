@@ -69,7 +69,7 @@ pub fn get_opencl_code() -> String {
     let sim_source: Vec<&str> = include_str!("sim_kernels.cl")
         .split("EndTempDefines%")
         .collect();
-    let graphics_source: Vec<&str> = include_str!("sim_kernels.cl")
+    let graphics_source: Vec<&str> = include_str!("graphics_kernels.cl")
         .split("EndTempDefines%")
         .collect();
     sim_source[1].to_string() + graphics_source[1]
