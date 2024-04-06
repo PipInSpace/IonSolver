@@ -275,7 +275,7 @@ impl Lbm {
         // the communicate calls at initialization need an odd time step
         self.increment_timestep(1);
         //communicate_rho_u_flags
-        for d in 0..self.get_domain_numbers() {
+        for d in 0..self.get_d_n() {
             self.domains[d].enqueue_initialize().unwrap();
         }
         //communicate_rho_u_flags
@@ -314,7 +314,10 @@ impl Lbm {
             self.update_e_b_dynamic();
         }
 
-        self.finish_queues();
+        if self.get_d_n() == 1 || (self.config.ext_magneto_hydro && self.config.induction_range != 0) {
+            // Additional synchronization only needed in single-GPU or after E&B update
+            self.finish_queues();
+        }
         self.increment_timestep(1);
     }
 
@@ -327,14 +330,14 @@ impl Lbm {
 
     /// Execute stream_collide kernel on all domains
     fn stream_collide(&self) {
-        for d in 0..self.get_domain_numbers() {
+        for d in 0..self.get_d_n() {
             self.domains[d].enqueue_stream_collide().unwrap();
         }
     }
 
     /// Execute E and B dynamic update kernel on all domains
     fn update_e_b_dynamic(&self) {
-        for d in 0..self.get_domain_numbers() {
+        for d in 0..self.get_d_n() {
             self.domains[d].enqueue_update_e_b_dyn().unwrap();
         }
     }
@@ -346,7 +349,7 @@ impl Lbm {
         let d_x = self.config.d_x as usize;
         let d_y = self.config.d_y as usize;
         let d_z = self.config.d_z as usize;
-        let d_n = self.get_domain_numbers();
+        let d_n = self.get_d_n();
 
         if d_x > 1 { // Communicate x-axis
             for d in 0..d_n {self.domains[d].enqueue_transfer_extract_field(field, 0, bytes_per_cell).unwrap();} // Extract into transfer buffers
@@ -407,7 +410,8 @@ impl Lbm {
         }
     }
 
-    pub fn get_domain_numbers(&self) -> usize {
+    /// Returns the amount of domains for this lbm
+    pub fn get_d_n(&self) -> usize {
         self.domains.len()
     }
 
@@ -486,9 +490,9 @@ impl LbmDomain {
         let d_y = lbm_config.d_y;
         let d_z = lbm_config.d_z;
 
-        let o_x = (x * n_x / d_x) as i32 - (lbm_config.d_x > 1u32) as i32;
-        let o_y = (y * n_y / d_y) as i32 - (lbm_config.d_y > 1u32) as i32;
-        let o_z = (z * n_z / d_z) as i32 - (lbm_config.d_z > 1u32) as i32;
+        let o_x = (x * lbm_config.n_x / lbm_config.d_x) as i32 - (lbm_config.d_x > 1u32) as i32;
+        let o_y = (y * lbm_config.n_y / lbm_config.d_y) as i32 - (lbm_config.d_y > 1u32) as i32;
+        let o_z = (z * lbm_config.n_z / lbm_config.d_z) as i32 - (lbm_config.d_z > 1u32) as i32;
 
         let (dimensions, velocity_set, transfers) = lbm_config.velocity_set.get_set_values();
 
@@ -931,9 +935,9 @@ impl LbmDomain {
         +"\n	#define def_Ay "+ &(n_z * n_x).to_string()+"u"
         +"\n	#define def_Az "+ &(n_x * n_y).to_string()+"u"
 
-        +"\n	#define def_domain_offset_x "+ &format!("{:?}", (o_x as f32+(d_x>1) as i32 as f32 - 0.5*(d_x as f32 - 1.0) * (n_x - 2u32 * (d_x>1u32) as i32 as u32) as f32))+"f"
-        +"\n	#define def_domain_offset_y "+ &format!("{:?}", (o_y as f32+(d_y>1) as i32 as f32 - 0.5*(d_y as f32 - 1.0) * (n_y - 2u32 * (d_y>1u32) as i32 as u32) as f32))+"f"
-        +"\n	#define def_domain_offset_z "+ &format!("{:?}", (o_z as f32+(d_z>1) as i32 as f32 - 0.5*(d_z as f32 - 1.0) * (n_z - 2u32 * (d_z>1u32) as i32 as u32) as f32))+"f"
+        +"\n	#define def_domain_offset_x "+ &format!("{:?}", (o_x as f32+((d_x>1) as i32 as f32) - 0.5*(d_x as f32 - 1.0) * (n_x - 2u32 * ((d_x>1u32) as i32 as u32)) as f32))+"f"
+        +"\n	#define def_domain_offset_y "+ &format!("{:?}", (o_y as f32+((d_y>1) as i32 as f32) - 0.5*(d_y as f32 - 1.0) * (n_y - 2u32 * ((d_y>1u32) as i32 as u32)) as f32))+"f"
+        +"\n	#define def_domain_offset_z "+ &format!("{:?}", (o_z as f32+((d_z>1) as i32 as f32) - 0.5*(d_z as f32 - 1.0) * (n_z - 2u32 * ((d_z>1u32) as i32 as u32)) as f32))+"f"
 
         +"\n	#define D"+ &dimensions.to_string()+"Q"+ &velocity_set.to_string()+"" // D2Q9/D3Q15/D3Q19/D3Q27
         +"\n	#define def_velocity_set "+ &velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
@@ -1055,14 +1059,13 @@ impl LbmDomain {
         }
         // Read result into host transfer buffers
         let field_length = self.get_area(direction) * bytes_per_cell;
-        println!("Field_length: {}, Len: {}, Dir: {}", field_length, self.transfer_p_host.len(), direction);
         self.transfer_p
-            //.create_sub_buffer(None, [0], field_length).unwrap()
             .read(&mut self.transfer_p_host)
+            .len(field_length)
             .enq().unwrap();
         self.transfer_m
-            //.create_sub_buffer(None, [0], field_length)?
             .read(&mut self.transfer_m_host)
+            .len(field_length)
             .enq()
     }
 
@@ -1073,14 +1076,15 @@ impl LbmDomain {
         direction: u32,
         bytes_per_cell: usize,
     ) -> ocl::Result<()> {
+        // Write transfer data to device buffers
         let field_length = self.get_area(direction) * bytes_per_cell;
         self.transfer_p
-            //.create_sub_buffer(None, [0], field_length)?
             .write(&self.transfer_p_host)
+            .len(field_length)
             .enq()?;
         self.transfer_m
-            //.create_sub_buffer(None, [0], field_length)?
             .write(&self.transfer_m_host)
+            .len(field_length)
             .enq()?;
         let kernel = &self.transfer_kernels[field as usize][1]; // [1] is the insertion kernel
         kernel.set_arg("direction", direction)?;

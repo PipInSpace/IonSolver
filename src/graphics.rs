@@ -278,7 +278,7 @@ impl Lbm {
     pub fn draw_frame(&self, save: bool, sim_tx: Sender<SimState>, i: &u32) {
         let width = self.config.graphics_config.camera_width;
         let height = self.config.graphics_config.camera_height;
-        let domain_numbers = self.get_domain_numbers();
+        let domain_numbers = self.get_d_n();
         let mut bitmap: Vec<i32> = vec![0; (width * height) as usize]; // Base bitmap
         let mut zbuffer: Vec<i32> = vec![0; (width * height) as usize];
         let mut bitmaps: Vec<Vec<i32>> =
