@@ -132,14 +132,13 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
 fn setup_domain_test() -> Lbm {
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 10.0, 1.2250);
-    lbm_config.n_x = 128;
-    lbm_config.n_y = 128;
-    lbm_config.n_z = 128;
+    lbm_config.n_x = 256;
+    lbm_config.n_y = 256;
+    lbm_config.n_z = 256;
     lbm_config.d_z = 2; // Two domains on z-axis (128 cells long each)
     lbm_config.velocity_set = VelocitySet::D3Q19;
 
-    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
-    println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
+    lbm_config.nu = lbm_config.units.si_to_nu(0.00148);
 
     // Graphics
     lbm_config.graphics_config.graphics_active = true;
@@ -147,13 +146,11 @@ fn setup_domain_test() -> Lbm {
     lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
     lbm_config.graphics_config.streamline_mode = true;
     lbm_config.graphics_config.field_mode = false;
-    lbm_config.graphics_config.u_max = 0.032;
+    lbm_config.graphics_config.u_max = 0.3;
     lbm_config.graphics_config.axes_mode = true;
 
     let mut lbm = Lbm::new(lbm_config.clone());
-
-    let velocity: Vec<f32> = vec![0.01; (lbm_config.n_x * lbm_config.n_y * (lbm_config.n_z / lbm_config.d_z)) as usize * 3];
-    lbm.domains[0].u.write(&velocity).enq().unwrap();
+    lbm.setup_taylor_green(1);
 
     lbm
 }
@@ -213,7 +210,7 @@ fn setup_bfield_spin() -> Lbm {
 impl Lbm {
     #[allow(unused)]
     /// 3D Taylor-Green vorticies setup.
-    pub fn setup_taylor_green(&mut self) {
+    pub fn setup_taylor_green(&mut self, periodicity: u32) {
         println!("Setting up Taylor-Green vorticies");
         let nx = self.config.n_x;
         let ny = self.config.n_y;
@@ -222,7 +219,6 @@ impl Lbm {
         let pif = std::f32::consts::PI;
         #[allow(non_snake_case)]
         let A = 0.25f32;
-        let periodicity = 2u32;
         let a = nx as f32 / periodicity as f32;
         let b = ny as f32 / periodicity as f32;
         let c = nz as f32 / periodicity as f32;
