@@ -657,6 +657,7 @@ uint get_area(const uint direction) {
 	const uint A[3] = { def_Ax, def_Ay, def_Az };
 	return A[direction];
 }
+// Return 1D index of cell to be transferred from id a and xyz direction (0, 1, 2) for pos and neg directions
 uint index_extract_p(const uint a, const uint direction) {
 	const uint3 coordinates[3] = { (uint3)(def_Nx-2u, a%def_Ny, a/def_Ny), (uint3)(a/def_Nz, def_Ny-2u, a%def_Nz), (uint3)(a%def_Nx, a/def_Nx, def_Nz-2u) };
 	return index(coordinates[direction]);
@@ -673,7 +674,7 @@ uint index_insert_m(const uint a, const uint direction) {
 	const uint3 coordinates[3] = { (uint3)(       0u, a%def_Ny, a/def_Ny), (uint3)(a/def_Nz,        0u, a%def_Nz), (uint3)(a%def_Nx, a/def_Nx,        0u) };
 	return index(coordinates[direction]);
 }
-
+// Returns an index for the transferred ddfs
 uint index_transfer(const uint side_i) {
 	const uchar index_transfer_data[2u*def_dimensions*def_transfers] = {
 	#if defined(D2Q9)
@@ -735,8 +736,8 @@ kernel void transfer_extract_fi(const uint direction, const ulong t, global ucha
 kernel void transfer__insert_fi(const uint direction, const ulong t, const global uchar* transfer_buffer_p, const global uchar* transfer_buffer_m, global fpxx_copy* fi) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	insert_fi(a, A, index_insert_p(a, direction), 2u*direction+0u, t, (global fpxx_copy*) transfer_buffer_p, fi);
-	insert_fi(a, A, index_insert_m(a, direction), 2u*direction+1u, t, (global fpxx_copy*) transfer_buffer_m, fi);
+	insert_fi(a, A, index_insert_p(a, direction), 2u*direction+0u, t, (const global fpxx_copy*) transfer_buffer_p, fi);
+	insert_fi(a, A, index_insert_m(a, direction), 2u*direction+1u, t, (const global fpxx_copy*) transfer_buffer_m, fi);
 }
 // Rho, u and flags (needed if graphics are active)
 void extract_rho_u_flags(const uint a, const uint A, const uint n, global char* transfer_buffer, const global float* rho, const global float* u, const global uchar* flags) {
@@ -762,6 +763,6 @@ kernel void transfer_extract_rho_u_flags(const uint direction, const ulong t, gl
 kernel void transfer__insert_rho_u_flags(const uint direction, const ulong t, const global uchar* transfer_buffer_p, const global uchar* transfer_buffer_m, global float* rho, global float* u, global uchar* flags) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	insert_rho_u_flags(a, A, index_insert_p(a, direction), (global char*) transfer_buffer_p, rho, u, flags);
-	insert_rho_u_flags(a, A, index_insert_m(a, direction), (global char*) transfer_buffer_m, rho, u, flags);
+	insert_rho_u_flags(a, A, index_insert_p(a, direction), (const global char*) transfer_buffer_p, rho, u, flags);
+	insert_rho_u_flags(a, A, index_insert_m(a, direction), (const global char*) transfer_buffer_m, rho, u, flags);
 }
