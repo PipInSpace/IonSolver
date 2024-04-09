@@ -596,7 +596,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 	#endif // ELECTRIC FORCE
 } // initialize()
 
-kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
+__kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_fields() on halo
     const uchar flagsn = flags[n];
@@ -784,4 +784,33 @@ kernel void transfer__insert_rho_u_flags(const uint direction, const ulong t, co
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
 	insert_rho_u_flags(a, A, index_insert_p(a, direction), (const global char*) transfer_buffer_p, rho, u, flags);
 	insert_rho_u_flags(a, A, index_insert_m(a, direction), (const global char*) transfer_buffer_m, rho, u, flags);
-}}
+}
+// Qi (Charge ddfs) 
+#ifdef MAGNETO_HYDRO
+void extract_gi(const uint a, const uint n, const uint side, const ulong t, global fpxx_copy* transfer_buffer, const global fpxx_copy* qi) {
+	uint j7[7u]; // neighbor indices
+	neighbors_charge(n, j7); // calculate neighbor indices
+	const uint i = side+1u;
+	const ulong index = index_f(i%2u ? j7[i] : n, t%2ul ? (i%2u ? i+1u : i-1u) : i); // Esoteric-Pull: standard store, or streaming part 1/2
+	transfer_buffer[a] = qi[index]; // fpxx_copy allows direct copying without decompression+compression
+}
+void insert_qi(const uint a, const uint n, const uint side, const ulong t, const global fpxx_copy* transfer_buffer, global fpxx_copy* qi) {
+	uint j7[7u]; // neighbor indices
+	neighbors_charge(n, j7); // calculate neighbor indices
+	const uint i = side+1u;
+	const ulong index = index_f(i%2u ? n : j7[i-1u], t%2ul ? i : (i%2u ? i+1u : i-1u)); // Esoteric-Pull: standard load, or streaming part 2/2
+	qi[index] = transfer_buffer[a]; // fpxx_copy allows direct copying without decompression+compression
+}
+kernel void transfer_extract_qi(const uint direction, const ulong t, global fpxx_copy* transfer_buffer_p, global fpxx_copy* transfer_buffer_m, const global fpxx_copy* qi) {
+	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
+	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
+	extract_gi(a, index_extract_p(a, direction), 2u*direction+0u, t, transfer_buffer_p, qi);
+	extract_gi(a, index_extract_m(a, direction), 2u*direction+1u, t, transfer_buffer_m, qi);
+}
+kernel void transfer__insert_qi(const uint direction, const ulong t, const global fpxx_copy* transfer_buffer_p, const global fpxx_copy* transfer_buffer_m, global fpxx_copy* qi) {
+	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
+	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
+	insert_qi(a, index_insert_p(a, direction), 2u*direction+0u, t, transfer_buffer_p, qi);
+	insert_qi(a, index_insert_m(a, direction), 2u*direction+1u, t, transfer_buffer_m, qi);
+}
+#endif // MAGNETO_HYDRO

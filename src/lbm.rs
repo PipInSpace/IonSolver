@@ -983,6 +983,7 @@ impl LbmDomain {
         +"\n	#define def_kmu "+ &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
         +"\n	#define def_charge "+ &format!("{:?}f", lbm_config.units.si_to_charge_per_dens(lbm_config.charge_per_dens)) // charge held per density unit
         +"\n	#define def_ind_r "+ &lbm_config.induction_range.to_string()
+        +"\n	#define def_w_Q  "+  &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
         } else {"".to_string()}
         + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}
