@@ -106,6 +106,7 @@ pub enum VariableFloatBuffer {
 enum TransferField {
     Fi,
     RhoUFlags,
+    Qi,
 }
 
 /// Struct used to bundle arguments for LBM simulation setup.
@@ -311,6 +312,7 @@ impl Lbm {
         self.communicate_fi();
         
         if self.config.ext_magneto_hydro && self.config.induction_range != 0 {
+            self.communicate_qi();
             self.update_e_b_dynamic();
         }
 
@@ -386,12 +388,17 @@ impl Lbm {
     /// Communicate Fi across domain boundaries
     fn communicate_fi(&mut self) {
         let bytes_per_cell =
-            self.config.float_type.size_of() * self.config.velocity_set.get_transfers();
+            self.config.float_type.size_of() * self.config.velocity_set.get_transfers();  // FP type size * transfers.
         self.communicate_field(TransferField::Fi, bytes_per_cell);
     }
     /// Communicate rho, u and flags across domain boundaries (needed for graphics)
     fn communicate_rho_u_flags(&mut self) {
         self.communicate_field(TransferField::RhoUFlags, 17);
+    }
+
+    fn communicate_qi(&mut self) {
+        let bytes_per_cell = self.config.float_type.size_of() * 1; // FP type size * transfers. The fixed D3Q7 lattice has 1 transfer
+        self.communicate_field(TransferField::Qi, bytes_per_cell);
     }
 
     // Helper functions
@@ -443,7 +450,7 @@ pub struct LbmDomain {
     kernel_initialize: Kernel, // Basic Kernels
     kernel_stream_collide: Kernel,
     kernel_update_fields: Kernel,
-    transfer_kernels: [[Kernel; 2]; 2],
+    transfer_kernels: [[Kernel; 2]; 3],
 
     kernel_update_e_b_dyn: Option<Kernel>, // Optional Kernels
 
@@ -469,6 +476,7 @@ pub struct LbmDomain {
     pub b: Option<Buffer<f32>>,
     pub e_dyn: Option<Buffer<f32>>,
     pub b_dyn: Option<Buffer<f32>>,
+    pub qi: Option<VariableFloatBuffer>,
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
 
@@ -582,6 +590,28 @@ impl LbmDomain {
         };
         let b_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
             Some(opencl::create_buffer(&queue, [n * 3], 0f32))
+        } else {
+            None
+        };
+        let qi: Option<VariableFloatBuffer> = if lbm_config.ext_magneto_hydro {
+            Some(match lbm_config.float_type {
+                FloatType::FP32 => {
+                    // Float Type F32
+                    VariableFloatBuffer::F32(opencl::create_buffer(
+                        &queue,
+                        [n * velocity_set as u64],
+                        0.0f32,
+                    ))
+                }
+                _ => {
+                    // Float Type F16S/F16C
+                    VariableFloatBuffer::U16(opencl::create_buffer(
+                        &queue,
+                        [n * velocity_set as u64],
+                        0u16,
+                    ))
+                }
+            })
         } else {
             None
         };
@@ -817,6 +847,60 @@ impl LbmDomain {
                     .build()
                     .unwrap(), // Extract rho, u, flags
             ], // Rho, u and flags (needed for graphics)
+            [
+                match &qi.as_ref().expect("qi should be defined") { // TODO: qi may be undefined. This needs to be an option
+                    VariableFloatBuffer::U16(qi_u16) => Kernel::builder()
+                        .program(&program)
+                        .name("transfer_extract_qi")
+                        .queue(queue.clone())
+                        .global_work_size(1)
+                        .arg_named("direction", 0_u32)
+                        .arg_named("time_step", 0_u64)
+                        .arg_named("transfer_buffer_p", &transfer_p)
+                        .arg_named("transfer_buffer_m", &transfer_m)
+                        .arg_named("qi", qi_u16)
+                        .build()
+                        .unwrap(),
+                    VariableFloatBuffer::F32(qi_f32) => Kernel::builder()
+                        .program(&program)
+                        .name("transfer_extract_qi")
+                        .queue(queue.clone())
+                        .global_work_size(1)
+                        .arg_named("direction", 0_u32)
+                        .arg_named("time_step", 0_u64)
+                        .arg_named("transfer_buffer_p", &transfer_p)
+                        .arg_named("transfer_buffer_m", &transfer_m)
+                        .arg_named("qi", qi_f32)
+                        .build()
+                        .unwrap(),
+                }, // Extract Qi
+                match &qi.as_ref().expect("qi should be defined") {
+                    VariableFloatBuffer::U16(qi_u16) => Kernel::builder()
+                        .program(&program)
+                        .name("transfer__insert_qi")
+                        .queue(queue.clone())
+                        .global_work_size(1)
+                        .arg_named("direction", 0_u32)
+                        .arg_named("time_step", 0_u64)
+                        .arg_named("transfer_buffer_p", &transfer_p)
+                        .arg_named("transfer_buffer_m", &transfer_m)
+                        .arg_named("qi", qi_u16)
+                        .build()
+                        .unwrap(),
+                    VariableFloatBuffer::F32(qi_f32) => Kernel::builder()
+                        .program(&program)
+                        .name("transfer__insert_qi")
+                        .queue(queue.clone())
+                        .global_work_size(1)
+                        .arg_named("direction", 0_u32)
+                        .arg_named("time_step", 0_u64)
+                        .arg_named("transfer_buffer_p", &transfer_p)
+                        .arg_named("transfer_buffer_m", &transfer_m)
+                        .arg_named("qi", qi_f32)
+                        .build()
+                        .unwrap(),
+                }, // Insert Qi
+            ], // Qi charge ddfs
         ];
         println!("    Kernels for domain compiled.");
         //TODO: allocate transfer buffers
@@ -861,6 +945,7 @@ impl LbmDomain {
             b,
             e_dyn,
             b_dyn,
+            qi,
             f,
             t,
 
