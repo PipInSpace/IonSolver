@@ -489,6 +489,7 @@ impl LbmDomain {
     ///
     /// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function.
     /// This ensures all arguments are correctly set.
+    #[rustfmt::skip]
     pub fn new(lbm_config: &LbmConfig, device: Device, x: u32, y: u32, z: u32) -> LbmDomain {
         let n_x = lbm_config.n_x / lbm_config.d_x + 2u32 * (lbm_config.d_x > 1u32) as u32; // Size + Halo offsets
         let n_y = lbm_config.n_y / lbm_config.d_y + 2u32 * (lbm_config.d_y > 1u32) as u32; // When multiple domains on axis -> add 2 cells of padding
@@ -507,22 +508,7 @@ impl LbmDomain {
 
         let t = 0;
 
-        let ocl_code = Self::get_device_defines(
-            n_x,
-            n_y,
-            n_z,
-            d_x,
-            d_y,
-            d_z,
-            o_x,
-            o_y,
-            o_z,
-            dimensions,
-            velocity_set,
-            transfers,
-            lbm_config.nu,
-            lbm_config,
-        ) + &if lbm_config.graphics_config.graphics_active {
+        let ocl_code = Self::get_device_defines(n_x, n_y, n_z, d_x, d_y, d_z, o_x, o_y, o_z, dimensions, velocity_set, transfers, lbm_config.nu, lbm_config) + &if lbm_config.graphics_config.graphics_active {
             graphics::get_graphics_defines(lbm_config.graphics_config)
         } else {
             "".to_string()
@@ -530,128 +516,54 @@ impl LbmDomain {
 
         // OCL variables are directly exposed, due to no other device struct.
         let platform = Platform::default();
-        let context = Context::builder()
-            .platform(platform)
-            .devices(device)
-            .build()
-            .unwrap();
+        let context = Context::builder().platform(platform).devices(device).build().unwrap();
         let queue = Queue::new(&context, device, None).unwrap();
         println!("    Compiling Program...");
-        let program = Program::builder()
-            .devices(device)
-            .src(&ocl_code)
-            .build(&context)
-            .unwrap();
+        let program = Program::builder().devices(device).src(&ocl_code).build(&context).unwrap();
 
         // Initialize Buffers
         let fi: VariableFloatBuffer = match lbm_config.float_type {
-            FloatType::FP32 => {
-                // Float Type F32
-                VariableFloatBuffer::F32(opencl::create_buffer(
-                    &queue,
-                    [n * velocity_set as u64],
-                    0.0f32,
-                ))
-            }
-            _ => {
-                // Float Type F16S/F16C
-                VariableFloatBuffer::U16(opencl::create_buffer(
-                    &queue,
-                    [n * velocity_set as u64],
-                    0u16,
-                ))
-            }
+            FloatType::FP32 => { VariableFloatBuffer::F32(opencl::create_buffer(&queue,[n * velocity_set as u64],0.0f32)) } // Float Type F32
+            _ =>               { VariableFloatBuffer::U16(opencl::create_buffer(&queue,[n * velocity_set as u64],0u16)) } // Float Type F16S/F16C
         };
         let rho = opencl::create_buffer(&queue, [n], 1.0f32);
         let u = opencl::create_buffer(&queue, [n * 3], 0f32);
         let flags = opencl::create_buffer(&queue, [n], 0u8);
 
         // Force field buffer as 3D Vectors
-        let f: Option<Buffer<f32>> = if lbm_config.ext_force_field {
-            Some(opencl::create_buffer(&queue, [n * 3], 0f32))
-        } else {
-            None
-        };
+        let f: Option<Buffer<f32>> = if lbm_config.ext_force_field { Some(opencl::create_buffer(&queue, [n * 3], 0f32)) } else { None };
         // Electric field buffer as 3D Vectors
-        let e: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
-            Some(opencl::create_buffer(&queue, [n * 3], 0f32))
-        } else {
-            None
-        };
-        let e_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
-            Some(opencl::create_buffer(&queue, [n * 3], 0f32))
-        } else {
-            None
-        };
+        let e: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(opencl::create_buffer(&queue, [n * 3], 0f32)) } else { None };
+        let e_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(opencl::create_buffer(&queue, [n * 3], 0f32)) } else { None };
         // Magnetic field buffers as 3D Vectors
-        let b: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
-            Some(opencl::create_buffer(&queue, [n * 3], 0f32))
-        } else {
-            None
-        };
-        let b_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
-            Some(opencl::create_buffer(&queue, [n * 3], 0f32))
-        } else {
-            None
-        };
+        let b: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(opencl::create_buffer(&queue, [n * 3], 0f32)) } else { None };
+        let b_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(opencl::create_buffer(&queue, [n * 3], 0f32)) } else { None };
         // Charge ddfs and charge field buffers
         let qi: Option<VariableFloatBuffer> = if lbm_config.ext_magneto_hydro {
             Some(match lbm_config.float_type {
-                FloatType::FP32 => {
-                    // Float Type F32
-                    VariableFloatBuffer::F32(opencl::create_buffer(
-                        &queue,
-                        [n * 7],
-                        0.0f32,
-                    ))
-                }
-                _ => {
-                    // Float Type F16S/F16C
-                    VariableFloatBuffer::U16(opencl::create_buffer(
-                        &queue,
-                        [n * 7],
-                        0u16,
-                    ))
-                }
+                FloatType::FP32 => { VariableFloatBuffer::F32(opencl::create_buffer(&queue, [n * 7], 0.0f32)) } // Float Type F32
+                _ =>               { VariableFloatBuffer::U16(opencl::create_buffer(&queue, [n * 7], 0u16)) } // Float Type F16S/F16C
             })
         } else {
             None
         };
-        let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
-            Some(opencl::create_buffer(&queue, [n], 0f32))
-        } else {
-            None
-        };
+        let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(opencl::create_buffer(&queue, [n], 0f32)) } else { None };
 
         // Initialize Kernels
         let mut kernel_initialize_builder = Kernel::builder();
         let mut kernel_stream_collide_builder = Kernel::builder();
         let mut kernel_update_fields_builder = Kernel::builder();
-        kernel_initialize_builder
-            .program(&program)
-            .name("initialize")
-            .queue(queue.clone())
-            .global_work_size([n]);
-        kernel_stream_collide_builder
-            .program(&program)
-            .name("stream_collide")
-            .queue(queue.clone())
-            .global_work_size([n]);
-        kernel_update_fields_builder
-            .program(&program)
-            .name("update_fields")
-            .queue(queue.clone())
-            .global_work_size([n]);
+        kernel_initialize_builder.program(&program).name("initialize").queue(queue.clone()).global_work_size([n]);
+        kernel_stream_collide_builder.program(&program).name("stream_collide").queue(queue.clone()).global_work_size([n]);
+        kernel_update_fields_builder.program(&program).name("update_fields").queue(queue.clone()).global_work_size([n]);
         match &fi {
             //Initialize kernels. Different Float types need different arguments (Fi-Buffer specifically)
-            VariableFloatBuffer::F32(fif32) => {
-                // Float Type F32
+            VariableFloatBuffer::F32(fif32) => { // Float Type F32
                 kernel_initialize_builder.arg_named("fi", fif32);
                 kernel_stream_collide_builder.arg_named("fi", fif32);
                 kernel_update_fields_builder.arg_named("fi", fif32);
             }
-            VariableFloatBuffer::U16(fiu16) => {
-                // Float Type F16S/F16C
+            VariableFloatBuffer::U16(fiu16) => { // Float Type F16S/F16C
                 kernel_initialize_builder.arg_named("fi", fiu16);
                 kernel_stream_collide_builder.arg_named("fi", fiu16);
                 kernel_update_fields_builder.arg_named("fi", fiu16);
@@ -757,17 +669,10 @@ impl LbmDomain {
         // Multi-Domain-Transfers:
         // Transfer buffer initializaton:
         let mut a_max: usize = 0;
-        if lbm_config.d_x > 1 {
-            a_max = cmp::max(a_max, n_y as usize * n_z as usize);
-        } // Ax
-        if lbm_config.d_y > 1 {
-            a_max = cmp::max(a_max, n_x as usize * n_z as usize);
-        } // Ay
-        if lbm_config.d_z > 1 {
-            a_max = cmp::max(a_max, n_x as usize * n_y as usize);
-        } // Az
-        let transfer_buffer_size =
-            a_max * cmp::max(17, transfers as usize * lbm_config.float_type.size_of());
+        if lbm_config.d_x > 1 { a_max = cmp::max(a_max, n_y as usize * n_z as usize); } // Ax
+        if lbm_config.d_y > 1 { a_max = cmp::max(a_max, n_x as usize * n_z as usize); } // Ay
+        if lbm_config.d_z > 1 { a_max = cmp::max(a_max, n_x as usize * n_y as usize); } // Az
+        let transfer_buffer_size = a_max * cmp::max(17, transfers as usize * lbm_config.float_type.size_of());
 
         let transfer_p = opencl::create_buffer(&queue, transfer_buffer_size, 0_u8); // Size is maxiumum 17 bytes or bytes needed for fi
         let transfer_m = opencl::create_buffer(&queue, transfer_buffer_size, 0_u8); // Size is maxiumum 17 bytes or bytes needed for fi
