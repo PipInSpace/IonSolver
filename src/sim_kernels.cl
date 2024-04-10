@@ -665,13 +665,13 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	}
 
 	// update buffers
-	E_dyn[n						] += def_ke * e.x;
-	E_dyn[(ulong)n+def_N    	] += def_ke * e.y;
-	E_dyn[(ulong)n+def_N*2ul	] += def_ke * e.z;
+	E_dyn[n					] += def_ke * e.x;
+	E_dyn[(ulong)n+def_N	] += def_ke * e.y;
+	E_dyn[(ulong)n+def_N*2ul] += def_ke * e.z;
 
-	B_dyn[n						] += def_kmu * b.x;
-	B_dyn[(ulong)n+def_N		] += def_kmu * b.y;
-	B_dyn[(ulong)n+def_N*2ul	] += def_kmu * b.z;
+	B_dyn[n					] += def_kmu * b.x;
+	B_dyn[(ulong)n+def_N	] += def_kmu * b.y;
+	B_dyn[(ulong)n+def_N*2ul] += def_kmu * b.z;
 }
 #endif
 

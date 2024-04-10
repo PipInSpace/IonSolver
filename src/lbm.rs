@@ -450,7 +450,7 @@ pub struct LbmDomain {
     kernel_initialize: Kernel, // Basic Kernels
     kernel_stream_collide: Kernel,
     kernel_update_fields: Kernel,
-    transfer_kernels: [[Kernel; 2]; 3],
+    transfer_kernels: [[Option<Kernel>; 2]; 3],
 
     kernel_update_e_b_dyn: Option<Kernel>, // Optional Kernels
 
@@ -650,7 +650,7 @@ impl LbmDomain {
         // Transfer kernels
         let transfer_kernels = [
             [
-                match &fi {
+                Some(match &fi {
                     VariableFloatBuffer::U16(fi_u16) => Kernel::builder()
                         .program(&program)
                         .name("transfer_extract_fi")
@@ -675,8 +675,8 @@ impl LbmDomain {
                         .arg_named("fi", fi_f32)
                         .build()
                         .unwrap(),
-                }, // Extract Fi
-                match &fi {
+                }), // Extract Fi
+                Some(match &fi {
                     VariableFloatBuffer::U16(fi_u16) => Kernel::builder()
                         .program(&program)
                         .name("transfer__insert_fi")
@@ -701,10 +701,10 @@ impl LbmDomain {
                         .arg_named("fi", fi_f32)
                         .build()
                         .unwrap(),
-                }, // Insert Fi
+                }), // Insert Fi
             ], // Fi
             [
-                Kernel::builder()
+                Some(Kernel::builder()
                     .program(&program)
                     .name("transfer_extract_rho_u_flags")
                     .queue(queue.clone())
@@ -717,8 +717,8 @@ impl LbmDomain {
                     .arg_named("u", &u)
                     .arg_named("flags", &flags)
                     .build()
-                    .unwrap(), // Extract rho, u, flags
-                Kernel::builder()
+                    .unwrap()), // Extract rho, u, flags
+                Some(Kernel::builder()
                     .program(&program)
                     .name("transfer__insert_rho_u_flags")
                     .queue(queue.clone())
@@ -731,61 +731,65 @@ impl LbmDomain {
                     .arg_named("u", &u)
                     .arg_named("flags", &flags)
                     .build()
-                    .unwrap(), // Extract rho, u, flags
+                    .unwrap()), // Extract rho, u, flags
             ], // Rho, u and flags (needed for graphics)
             [
-                match &qi.as_ref().expect("qi should be defined") { // TODO: qi may be undefined. This needs to be an option
+                if lbm_config.ext_magneto_hydro {
+                    Some(match &qi.as_ref().expect("qi should be defined") { // TODO: qi may be undefined. This needs to be an option
                     VariableFloatBuffer::U16(qi_u16) => Kernel::builder()
-                        .program(&program)
-                        .name("transfer_extract_qi")
-                        .queue(queue.clone())
-                        .global_work_size(1)
-                        .arg_named("direction", 0_u32)
-                        .arg_named("time_step", 0_u64)
-                        .arg_named("transfer_buffer_p", &transfer_p)
-                        .arg_named("transfer_buffer_m", &transfer_m)
-                        .arg_named("qi", qi_u16)
-                        .build()
-                        .unwrap(),
-                    VariableFloatBuffer::F32(qi_f32) => Kernel::builder()
-                        .program(&program)
-                        .name("transfer_extract_qi")
-                        .queue(queue.clone())
-                        .global_work_size(1)
-                        .arg_named("direction", 0_u32)
-                        .arg_named("time_step", 0_u64)
-                        .arg_named("transfer_buffer_p", &transfer_p)
-                        .arg_named("transfer_buffer_m", &transfer_m)
-                        .arg_named("qi", qi_f32)
-                        .build()
-                        .unwrap(),
-                }, // Extract Qi
-                match &qi.as_ref().expect("qi should be defined") {
-                    VariableFloatBuffer::U16(qi_u16) => Kernel::builder()
-                        .program(&program)
-                        .name("transfer__insert_qi")
-                        .queue(queue.clone())
-                        .global_work_size(1)
-                        .arg_named("direction", 0_u32)
-                        .arg_named("time_step", 0_u64)
-                        .arg_named("transfer_buffer_p", &transfer_p)
-                        .arg_named("transfer_buffer_m", &transfer_m)
-                        .arg_named("qi", qi_u16)
-                        .build()
-                        .unwrap(),
-                    VariableFloatBuffer::F32(qi_f32) => Kernel::builder()
-                        .program(&program)
-                        .name("transfer__insert_qi")
-                        .queue(queue.clone())
-                        .global_work_size(1)
-                        .arg_named("direction", 0_u32)
-                        .arg_named("time_step", 0_u64)
-                        .arg_named("transfer_buffer_p", &transfer_p)
-                        .arg_named("transfer_buffer_m", &transfer_m)
-                        .arg_named("qi", qi_f32)
-                        .build()
-                        .unwrap(),
-                }, // Insert Qi
+                            .program(&program)
+                            .name("transfer_extract_qi")
+                            .queue(queue.clone())
+                            .global_work_size(1)
+                            .arg_named("direction", 0_u32)
+                            .arg_named("time_step", 0_u64)
+                            .arg_named("transfer_buffer_p", &transfer_p)
+                            .arg_named("transfer_buffer_m", &transfer_m)
+                            .arg_named("qi", qi_u16)
+                            .build()
+                            .unwrap(),
+                        VariableFloatBuffer::F32(qi_f32) => Kernel::builder()
+                            .program(&program)
+                            .name("transfer_extract_qi")
+                            .queue(queue.clone())
+                            .global_work_size(1)
+                            .arg_named("direction", 0_u32)
+                            .arg_named("time_step", 0_u64)
+                            .arg_named("transfer_buffer_p", &transfer_p)
+                            .arg_named("transfer_buffer_m", &transfer_m)
+                            .arg_named("qi", qi_f32)
+                            .build()
+                            .unwrap(),
+                    })
+                } else { None } , // Extract Qi
+                if lbm_config.ext_magneto_hydro {
+                    Some(match &qi.as_ref().expect("qi should be defined") {
+                        VariableFloatBuffer::U16(qi_u16) => Kernel::builder()
+                            .program(&program)
+                            .name("transfer__insert_qi")
+                            .queue(queue.clone())
+                            .global_work_size(1)
+                            .arg_named("direction", 0_u32)
+                            .arg_named("time_step", 0_u64)
+                            .arg_named("transfer_buffer_p", &transfer_p)
+                            .arg_named("transfer_buffer_m", &transfer_m)
+                            .arg_named("qi", qi_u16)
+                            .build()
+                            .unwrap(),
+                        VariableFloatBuffer::F32(qi_f32) => Kernel::builder()
+                            .program(&program)
+                            .name("transfer__insert_qi")
+                            .queue(queue.clone())
+                            .global_work_size(1)
+                            .arg_named("direction", 0_u32)
+                            .arg_named("time_step", 0_u64)
+                            .arg_named("transfer_buffer_p", &transfer_p)
+                            .arg_named("transfer_buffer_m", &transfer_m)
+                            .arg_named("qi", qi_f32)
+                            .build()
+                            .unwrap(),
+                    })
+                } else { None }, // Insert Qi
             ], // Qi charge ddfs
         ];
         println!("    Kernels for domain compiled.");
@@ -994,7 +998,7 @@ impl LbmDomain {
         bytes_per_cell: usize,
     ) -> ocl::Result<()> {
         // Enqueue extraction kernel
-        let kernel = &self.transfer_kernels[field as usize][0]; // [0] is the extraction kernel
+        let kernel = self.transfer_kernels[field as usize][0].as_ref().expect("transfer kernel should be initialized"); // [0] is the extraction kernel
         kernel.set_arg("direction", direction)?;
         kernel.set_arg("time_step", self.t)?;
         unsafe {
@@ -1032,7 +1036,7 @@ impl LbmDomain {
             .write(&self.transfer_m_host)
             .len(field_length)
             .enq()?;
-        let kernel = &self.transfer_kernels[field as usize][1]; // [1] is the insertion kernel
+        let kernel = self.transfer_kernels[field as usize][1].as_ref().expect("transfer kernel should be initialized"); // [1] is the insertion kernel
         kernel.set_arg("direction", direction)?;
         kernel.set_arg("time_step", self.t)?;
         unsafe {
