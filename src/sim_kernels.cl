@@ -628,7 +628,7 @@ __kernel void update_fields(const global fpxx* fi, global float* rho, global flo
 }
 
 #ifdef MAGNETO_HYDRO
-__kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* rho, const global float* u, const global uchar* flags) {
+__kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* q, const global float* u, const global uchar* flags) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
     const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
@@ -636,39 +636,42 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
     if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
 
 	const uint3 coord_n = coordinates(n); // Cell coordinate
-	const float charge = rho[n] * def_charge; // Cell charge
-	const float3 v = {u[n], u[(ulong)n+def_N], u[(ulong)n+def_N*2ul]}; // Cell velocity
 
 	const uint x_upper = int_min(coord_n.x + def_ind_r + 1, def_Nx);
 	const uint y_upper = int_min(coord_n.y + def_ind_r + 1, def_Ny);
 	const uint z_upper = int_min(coord_n.z + def_ind_r + 1, def_Nz);
+
+	float3 e, b;
 	
-	// TODO: Do this at kernel execution level?
 	for (uint x = int_max(coord_n.x - def_ind_r, 0); x < x_upper; x++) {
 		for (uint y = int_max(coord_n.y - def_ind_r, 0); y < y_upper; y++) {
 			for (uint z = int_max(coord_n.z - def_ind_r, 0); z < z_upper; z++) {
 
 				// _c vars describe surronding cells 
 				const uint n_c = x + (y + z * def_Nx) * def_Ny;
-				if (n != n_c) {
-					// Use the Biot-Savart law
-					const uint3 vec_r_diff = coordinates(n_c) - coord_n;
-					const float3 vec_r =  convert_float3(vec_r_diff) / cbmagnitude(vec_r_diff);
+				if (n == n_c) continue;
+					
+				const float q_c = q[n_c]; // charge of nearby cell
+				const float3 v_c = {u[n_c], u[(ulong)n_c+def_N], u[(ulong)n_c+def_N*2ul]}; // velocity of nearby cell
 
-					const float3 e_c = def_ke * charge * vec_r;
-					E_dyn[n_c                 ] += e_c.x;
-					E_dyn[(ulong)n_c+def_N    ] += e_c.y;
-					E_dyn[(ulong)n_c+def_N*2ul] += e_c.z;
+				// precalculation for both fields
+				const uint3 vec_r = coordinates(n_c) - coord_n;
+				const float3 pre_field =  convert_float3(vec_r) / cbmagnitude(vec_r);
 
-					const float3 b_c = def_kmu * charge * cross(v, vec_r);
-					B_dyn[n_c                 ] += b_c.x;
-					B_dyn[(ulong)n_c+def_N    ] += b_c.y;
-					B_dyn[(ulong)n_c+def_N*2ul] += b_c.z;
-				}
+				e += def_ke * q_c * pre_field; // E imparted by nearby cell (Coulomb)
+				b += def_kmu * q_c * cross(v_c, pre_field); // B imparted by nearby cell (Biot-Savart)
 			}
 		}
 	}
 
+	// update buffers
+	E_dyn[n						] += e.x;
+	E_dyn[(ulong)n+def_N    	] += e.y;
+	E_dyn[(ulong)n+def_N*2ul	] += e.z;
+
+	B_dyn[n						] += b.x;
+	B_dyn[(ulong)n+def_N		] += b.y;
+	B_dyn[(ulong)n+def_N*2ul	] += b.z;
 }
 #endif
 
