@@ -388,11 +388,12 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , const global float* F 
 #endif // FORCE_FIELD
 #ifdef MAGNETO_HYDRO
-, const global float* E // static electric field
-, const global float* B // static magnetic flux
-, global float* E_dyn   // dynamic electric field
-, global float* B_dyn   // dynamic magnetic flux
-, global float* qi      // charge ddfs
+, const global float* E	// static electric field
+, const global float* B	// static magnetic flux
+, global float* E_dyn	// dynamic electric field
+, global float* B_dyn	// dynamic magnetic flux
+, global float* qi		// charge ddfs
+, global float* Q		// charge
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -448,16 +449,16 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		calculate_q_eq(Qn, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
 
 		#ifdef UPDATE_FIELDS
-			Q[n] = Qn; // update temperature field
+			Q[n] = Qn; // update charge field
 		#endif // UPDATE_FIELDS
 
 		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-def_w_Q, qhn[i], def_w_Q*qeq[i]); // perform collision
 		store_q(n, qhn, qi, j7, t); // perform streaming (part 1)
 
 		// F = charge * (E + (U cross B))
-		fxn += rhon * def_charge * (E_dyn[                 n] + uyn*B_dyn[2ul*def_N+(ulong)n] - uzn*B_dyn[    def_N+(ulong)n]); // force = charge * (electric field + magnetic field x U)
-		fyn += rhon * def_charge * (E_dyn[    def_N+(ulong)n] + uzn*B_dyn[                 n] - uxn*B_dyn[2ul*def_N+(ulong)n]);
-		fzn += rhon * def_charge * (E_dyn[2ul*def_N+(ulong)n] + uxn*B_dyn[    def_N+(ulong)n] - uyn*B_dyn[                 n]);
+		fxn += Qn * (E_dyn[                 n] + uyn*B_dyn[2ul*def_N+(ulong)n] - uzn*B_dyn[    def_N+(ulong)n]); // force = charge * (electric field + magnetic field x U)
+		fyn += Qn * (E_dyn[    def_N+(ulong)n] + uzn*B_dyn[                 n] - uxn*B_dyn[2ul*def_N+(ulong)n]);
+		fzn += Qn * (E_dyn[2ul*def_N+(ulong)n] + uxn*B_dyn[    def_N+(ulong)n] - uyn*B_dyn[                 n]);
 
 		// Clear dynamic buffers with static buffers for recomputation
 		B_dyn[                 n] = B[                 n];

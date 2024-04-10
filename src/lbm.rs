@@ -477,6 +477,7 @@ pub struct LbmDomain {
     pub e_dyn: Option<Buffer<f32>>,
     pub b_dyn: Option<Buffer<f32>>,
     pub qi: Option<VariableFloatBuffer>,
+    pub q: Option<Buffer<f32>>,
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
 
@@ -593,13 +594,14 @@ impl LbmDomain {
         } else {
             None
         };
+        // Charge ddfs and charge field buffers
         let qi: Option<VariableFloatBuffer> = if lbm_config.ext_magneto_hydro {
             Some(match lbm_config.float_type {
                 FloatType::FP32 => {
                     // Float Type F32
                     VariableFloatBuffer::F32(opencl::create_buffer(
                         &queue,
-                        [n * velocity_set as u64],
+                        [n * 7],
                         0.0f32,
                     ))
                 }
@@ -607,11 +609,16 @@ impl LbmDomain {
                     // Float Type F16S/F16C
                     VariableFloatBuffer::U16(opencl::create_buffer(
                         &queue,
-                        [n * velocity_set as u64],
+                        [n * 7],
                         0u16,
                     ))
                 }
             })
+        } else {
+            None
+        };
+        let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro {
+            Some(opencl::create_buffer(&queue, [n], 0f32))
         } else {
             None
         };
@@ -709,6 +716,12 @@ impl LbmDomain {
                         .as_ref()
                         .expect("b_dyn buffer used but not initialized"),
                 );
+            
+            match qi.as_ref().expect("qi should be initialized") {
+                VariableFloatBuffer::U16(qi_u16) => kernel_stream_collide_builder.arg_named("Qi", qi_u16),
+                VariableFloatBuffer::F32(qi_f32) => kernel_stream_collide_builder.arg_named("Qi", qi_f32),
+            };
+            kernel_stream_collide_builder.arg_named("Q", q.as_ref().expect("Q should be initialized"));
 
             // Dynamic B kernel
             kernel_update_e_b_dyn = Some(
@@ -729,7 +742,7 @@ impl LbmDomain {
                             .as_ref()
                             .expect("b_dyn buffer used but not initialized"),
                     )
-                    .arg_named("rho", &rho)
+                    .arg_named("Q", q.as_ref().expect("q should be initialized"))
                     .arg_named("u", &u)
                     .arg_named("flags", &flags)
                     .build()
@@ -946,6 +959,7 @@ impl LbmDomain {
             e_dyn,
             b_dyn,
             qi,
+            q,
             f,
             t,
 
