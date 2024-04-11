@@ -669,20 +669,20 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 				const uint3 vec_r = coordinates(n_c) - coord_n;
 				const float3 pre_field =  convert_float3(vec_r) / cbmagnitude(vec_r);
 
-				e += def_ke * q_c * pre_field; // E imparted by nearby cell (Coulomb)
-				b += def_kmu * q_c * cross(v_c, pre_field); // B imparted by nearby cell (Biot-Savart)
+				e += q_c * pre_field; // E imparted by nearby cell (Coulomb)
+				b += q_c * cross(v_c, pre_field); // B imparted by nearby cell (Biot-Savart)
 			}
 		}
 	}
 
 	// update buffers
-	E_dyn[n						] += e.x;
-	E_dyn[(ulong)n+def_N    	] += e.y;
-	E_dyn[(ulong)n+def_N*2ul	] += e.z;
+	E_dyn[n					] += def_ke * e.x;
+	E_dyn[(ulong)n+def_N	] += def_ke * e.y;
+	E_dyn[(ulong)n+def_N*2ul] += def_ke * e.z;
 
-	B_dyn[n						] += b.x;
-	B_dyn[(ulong)n+def_N		] += b.y;
-	B_dyn[(ulong)n+def_N*2ul	] += b.z;
+	B_dyn[n					] += def_kmu * b.x;
+	B_dyn[(ulong)n+def_N	] += def_kmu * b.y;
+	B_dyn[(ulong)n+def_N*2ul] += def_kmu * b.z;
 } // update_e_b_dynamic()
 #endif
 
