@@ -567,6 +567,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute initialize() on halo
+	ulong nxi=(ulong)n, nyi=def_N+(ulong)n, nzi=2ul*def_N+(ulong)n; // n indecies for x, y and z components
     uchar flagsn = flags[n];
     const uchar flagsn_bo = flagsn&TYPE_BO; // extract boundary flags
     uint j[def_velocity_set]; // neighbor indices
@@ -577,14 +578,14 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 	    bool TYPE_ONLY_S = true; // has only solid neighbors
 	    for(uint i=1u; i<def_velocity_set; i++) TYPE_ONLY_S = TYPE_ONLY_S&&(flagsj[i]&TYPE_BO)==TYPE_S;
 	    if(TYPE_ONLY_S) {
-	    	u[                 n] = 0.0f; // reset velocity for solid lattice points with only boundary neighbors
-	    	u[    def_N+(ulong)n] = 0.0f;
-	    	u[2ul*def_N+(ulong)n] = 0.0f;
+	    	u[nxi] = 0.0f; // reset velocity for solid lattice points with only boundary neighbors
+	    	u[nyi] = 0.0f;
+	    	u[nzi] = 0.0f;
 	    }
         if(flagsn_bo==TYPE_S) {
-	        u[                 n] = 0.0f; // reset velocity for all solid lattice points
-	        u[    def_N+(ulong)n] = 0.0f;
-	        u[2ul*def_N+(ulong)n] = 0.0f;
+	        u[nxi] = 0.0f; // reset velocity for all solid lattice points
+	        u[nyi] = 0.0f;
+	        u[nzi] = 0.0f;
         }
     }
     float feq[def_velocity_set]; // f_equilibrium
@@ -593,18 +594,18 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 	#ifdef MAGNETO_HYDRO
 		// Initialize charge ddfs
 		float qeq[7]; // q_equilibrium
-		calculate_q_eq(Qn, u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], qeq);
+		calculate_q_eq(Q[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], qeq);
 		uint j7[7]; // neighbors of D3Q7 subset
 		neighbors_charge(n, j7);
 		store_q(n, qeq, qi, j7, 1ul); // write to qi. perform streaming (part 1)
 
 		// Clear dyn with static for recomputation
-		B_dyn[                 n] = B[                 n];
-		B_dyn[    def_N+(ulong)n] = B[    def_N+(ulong)n];
-		B_dyn[2ul*def_N+(ulong)n] = B[2ul*def_N+(ulong)n];
-		E_dyn[                 n] = E[                 n];
-		E_dyn[    def_N+(ulong)n] = E[    def_N+(ulong)n];
-		E_dyn[2ul*def_N+(ulong)n] = E[2ul*def_N+(ulong)n];
+		B_dyn[nxi] = B[nxi];
+		B_dyn[nyi] = B[nyi];
+		B_dyn[nzi] = B[nzi];
+		E_dyn[nxi] = E[nxi];
+		E_dyn[nyi] = E[nyi];
+		E_dyn[nzi] = E[nzi];
 	#endif // MAGNETO_HYDRO
 } // initialize()
 
@@ -639,7 +640,7 @@ __kernel void update_fields(const global fpxx* fi, global float* rho, global flo
 } // update_fields()
 
 #ifdef MAGNETO_HYDRO
-__kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* q, const global float* u, const global uchar* flags) {
+__kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* Q, const global float* u, const global uchar* flags) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
     const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
@@ -662,7 +663,7 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 				const uint n_c = x + (y + z * def_Nx) * def_Ny;
 				if (n == n_c) continue;
 					
-				const float q_c = q[n_c]; // charge of nearby cell
+				const float q_c = Q[n_c]; // charge of nearby cell
 				const float3 v_c = {u[n_c], u[(ulong)n_c+def_N], u[(ulong)n_c+def_N*2ul]}; // velocity of nearby cell
 
 				// precalculation for both fields
@@ -802,7 +803,7 @@ kernel void transfer__insert_rho_u_flags(const uint direction, const ulong t, co
 }
 // Qi (Charge ddfs) 
 #ifdef MAGNETO_HYDRO
-void extract_gi(const uint a, const uint n, const uint side, const ulong t, global fpxx_copy* transfer_buffer, const global fpxx_copy* qi) {
+void extract_qi(const uint a, const uint n, const uint side, const ulong t, global fpxx_copy* transfer_buffer, const global fpxx_copy* qi) {
 	uint j7[7u]; // neighbor indices
 	neighbors_charge(n, j7); // calculate neighbor indices
 	const uint i = side+1u;
@@ -819,8 +820,8 @@ void insert_qi(const uint a, const uint n, const uint side, const ulong t, const
 kernel void transfer_extract_qi(const uint direction, const ulong t, global fpxx_copy* transfer_buffer_p, global fpxx_copy* transfer_buffer_m, const global fpxx_copy* qi) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	extract_gi(a, index_extract_p(a, direction), 2u*direction+0u, t, transfer_buffer_p, qi);
-	extract_gi(a, index_extract_m(a, direction), 2u*direction+1u, t, transfer_buffer_m, qi);
+	extract_qi(a, index_extract_p(a, direction), 2u*direction+0u, t, transfer_buffer_p, qi);
+	extract_qi(a, index_extract_m(a, direction), 2u*direction+1u, t, transfer_buffer_m, qi);
 }
 kernel void transfer__insert_qi(const uint direction, const ulong t, const global fpxx_copy* transfer_buffer_p, const global fpxx_copy* transfer_buffer_m, global fpxx_copy* qi) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
