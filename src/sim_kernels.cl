@@ -408,16 +408,18 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     float fhn[def_velocity_set]; // local DDFs
     load_f(n, fhn, fi, j, t); // perform streaming (part 2)
 
+	ulong nxi=(ulong)n, nyi=def_N+(ulong)n, nzi=2ul*def_N+(ulong)n; // n indecies for x, y and z components
+
     float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
 
     #ifndef EQUILIBRIUM_BOUNDARIES // EQUILIBRIUM_BOUNDARIES
         calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
     #else
         if(flagsn_bo==TYPE_E) {
-        	rhon = rho[               n]; // apply preset velocity/density
-        	uxn  = u[                 n];
-        	uyn  = u[    def_N+(ulong)n];
-        	uzn  = u[2ul*def_N+(ulong)n];
+        	rhon = rho[n]; // apply preset velocity/density
+        	uxn  = u[nxi];
+        	uyn  = u[nyi];
+        	uzn  = u[nzi];
         } else {
         	calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
         }
@@ -429,9 +431,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 	#ifdef FORCE_FIELD
 	{ // separate block to avoid variable name conflicts
-		fxn += F[                 n]; // apply force field
-		fyn += F[    def_N+(ulong)n];
-		fzn += F[2ul*def_N+(ulong)n];
+		fxn += F[nxi]; // apply force field
+		fyn += F[nyi];
+		fzn += F[nzi];
 	}
 	#endif
 
@@ -456,17 +458,17 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		store_q(n, qhn, qi, j7, t); // perform streaming (part 1)
 
 		// F = charge * (E + (U cross B))
-		fxn += Qn * (E_dyn[                 n] + uyn*B_dyn[2ul*def_N+(ulong)n] - uzn*B_dyn[    def_N+(ulong)n]); // force = charge * (electric field + magnetic field x U)
-		fyn += Qn * (E_dyn[    def_N+(ulong)n] + uzn*B_dyn[                 n] - uxn*B_dyn[2ul*def_N+(ulong)n]);
-		fzn += Qn * (E_dyn[2ul*def_N+(ulong)n] + uxn*B_dyn[    def_N+(ulong)n] - uyn*B_dyn[                 n]);
+		fxn += Qn * (E_dyn[nxi] + uyn*B_dyn[nzi] - uzn*B_dyn[nyi]); // force = charge * (electric field + magnetic field x U)
+		fyn += Qn * (E_dyn[nyi] + uzn*B_dyn[nxi] - uxn*B_dyn[nzi]);
+		fzn += Qn * (E_dyn[nzi] + uxn*B_dyn[nyi] - uyn*B_dyn[nxi]);
 
 		// Clear dynamic buffers with static buffers for recomputation
-		B_dyn[                 n] = B[                 n];
-		B_dyn[    def_N+(ulong)n] = B[    def_N+(ulong)n];
-		B_dyn[2ul*def_N+(ulong)n] = B[2ul*def_N+(ulong)n];
-		E_dyn[                 n] = E[                 n];
-		E_dyn[    def_N+(ulong)n] = E[    def_N+(ulong)n];
-		E_dyn[2ul*def_N+(ulong)n] = E[2ul*def_N+(ulong)n];
+		B_dyn[nxi] = B[nxi];
+		B_dyn[nyi] = B[nyi];
+		B_dyn[nzi] = B[nzi];
+		E_dyn[nxi] = E[nxi];
+		E_dyn[nyi] = E[nyi];
+		E_dyn[nzi] = E[nzi];
 	}
 	#endif// MAGNETO_HYDRO
 
@@ -486,18 +488,18 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 	#ifndef EQUILIBRIUM_BOUNDARIES
 	#ifdef UPDATE_FIELDS
-		rho[               n] = rhon; // update density field
-		u[                 n] = uxn; // update velocity field
-		u[    def_N+(ulong)n] = uyn;
-		u[2ul*def_N+(ulong)n] = uzn;
+		rho[n] = rhon; // update density field
+		u[nxi] = uxn; // update velocity field
+		u[nyi] = uyn;
+		u[nzi] = uzn;
 	#endif // UPDATE_FIELDS
 	#else // EQUILIBRIUM_BOUNDARIES
 	#ifdef UPDATE_FIELDS
 		if(flagsn_bo!=TYPE_E) { // only update fields for non-TYPE_E cells
-			rho[               n] = rhon; // update density field
-			u[                 n] = uxn; // update velocity field
-			u[    def_N+(ulong)n] = uyn;
-			u[2ul*def_N+(ulong)n] = uzn;
+			rho[n] = rhon; // update density field
+			u[nxi] = uxn; // update velocity field
+			u[nyi] = uyn;
+			u[nzi] = uzn;
 		}
 	#endif // UPDATE_FIELDS
 	#endif // EQUILIBRIUM_BOUNDARIES
@@ -559,6 +561,8 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 , const global float* B
 , global float* E_dyn
 , global float* B_dyn
+, global float* qi
+, const global float* Q
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -587,6 +591,13 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
     calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
 	#ifdef MAGNETO_HYDRO
+		// Initialize charge ddfs
+		float qeq[7]; // q_equilibrium
+		calculate_q_eq(Qn, u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], qeq);
+		uint j7[7]; // neighbors of D3Q7 subset
+		neighbors_charge(n, j7);
+		store_q(n, qeq, qi, j7, 1ul); // write to qi. perform streaming (part 1)
+
 		// Clear dyn with static for recomputation
 		B_dyn[                 n] = B[                 n];
 		B_dyn[    def_N+(ulong)n] = B[    def_N+(ulong)n];
@@ -594,7 +605,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 		E_dyn[                 n] = E[                 n];
 		E_dyn[    def_N+(ulong)n] = E[    def_N+(ulong)n];
 		E_dyn[2ul*def_N+(ulong)n] = E[2ul*def_N+(ulong)n];
-	#endif // ELECTRIC FORCE
+	#endif // MAGNETO_HYDRO
 } // initialize()
 
 __kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
@@ -625,7 +636,7 @@ __kernel void update_fields(const global fpxx* fi, global float* rho, global flo
 	// update charge field (later)
 
 
-}
+} // update_fields()
 
 #ifdef MAGNETO_HYDRO
 __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* q, const global float* u, const global uchar* flags) {
@@ -672,7 +683,7 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	B_dyn[n						] += b.x;
 	B_dyn[(ulong)n+def_N		] += b.y;
 	B_dyn[(ulong)n+def_N*2ul	] += b.z;
-}
+} // update_e_b_dynamic()
 #endif
 
 // Inter-Domain Transfer kernels

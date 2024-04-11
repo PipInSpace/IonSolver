@@ -129,6 +129,11 @@ impl Units {
         1.0 / (self.si_to_epsilon_0() * sq(2.99792458E8) / sq(self.m) * sq(self.s))
     }
 
+    pub fn si_to_charge(&self, q: f32) -> f32 {
+        // unit: (A*s)
+        q / self.s
+    }
+
     pub fn si_to_charge_per_dens(&self, cpd: f32) -> f32 {
         // unit: (A/s)/(kg/m^3) = m^3/(kg*s)
         cpd * (cb(self.m) * (self.kg / self.s))
