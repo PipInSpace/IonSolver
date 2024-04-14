@@ -607,11 +607,14 @@ impl LbmDomain {
                 .arg_named("E_dyn", e_dyn.as_ref().expect("e_dyn buffer used but not initialized"))
                 .arg_named("B_dyn", b_dyn.as_ref().expect("b_dyn buffer used but not initialized"));
             
+            
             match qi.as_ref().expect("qi should be initialized") {
-                VariableFloatBuffer::U16(qi_u16) => kernel_stream_collide_builder.arg_named("Qi", qi_u16),
-                VariableFloatBuffer::F32(qi_f32) => kernel_stream_collide_builder.arg_named("Qi", qi_f32),
+                VariableFloatBuffer::U16(qi_u16) => {kernel_stream_collide_builder.arg_named("qi", qi_u16); kernel_initialize_builder.arg_named("qi", qi_u16)},
+                VariableFloatBuffer::F32(qi_f32) => {kernel_stream_collide_builder.arg_named("qi", qi_f32); kernel_initialize_builder.arg_named("qi", qi_f32)},
             };
+            
             kernel_stream_collide_builder.arg_named("Q", q.as_ref().expect("Q should be initialized"));
+            kernel_initialize_builder.arg_named("Q", q.as_ref().expect("Q should be initialized"));
 
             // Dynamic E/B kernel
             kernel_update_e_b_dyn = Some(
@@ -630,8 +633,8 @@ impl LbmDomain {
             )
         }
 
-        let kernel_initialize: Kernel = kernel_initialize_builder.build().unwrap();
         let kernel_stream_collide: Kernel = kernel_stream_collide_builder.build().unwrap();
+        let kernel_initialize: Kernel = kernel_initialize_builder.build().unwrap();
         let kernel_update_fields: Kernel = kernel_update_fields_builder.build().unwrap();
 
         // Multi-Domain-Transfers:

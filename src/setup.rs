@@ -13,7 +13,7 @@ use crate::*;
 ///
 /// Run `your_lbm.initialize()` and return it with the config.
 pub fn setup() -> Lbm {
-    /*
+    
     //let now = Instant::now();
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.print();
@@ -38,7 +38,7 @@ pub fn setup() -> Lbm {
     lbm_config.graphics_config.camera_width = 1920;
     lbm_config.graphics_config.camera_height = 1080;
     lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::E;
     lbm_config.graphics_config.streamline_mode = true;
     lbm_config.graphics_config.u_max = 0.032;
     lbm_config.graphics_config.q_min = 0.00001;
@@ -59,7 +59,7 @@ pub fn setup() -> Lbm {
         flags[i] = 0x01;
         flags[len - i] = 0x01;
     }
-    lbm.domains[0].flags.write(&flags).enq().unwrap();
+    //lbm.domains[0].flags.write(&flags).enq().unwrap();
 
     //// electric field
     //let mut vec_q: Vec<(u64, f32)> = vec![];
@@ -67,6 +67,7 @@ pub fn setup() -> Lbm {
     //vec_q.push((1056840, -10.0));
     //precompute::precompute_E(&lbm, vec_q);
 
+    precompute::constant_E(&lbm, [1.0, 1.0, 0.0]);
     // magnetic field
     let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
     //vec_m.push((1056824, [1.0, 0.0, 0.0]));
@@ -77,13 +78,13 @@ pub fn setup() -> Lbm {
         vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000000.0]));
         vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000000.0]));
     }
-    precompute::precompute_B(&lbm, vec_m);
+    //precompute::precompute_B(&lbm, vec_m);
 
     lbm.setup_velocity_field((0.01, 0.001, 0.0), 1.0);
 
-    lbm*/
+    lbm
     
-    setup_domain_test()
+    //setup_domain_test()
 }
 
 #[allow(unused)]

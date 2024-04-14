@@ -2,26 +2,33 @@ use crate::*;
 use rayon::prelude::*;
 
 #[allow(unused)]
-/// sets the B-Field to a constant value
+/// sets the E-Field to a constant value
 pub fn constant_E(lbm: &Lbm, e: [f32; 3]) {
     // Set variables
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
-    let mut e_field: Vec<f32> = vec![0.0; (n * 3) as usize];
-
-    for i in 0..n {
-        e_field[i as usize] = e[0];
-        e_field[(i * 2) as usize] = e[1];
-        e_field[(i * 3) as usize] = e[2];
+    let d = lbm.config.d_x as u64 * lbm.config.d_y as u64 * lbm.config.d_z as u64; 
+    let dsx = lbm.config.n_x as u64 / lbm.config.d_x as u64 + (lbm.config.d_x > 1u32) as u64 * 2; // Domain size on each axis
+    let dsy = lbm.config.n_y as u64 / lbm.config.d_y as u64 + (lbm.config.d_y > 1u32) as u64 * 2; // Needs to account for halo offsets
+    let dsz = lbm.config.n_z as u64 / lbm.config.d_z as u64 + (lbm.config.d_z > 1u32) as u64 * 2;
+    let dtotal = dsx * dsy * dsz;
+    for i in 0..d {
+        let mut e_field: Vec<f32> = vec![0.0; (dtotal * 3) as usize];
+    
+        for j in 0..dtotal {
+            e_field[j as usize] = e[0];
+            e_field[(j * 2) as usize] = e[1];
+            e_field[(j * 3) as usize] = e[2];
+        }
+    
+        // Write to device
+        lbm.domains[i as usize]
+            .e
+            .as_ref()
+            .expect("E buffer used but not initialized")
+            .write(&e_field)
+            .enq()
+            .unwrap();
     }
-
-    // Write to device
-    lbm.domains[0]
-        .e
-        .as_ref()
-        .expect("E buffer used but not initialized")
-        .write(&e_field)
-        .enq()
-        .unwrap();
 }
 
 #[allow(unused_mut)] // Variables are mutated with deborrow
@@ -30,8 +37,12 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
     // TODO: Make multi-domain compatible
 
     // Set variables
-    let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
-    let mut e_field: Vec<f32> = vec![0.0; (n * 3) as usize];
+    let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64; // number of cells
+    let d = lbm.config.d_x as u64 * lbm.config.d_y as u64 * lbm.config.d_z as u64; // number of domains
+    let dsx = lbm.config.n_x as u64 / lbm.config.d_x as u64 + (lbm.config.d_x > 1u32) as u64 * 2; // Domain size on each axis
+    let dsy = lbm.config.n_y as u64 / lbm.config.d_y as u64 + (lbm.config.d_y > 1u32) as u64 * 2; // Needs to account for halo offsets
+    let dsz = lbm.config.n_z as u64 / lbm.config.d_z as u64 + (lbm.config.d_z > 1u32) as u64 * 2;
+    let dtotal = dsx * dsy * dsz; // cells per domain
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     let def_ke = lbm.config.units.si_to_ke();
     println!(
@@ -39,7 +50,7 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
         charges.len(),
         n
     );
-
+    
     fn deborrow<'b, T>(r: &T) -> &'b mut T {
         // Needed to access e_field in parallel.
         // This is safe, because no indecies are accessed multiple times
@@ -49,23 +60,29 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
         }
     }
 
-    let charges_u32_3_pos: Vec<([u32; 3], f32)> = u32_3_pos(charges, lengths);
-
-    (0..n).into_par_iter().for_each(|i| {
-        let e_at = calculate_e_at(i, &charges_u32_3_pos, lengths, def_ke);
-        deborrow(&e_field)[i as usize] = e_at[0];
-        deborrow(&e_field)[(i + n) as usize] = e_at[1];
-        deborrow(&e_field)[(i + (n * 2)) as usize] = e_at[2];
-    });
-
-    // Write to device
-    lbm.domains[0]
-        .e
-        .as_ref()
-        .expect("E buffer used but not initialized")
-        .write(&e_field)
-        .enq()
-        .unwrap();
+    /*
+    for current_d in 0..d {
+        let mut e_field: Vec<f32> = vec![0.0; (n * 3) as usize];
+        let charges_u32_3_pos: Vec<([u32; 3], f32)> = u32_3_pos(&charges, lengths);
+    
+        (0..dtotal).into_par_iter().for_each(|i| {
+            let i_cell = 
+            let e_at = calculate_e_at(i_cell, &charges_u32_3_pos, lengths, def_ke);
+            deborrow(&e_field)[i as usize] = e_at[0];
+            deborrow(&e_field)[(i + n) as usize] = e_at[1];
+            deborrow(&e_field)[(i + (n * 2)) as usize] = e_at[2];
+        });
+    
+        // Write to device
+        lbm.domains[current_d as usize]
+            .e
+            .as_ref()
+            .expect("E buffer used but not initialized")
+            .write(&e_field)
+            .enq()
+            .unwrap();
+    }
+    */
 }
 
 /// Calculates electric field vector at a cell with index n
@@ -112,22 +129,30 @@ fn calculate_e_at(
 pub fn constant_B(lbm: &Lbm, b: [f32; 3]) {
     // Set variables
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
-    let mut b_field: Vec<f32> = vec![0.0; (n * 3) as usize];
+    let d = lbm.config.d_x as u64 * lbm.config.d_y as u64 * lbm.config.d_z as u64; 
+    let dsx = lbm.config.n_x as u64 / lbm.config.d_x as u64 + (lbm.config.d_x > 1u32) as u64 * 2; // Domain size on each axis
+    let dsy = lbm.config.n_y as u64 / lbm.config.d_y as u64 + (lbm.config.d_y > 1u32) as u64 * 2; // Needs to account for halo offsets
+    let dsz = lbm.config.n_z as u64 / lbm.config.d_z as u64 + (lbm.config.d_z > 1u32) as u64 * 2;
+    let dtotal = dsx * dsy * dsz;
+    for i in 0..d {
+        let mut b_field: Vec<f32> = vec![0.0; (dtotal * 3) as usize];
 
-    for i in 0..n {
-        b_field[i as usize] = b[0];
-        b_field[(i * 2) as usize] = b[1];
-        b_field[(i * 3) as usize] = b[2];
+        for j in 0..dtotal {
+            b_field[j as usize] = b[0];
+            b_field[(j * 2) as usize] = b[1];
+            b_field[(j * 3) as usize] = b[2];
+        }
+
+        // Write to device
+        lbm.domains[i as usize]
+            .b
+            .as_ref()
+            .expect("B buffer used but not initialized")
+            .write(&b_field)
+            .enq()
+            .unwrap();
     }
 
-    // Write to device
-    lbm.domains[0]
-        .b
-        .as_ref()
-        .expect("B buffer used but not initialized")
-        .write(&b_field)
-        .enq()
-        .unwrap();
 }
 
 #[allow(unused_mut)] // Variables are mutated with deborrow
@@ -208,7 +233,7 @@ pub fn calculate_psi_field(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) -> Vec<f32>
         n,
     );
 
-    let magnets_u32_3_pos: Vec<([u32; 3], [f32; 3])> = u32_3_pos(magnets, lengths);
+    let magnets_u32_3_pos: Vec<([u32; 3], [f32; 3])> = u32_3_pos(&magnets, lengths);
 
     // get psi for all including padding
     psi_field.par_iter_mut().enumerate().for_each(|(i, item)| {
@@ -268,7 +293,7 @@ fn calculate_psi_at(n: u64, magnets: &[([u32; 3], [f32; 3])], lengths: (u32, u32
 }
 
 /// Converts u64 index positions to u32 coords in a vector
-fn u32_3_pos<T: Copy>(gen_vector: Vec<(u64, T)>, lengths: (u32, u32, u32)) -> Vec<([u32; 3], T)> {
+fn u32_3_pos<T: Copy>(gen_vector: &Vec<(u64, T)>, lengths: (u32, u32, u32)) -> Vec<([u32; 3], T)> {
     let mut gen_vector_u32_3: Vec<([u32; 3], T)> = Vec::with_capacity(gen_vector.len());
 
     // Precompute position vectors
