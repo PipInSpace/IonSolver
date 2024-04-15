@@ -389,10 +389,10 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 #endif // FORCE_FIELD
 #ifdef MAGNETO_HYDRO
 , const global float* E	// static electric field
-, const global float* B	// static magnetic flux
+, const global float* B	// static magnetic flux density
 , global float* E_dyn	// dynamic electric field
-, global float* B_dyn	// dynamic magnetic flux
-, global float* qi		// charge ddfs
+, global float* B_dyn	// dynamic magnetic flux density
+, global fpxx* qi		// charge ddfs
 , global float* Q		// charge
 #endif // MAGNETO_HYDRO
 ) {
