@@ -38,10 +38,10 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
 
     // Set variables
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64; // number of cells
-    let d = lbm.config.d_x as u64 * lbm.config.d_y as u64 * lbm.config.d_z as u64; // number of domains
-    let dsx = lbm.config.n_x as u64 / lbm.config.d_x as u64 + (lbm.config.d_x > 1u32) as u64 * 2; // Domain size on each axis
-    let dsy = lbm.config.n_y as u64 / lbm.config.d_y as u64 + (lbm.config.d_y > 1u32) as u64 * 2; // Needs to account for halo offsets
-    let dsz = lbm.config.n_z as u64 / lbm.config.d_z as u64 + (lbm.config.d_z > 1u32) as u64 * 2;
+    let d: u32 = lbm.config.d_x * lbm.config.d_y * lbm.config.d_z; // number of domains
+    let dsx = lbm.config.n_x / lbm.config.d_x + (lbm.config.d_x > 1u32) as u32 * 2; // Domain size on each axis
+    let dsy = lbm.config.n_y / lbm.config.d_y + (lbm.config.d_y > 1u32) as u32 * 2; // Needs to account for halo offsets
+    let dsz = lbm.config.n_z / lbm.config.d_z + (lbm.config.d_z > 1u32) as u32 * 2;
     let dtotal = dsx * dsy * dsz; // cells per domain
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     let def_ke = lbm.config.units.si_to_ke();
@@ -83,18 +83,59 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
             .unwrap();
     }
     */
+    let dx = lbm.config.d_x;
+    let dy = lbm.config.d_y;
+    let dz = lbm.config.d_z;
+    for current_d in 0..d {
+        let x = (current_d % (dx * dy)) % dx; // Current Domain coordinates
+        let y = (current_d % (dx * dy)) / dx;
+        let z = current_d / (dx * dy);
+
+        let mut e_field: Vec<f32> = vec![0.0; (dtotal * 3) as usize];
+        let charges_u32_3_pos: Vec<([u32; 3], f32)> = u32_3_pos(&charges, lengths);
+
+        (0..dsz).into_par_iter().for_each(|zi| {
+            (0..dsy).into_par_iter().for_each(|yi| {
+                (0..dsx).into_par_iter().for_each(|xi| {
+                    //do not set at halo offsets
+                    if !(((xi == 0 || xi == dsx - 1) && dx > 1)
+                        || ((yi == 0 || yi == dsy - 1) && dy > 1)
+                        || ((zi == 0 || zi == dsz - 1) && dz > 1))
+                    {
+                        let gx: u32 =
+                            xi - (dx > 1u32) as u32 + x * (dsx - (dx > 1u32) as u32 * 2); // Global coordinates
+                        let gy: u32 =
+                            yi - (dy > 1u32) as u32 + y * (dsy - (dy > 1u32) as u32 * 2);
+                        let gz: u32 =
+                            zi - (dz > 1u32) as u32 + z * (dsz - (dz > 1u32) as u32 * 2);
+
+                                        
+                        let e_at = calculate_e_at((gx, gy, gz), &charges_u32_3_pos, def_ke); // god i hope this works
+                        deborrow(&e_field)[(xi + (dsy * (yi + (dsz * zi)))) as usize] = e_at[0];
+                        deborrow(&e_field)[((xi + (dsy * (yi + (dsz * zi)))) + dtotal) as usize] = e_at[1];
+                        deborrow(&e_field)[((xi + (dsy * (yi + (dsz * zi)))) + (dtotal * 2)) as usize] = e_at[2];
+                    }
+                });
+            });
+        });
+
+        lbm.domains[current_d as usize]
+        .e
+        .as_ref()
+        .expect("E buffer used but not initialized")
+        .write(&e_field)
+        .enq()
+        .unwrap();
+    }
 }
 
 /// Calculates electric field vector at a cell with index n
 /// from a vector of charges.
 fn calculate_e_at(
-    n: u64,
+    pos: (u32, u32, u32),
     charges: &[([u32; 3], f32)],
-    lengths: (u32, u32, u32),
     def_ke: f32,
 ) -> [f32; 3] {
-    // Compute current cell coordinates
-    let coord_cell = coord(n, lengths);
     // Initialize field vector
     let mut e_at_cell = [0.0; 3];
 
@@ -102,9 +143,9 @@ fn calculate_e_at(
     for &(coord_charge, charge) in charges.iter() {
         // Compute difference vector from cell to current charge
         let coord_diff = [
-            (coord_cell[0] as i32) - (coord_charge[0] as i32),
-            (coord_cell[1] as i32) - (coord_charge[1] as i32),
-            (coord_cell[2] as i32) - (coord_charge[2] as i32),
+            (pos.0 as i32) - (coord_charge[0] as i32),
+            (pos.1 as i32) - (coord_charge[1] as i32),
+            (pos.2 as i32) - (coord_charge[2] as i32),
         ];
 
         // if not the cell we are checking
@@ -158,13 +199,15 @@ pub fn constant_B(lbm: &Lbm, b: [f32; 3]) {
 #[allow(unused_mut)] // Variables are mutated with deborrow
 /// Precomputes the magnetic field from a Vector of magnetic scalar potentials
 pub fn precompute_B(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) {
-    // TODO: Make multi-domain compatible
-
     let vec_psi = precompute::calculate_psi_field(lbm, magnets);
 
     // Set variables
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
-    let mut b_field: Vec<f32> = vec![0.0; (n * 3) as usize];
+    let d: u32 = lbm.config.d_x * lbm.config.d_y * lbm.config.d_z; // number of domains
+    let dsx = lbm.config.n_x / lbm.config.d_x + (lbm.config.d_x > 1u32) as u32 * 2; // Domain size on each axis
+    let dsy = lbm.config.n_y / lbm.config.d_y + (lbm.config.d_y > 1u32) as u32 * 2; // Needs to account for halo offsets
+    let dsz = lbm.config.n_z / lbm.config.d_z + (lbm.config.d_z > 1u32) as u32 * 2;
+    let dtotal = dsx * dsy * dsz; // cells per domain
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     let def_mu0 = lbm.config.units.si_to_mu_0();
     println!(
@@ -181,34 +224,60 @@ pub fn precompute_B(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) {
         }
     }
 
-    (0..n).into_par_iter().for_each(|i| {
-        let b_at = calculate_b_at(i, &vec_psi, lengths, def_mu0);
-        deborrow(&b_field)[i as usize] = b_at[0];
-        deborrow(&b_field)[(i + n) as usize] = b_at[1];
-        deborrow(&b_field)[(i + (n * 2)) as usize] = b_at[2];
-    });
+    let dx = lbm.config.d_x;
+    let dy = lbm.config.d_y;
+    let dz = lbm.config.d_z;
+    for current_d in 0..d {
+        let x = (current_d % (dx * dy)) % dx; // Current Domain coordinates
+        let y = (current_d % (dx * dy)) / dx;
+        let z = current_d / (dx * dy);
 
-    // Write to device
-    lbm.domains[0]
-        .b
+        let mut b_field: Vec<f32> = vec![0.0; (dtotal * 3) as usize];
+
+        (0..dsz).into_par_iter().for_each(|zi| {
+            (0..dsy).into_par_iter().for_each(|yi| {
+                (0..dsx).into_par_iter().for_each(|xi| {
+                    //do not set at halo offsets
+                    if !(((xi == 0 || xi == dsx - 1) && dx > 1)
+                        || ((yi == 0 || yi == dsy - 1) && dy > 1)
+                        || ((zi == 0 || zi == dsz - 1) && dz > 1))
+                    {
+                        let gx: u32 =
+                            xi - (dx > 1u32) as u32 + x * (dsx - (dx > 1u32) as u32 * 2); // Global coordinates
+                        let gy: u32 =
+                            yi - (dy > 1u32) as u32 + y * (dsy - (dy > 1u32) as u32 * 2);
+                        let gz: u32 =
+                            zi - (dz > 1u32) as u32 + z * (dsz - (dz > 1u32) as u32 * 2);
+
+                                        
+                        let e_at = calculate_b_at((gx, gy, gz), &vec_psi, lengths, def_mu0); // god i hope this works
+                        deborrow(&b_field)[(xi + (dsy * (yi + (dsz * zi)))) as usize] = e_at[0];
+                        deborrow(&b_field)[((xi + (dsy * (yi + (dsz * zi)))) + dtotal) as usize] = e_at[1];
+                        deborrow(&b_field)[((xi + (dsy * (yi + (dsz * zi)))) + (dtotal * 2)) as usize] = e_at[2];
+                    }
+                });
+            });
+        });
+
+        lbm.domains[current_d as usize]
+        .e
         .as_ref()
-        .expect("B buffer used but not initialized")
+        .expect("E buffer used but not initialized")
         .write(&b_field)
         .enq()
         .unwrap();
+    }
 }
 
 #[allow(unused)]
-fn calculate_b_at(n: u64, psi: &[f32], lengths: (u32, u32, u32), def_mu0: f32) -> [f32; 3] {
+fn calculate_b_at(pos: (u32, u32, u32), psi: &[f32], lengths: (u32, u32, u32), def_mu0: f32) -> [f32; 3] {
     let mut b = [0.0f32; 3];
-
-    let coord = coord(n, lengths);
     let pre_b = nabla(
         psi,
         (lengths.0 + 2, lengths.1 + 2, lengths.2 + 2),
-        coord[0] + 1,
-        coord[1] + 1,
-        coord[2] + 1,
+        pos.0 + 1,
+        pos.1 + 1,
+        pos.2 + 1,
     );
 
     b[0] = -def_mu0 * pre_b[0];
@@ -262,31 +331,6 @@ fn calculate_psi_at(n: u64, magnets: &[([u32; 3], [f32; 3])], lengths: (u32, u32
             let pre_psi = dotp_f32_i32(magnetization, coord_diff) / cb(length(coord_diff));
             psi_at_cell += pre_psi;
         }
-
-        /*
-        if coord_cell.eq(&[31, 31, 31]) {
-            println!("PSI: {}", psi_at_cell/(4.0 * PI));
-        }
-
-        if coord_cell.eq(&[29, 30, 30]) {
-            println!("-x: {}", psi_at_cell/ (4.0 * PI));
-        }
-        if coord_cell.eq(&[31, 30, 30]) {
-            println!("+x: {}", psi_at_cell/ (4.0 * PI));
-        }
-        if coord_cell.eq(&[30, 31, 30]) {
-            println!("+y: {}", psi_at_cell/ (4.0 * PI));
-        }
-        if coord_cell.eq(&[30, 29, 30]) {
-            println!("-y: {}", psi_at_cell/ (4.0 * PI));
-        }
-        if coord_cell.eq(&[30, 30, 31]) {
-            println!("+z: {}", psi_at_cell/ (4.0 * PI));
-        }
-        if coord_cell.eq(&[30, 30, 29]) {
-            println!("-z: {}", psi_at_cell/ (4.0 * PI));
-        }
-        */
     }
 
     psi_at_cell / (4.0 * PI)
