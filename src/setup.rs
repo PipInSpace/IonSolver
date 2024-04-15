@@ -22,7 +22,7 @@ pub fn setup() -> Lbm {
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
     lbm_config.n_z = 256;
-    lbm_config.d_x = 1;
+    lbm_config.d_z = 2;
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
     lbm_config.charge_per_dens = 180000.0;
@@ -38,7 +38,7 @@ pub fn setup() -> Lbm {
     lbm_config.graphics_config.camera_width = 1920;
     lbm_config.graphics_config.camera_height = 1080;
     lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::E;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
     lbm_config.graphics_config.streamline_mode = true;
     lbm_config.graphics_config.u_max = 0.032;
     lbm_config.graphics_config.q_min = 0.00001;
@@ -67,7 +67,7 @@ pub fn setup() -> Lbm {
     //vec_q.push((1056840, -10.0));
     //precompute::precompute_E(&lbm, vec_q);
 
-    precompute::constant_E(&lbm, [1.0, 1.0, 0.0]);
+    //precompute::constant_E(&lbm, [1.0, 1.0, 0.0]);
     // magnetic field
     let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
     //vec_m.push((1056824, [1.0, 0.0, 0.0]));
@@ -78,7 +78,7 @@ pub fn setup() -> Lbm {
         vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000000.0]));
         vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000000.0]));
     }
-    //precompute::precompute_B(&lbm, vec_m);
+    precompute::precompute_B(&lbm, vec_m);
 
     lbm.setup_velocity_field((0.01, 0.001, 0.0), 1.0);
 
