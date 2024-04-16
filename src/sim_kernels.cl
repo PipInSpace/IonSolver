@@ -85,8 +85,8 @@ float half_to_float_custom(const ushort x) { // custom 16-bit floating-point for
 float sqmagnitude(uint3 v){
 	return sq(v.x) + sq(v.y) + sq(v.z);
 }
-float cbmagnitude(uint3 v){
-	return cb(sqrt((float)(uint_sq(v.x) + uint_sq(v.y) + uint_sq(v.z))));
+float cbmagnitude(float3 v){
+	return cb(sqrt(sq(v.x) + sq(v.y) + sq(v.z)));
 }
 int int_max(int x, int y) {
 	if (x > y) {
@@ -438,7 +438,6 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 	#endif
 
 	#ifdef MAGNETO_HYDRO
-	{
 		// Advection of charge. Cell charge is stored in charge ddfs 'qi' for advection with 'fi'.
 		uint j7[7]; // neighbors of D3Q7 subset
 		neighbors_charge(n, j7);
@@ -469,7 +468,6 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		E_dyn[nxi] = E[nxi];
 		E_dyn[nyi] = E[nyi];
 		E_dyn[nzi] = E[nzi];
-	}
 	#endif// MAGNETO_HYDRO
 
 	#ifdef VOLUME_FORCE
@@ -561,7 +559,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 , const global float* B
 , global float* E_dyn
 , global float* B_dyn
-, global float* qi
+, global fpxx* qi
 , const global float* Q
 #endif // MAGNETO_HYDRO
 ) {
@@ -648,27 +646,29 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
     if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
 
 	const uint3 coord_n = coordinates(n); // Cell coordinate
+	const float3 coord_nf = convert_float3(coord_n); // Cell coordinate as float vector
 
 	const uint x_upper = int_min(coord_n.x + def_ind_r + 1, def_Nx);
 	const uint y_upper = int_min(coord_n.y + def_ind_r + 1, def_Ny);
 	const uint z_upper = int_min(coord_n.z + def_ind_r + 1, def_Nz);
 
-	float3 e, b;
+	float3 e = {0.0f, 0.0f, 0.0f}, b = {0.0f, 0.0f, 0.0f};
 	
-	for (uint x = int_max(coord_n.x - def_ind_r, 0); x < x_upper; x++) {
-		for (uint y = int_max(coord_n.y - def_ind_r, 0); y < y_upper; y++) {
-			for (uint z = int_max(coord_n.z - def_ind_r, 0); z < z_upper; z++) {
+	for (uint x = (uint)int_max((int)coord_n.x - (int)def_ind_r, 0); x < x_upper; x++) {
+		for (uint y = (uint)int_max((int)coord_n.y - (int)def_ind_r, 0); y < y_upper; y++) {
+			for (uint z = (uint)int_max((int)coord_n.z - (int)def_ind_r, 0); z < z_upper; z++) {
 
 				// _c vars describe surronding cells 
-				const uint n_c = x + (y + z * def_Nx) * def_Ny;
+				const uint n_c = x + (y + z * def_Ny) * def_Nx;
 				if (n == n_c) continue;
 					
 				const float q_c = Q[n_c]; // charge of nearby cell
+				if (q_c == 0.0f) { continue; } // cells without charge have no influence
 				const float3 v_c = {u[n_c], u[(ulong)n_c+def_N], u[(ulong)n_c+def_N*2ul]}; // velocity of nearby cell
 
 				// precalculation for both fields
-				const uint3 vec_r = coordinates(n_c) - coord_n;
-				const float3 pre_field =  convert_float3(vec_r) / cbmagnitude(vec_r);
+				const float3 vec_r = coord_nf - convert_float3(coordinates(n_c));
+				const float3 pre_field = vec_r / cbmagnitude(vec_r);
 
 				e += q_c * pre_field; // E imparted by nearby cell (Coulomb)
 				b += q_c * cross(v_c, pre_field); // B imparted by nearby cell (Biot-Savart)

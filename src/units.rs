@@ -64,9 +64,9 @@ impl Units {
         f * (self.kg * self.m / (self.s * self.s))
     }
 
-    pub fn charge_to_si(&self, cl: f32) -> f32 {
-        // Unit: A/s, A fac is 1
-        cl / self.s
+    pub fn charge_to_si(&self, q: f32) -> f32 {
+        // Unit: As, A fac is 1
+        q / self.s
     }
 
     pub fn mag_flux_to_si(&self, b: f32) -> f32 {

@@ -16,69 +16,45 @@ pub fn setup() -> Lbm {
     
     //let now = Instant::now();
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.print();
+    //lbm_config.units.print();
     lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 10.0, 1.2250);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
-    lbm_config.n_z = 256;
-    lbm_config.d_z = 2;
+    lbm_config.n_z = 128;
+    lbm_config.d_z = 1;
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
-    lbm_config.charge_per_dens = 180000.0;
-    println!("    cpd in LU is: {}", lbm_config.units.si_to_charge_per_dens(180000.0));
+    //lbm_config.charge_per_dens = 180000.0;
+    //println!("    cpd in LU is: {}", lbm_config.units.si_to_charge_per_dens(180000.0));
     lbm_config.velocity_set = VelocitySet::D3Q19;
     // Extensions
     lbm_config.ext_volume_force = true;
     lbm_config.ext_magneto_hydro = true;
-    lbm_config.induction_range = 0;
+    lbm_config.induction_range = 20;
     // Graphics
     lbm_config.graphics_config.graphics_active = true;
     //lbm_config.graphics_config.background_color = 0x1c1b22;
     lbm_config.graphics_config.camera_width = 1920;
     lbm_config.graphics_config.camera_height = 1080;
-    lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
+    lbm_config.graphics_config.streamline_every = 4;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::EDyn;
+    lbm_config.graphics_config.field_mode = false;
     lbm_config.graphics_config.streamline_mode = true;
-    lbm_config.graphics_config.u_max = 0.032;
+    lbm_config.graphics_config.u_max = 0.000032;
     lbm_config.graphics_config.q_min = 0.00001;
     lbm_config.graphics_config.axes_mode = true;
-    //lbm_config.graphics_config.q_mode = true;
-    lbm_config.graphics_config.q_field_mode = true;
-    lbm_config.graphics_config.flags_surface_mode = true;
-    lbm_config.graphics_config.flags_mode = true;
 
-    //let mut lbm = setup_from_file("b-field_spin.ion", lbm_config);
+    let cpc = 0.09;
+    println!("Charge per cell: {}As", lbm_config.units.charge_to_si(cpc));
+    let mut charge: Vec<f32> = vec![0.0; (lbm_config.n_x * lbm_config.n_y * lbm_config.n_z) as usize];
+    for i in 0..lbm_config.n_x {
+        let n = i + (64 + 64 * lbm_config.n_y) * lbm_config.n_x;
+        charge[n as usize] = cpc;
+    }
 
     let mut lbm = Lbm::new(lbm_config);
-
-    let mut flags: Vec<u8> = vec![0; 128 * 128 * 256];
-    let len = flags.len() - 1;
-    // Solid
-    for i in 0..(128 * 128 * 8) {
-        flags[i] = 0x01;
-        flags[len - i] = 0x01;
-    }
-    //lbm.domains[0].flags.write(&flags).enq().unwrap();
-
-    //// electric field
-    //let mut vec_q: Vec<(u64, f32)> = vec![];
-    //vec_q.push((1056824, 10.0));
-    //vec_q.push((1056840, -10.0));
-    //precompute::precompute_E(&lbm, vec_q);
-
-    //precompute::constant_E(&lbm, [1.0, 1.0, 0.0]);
-    // magnetic field
-    let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
-    //vec_m.push((1056824, [1.0, 0.0, 0.0]));
-    //vec_m.push((1056832, [1.0, 0.0, 0.0]));
-    //vec_m.push((1056833, [1.0, 0.0, 0.0]));
-    //vec_m.push((1056840, [1.0, 0.0, 0.0]));
-    for i in 0..243 {
-        vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000000.0]));
-        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000000.0]));
-    }
-    precompute::precompute_B(&lbm, vec_m);
+    lbm.domains[0].q.as_ref().expect("msg").write(&charge).enq().unwrap();
 
     lbm.setup_velocity_field((0.01, 0.001, 0.0), 1.0);
 

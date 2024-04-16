@@ -454,7 +454,7 @@ pub fn get_graphics_defines(graphics_config: GraphicsConfig) -> String {
     +"\n	#define def_background_color "  + &graphics_config.background_color.to_string()
     +"\n	#define def_screen_width "      + &graphics_config.camera_width.to_string()+"u"
     +"\n	#define def_screen_height "     + &graphics_config.camera_height.to_string()+"u"
-    +"\n	#define def_scale_u "           + &(1.0f32 / (0.57735027f32 * graphics_config.u_max)).to_string()+"f"
+    +"\n	#define def_scale_u "           + &format!("{:?}f", 1.0f32 / (0.57735027f32 * graphics_config.u_max))
     +"\n	#define def_scale_Q_min "       + &graphics_config.q_min.to_string()+"f"
     +"\n	#define def_scale_F "           + &(1.0f32 / graphics_config.f_max).to_string()+"f"
     +"\n	#define def_streamline_sparse " + &graphics_config.streamline_every.to_string()+"u"
