@@ -564,7 +564,17 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)def_N||is_halo(n)) return; // don't execute initialize() on halo
+	if(n>=(uint)def_N) return; // Do not write into unallocated memory space
+	#ifdef MAGNETO_HYDRO
+		// Initialize charge ddfs (need to be set at halo)
+		float qeq[7]; // q_equilibrium
+		calculate_q_eq(Q[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], qeq);
+		uint j7[7]; // neighbors of D3Q7 subset
+		neighbors_charge(n, j7);
+		store_q(n, qeq, qi, j7, 1ul); // write to qi. perform streaming (part 1)
+	#endif // MAGNETO_HYDRO
+
+    if(is_halo(n)) return; // don't execute initialize() on halo
 	ulong nxi=(ulong)n, nyi=def_N+(ulong)n, nzi=2ul*def_N+(ulong)n; // n indecies for x, y and z components
     uchar flagsn = flags[n];
     const uchar flagsn_bo = flagsn&TYPE_BO; // extract boundary flags
@@ -589,15 +599,9 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
     float feq[def_velocity_set]; // f_equilibrium
     calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
-	#ifdef MAGNETO_HYDRO
-		// Initialize charge ddfs
-		float qeq[7]; // q_equilibrium
-		calculate_q_eq(Q[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], qeq);
-		uint j7[7]; // neighbors of D3Q7 subset
-		neighbors_charge(n, j7);
-		store_q(n, qeq, qi, j7, 1ul); // write to qi. perform streaming (part 1)
 
-		// Clear dyn with static for recomputation
+	#ifdef MAGNETO_HYDRO
+		// Clear dyn with static field for recomputation
 		B_dyn[nxi] = B[nxi];
 		B_dyn[nyi] = B[nyi];
 		B_dyn[nzi] = B[nzi];
@@ -648,15 +652,15 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	const uint3 coord_n = coordinates(n); // Cell coordinate
 	const float3 coord_nf = convert_float3(coord_n); // Cell coordinate as float vector
 
-	const uint x_upper = int_min(coord_n.x + def_ind_r + 1, def_Nx);
-	const uint y_upper = int_min(coord_n.y + def_ind_r + 1, def_Ny);
-	const uint z_upper = int_min(coord_n.z + def_ind_r + 1, def_Nz);
+	const uint x_upper = int_min(coord_n.x + def_ind_r + 1, def_Dx>1?def_Nx-1:def_Nx); // Do not read at halo offsets
+	const uint y_upper = int_min(coord_n.y + def_ind_r + 1, def_Dy>1?def_Ny-1:def_Ny);
+	const uint z_upper = int_min(coord_n.z + def_ind_r + 1, def_Dz>1?def_Nz-1:def_Nz);
 
 	float3 e = {0.0f, 0.0f, 0.0f}, b = {0.0f, 0.0f, 0.0f};
 	
-	for (uint x = (uint)int_max((int)coord_n.x - (int)def_ind_r, 0); x < x_upper; x++) {
-		for (uint y = (uint)int_max((int)coord_n.y - (int)def_ind_r, 0); y < y_upper; y++) {
-			for (uint z = (uint)int_max((int)coord_n.z - (int)def_ind_r, 0); z < z_upper; z++) {
+	for (uint x = (uint)int_max((int)coord_n.x - (int)def_ind_r, def_Dx>1?1:0); x < x_upper; x++) {
+		for (uint y = (uint)int_max((int)coord_n.y - (int)def_ind_r, def_Dy>1?1:0); y < y_upper; y++) {
+			for (uint z = (uint)int_max((int)coord_n.z - (int)def_ind_r, def_Dz>1?1:0); z < z_upper; z++) {
 
 				// _c vars describe surronding cells 
 				const uint n_c = x + (y + z * def_Ny) * def_Nx;
@@ -664,6 +668,7 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 					
 				const float q_c = Q[n_c]; // charge of nearby cell
 				if (q_c == 0.0f) { continue; } // cells without charge have no influence
+				//if (n_c < 100000) {printf("%fq%dn", q_c, n_c);}
 				const float3 v_c = {u[n_c], u[(ulong)n_c+def_N], u[(ulong)n_c+def_N*2ul]}; // velocity of nearby cell
 
 				// precalculation for both fields
