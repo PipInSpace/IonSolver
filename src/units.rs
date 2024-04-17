@@ -64,9 +64,9 @@ impl Units {
         f * (self.kg * self.m / (self.s * self.s))
     }
 
-    pub fn charge_to_si(&self, cl: f32) -> f32 {
-        // Unit: A/s, A fac is 1
-        cl / self.s
+    pub fn charge_to_si(&self, q: f32) -> f32 {
+        // Unit: As, A fac is 1
+        q / self.s
     }
 
     pub fn mag_flux_to_si(&self, b: f32) -> f32 {
@@ -129,9 +129,20 @@ impl Units {
         1.0 / (self.si_to_epsilon_0() * sq(2.99792458E8) / sq(self.m) * sq(self.s))
     }
 
+    pub fn si_to_charge(&self, q: f32) -> f32 {
+        // unit: (A*s)
+        q / self.s
+    }
+
     pub fn si_to_charge_per_dens(&self, cpd: f32) -> f32 {
         // unit: (A/s)/(kg/m^3) = m^3/(kg*s)
         cpd * (cb(self.m) * (self.kg / self.s))
+    }
+
+    pub fn si_to_k_charge_expansion(&self) -> f32 {
+        // TODO: q advection uses an expansion coefficient (org. thermal)
+        // This value is set to 1.0 in test simulations, the resulting def_w_T is 0.4
+        1.0//todo!()
     }
 
     /// From lbm.n_x and velocity u

@@ -32,6 +32,7 @@
 #define def_kmu 0.0f
 #define def_charge 0.1f // Electric charge of a cell
 #define def_ind_r 5 // Range of induction fill around cell
+#define def_w_Q 0.1f
 
 #define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
 #define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
@@ -84,8 +85,8 @@ float half_to_float_custom(const ushort x) { // custom 16-bit floating-point for
 float sqmagnitude(uint3 v){
 	return sq(v.x) + sq(v.y) + sq(v.z);
 }
-float cbmagnitude(uint3 v){
-	return cb(sqrt((float)(uint_sq(v.x) + uint_sq(v.y) + uint_sq(v.z))));
+float cbmagnitude(float3 v){
+	return cb(sqrt(sq(v.x) + sq(v.y) + sq(v.z)));
 }
 int int_max(int x, int y) {
 	if (x > y) {
@@ -349,21 +350,35 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 #endif // VOLUME_FORCE
 
 #ifdef MAGNETO_HYDRO
-// this is unusable
-// n: cell id
-// q: float array for charges
-// E: electric field at n
-void calculate_E(const uint n, const global float* q, global float* E) {// uses coulomb's law https://en.wikipedia.org/wiki/Coulomb%27s_law
-	const float3 c_n = convert_float3(coordinates(n));
-	float3 e_i;
-	for(uint i = 0; i < def_N; i++){
-		const float3 c_i = convert_float3(coordinates(i));
-		//const float3 e_i = def_ke * convert_float3((coord_n - coord_i)) / cbmagnitude(coord_n - coord_i); // coulomb's law
-		e_i += q[i] / (sq(c_n.x-c_i.x)+sq(c_n.y-c_i.y)+sq(c_n.z-c_i.z)) * fast_normalize(c_n - c_i);
+// Charge advection
+void neighbors_charge(const uint n, uint* j7) { // calculate neighbor indices
+	uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
+	calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
+	j7[0] = n;
+	j7[1] = xp+y0+z0; j7[2] = xm+y0+z0; // +00 -00
+	j7[3] = x0+yp+z0; j7[4] = x0+ym+z0; // 0+0 0-0
+	j7[5] = x0+y0+zp; j7[6] = x0+y0+zm; // 00+ 00-
+}
+void calculate_q_eq(const float Q, const float ux, const float uy, const float uz, float* qeq) { // calculate q_equilibrium from density and velocity field (perturbation method / DDF-shifting)
+	const float wsT4=0.5f*Q, wsTm1=0.125f*(Q-1.0f); // 0.125f*Q*4.0f (straight directions in D3Q7), wsTm1 is arithmetic optimization to minimize digit extinction, lattice speed of sound is 1/2 for D3Q7 and not 1/sqrt(3)
+	qeq[0] = fma(0.25f, Q, -0.25f); // 000
+	qeq[1] = fma(wsT4, ux, wsTm1); qeq[2] = fma(wsT4, -ux, wsTm1); // +00 -00, source: http://dx.doi.org/10.1016/j.ijheatmasstransfer.2009.11.014
+	qeq[3] = fma(wsT4, uy, wsTm1); qeq[4] = fma(wsT4, -uy, wsTm1); // 0+0 0-0
+	qeq[5] = fma(wsT4, uz, wsTm1); qeq[6] = fma(wsT4, -uz, wsTm1); // 00+ 00-
+}
+void load_q(const uint n, float* qhn, const global fpxx* qi, const uint* j7, const ulong t) {
+	qhn[0] = load(qi, index_f(n, 0u)); // Esoteric-Pull
+	for(uint i=1u; i<7u; i+=2u) {
+		qhn[i   ] = load(qi, index_f(n    , t%2ul ? i    : i+1u));
+		qhn[i+1u] = load(qi, index_f(j7[i], t%2ul ? i+1u : i   ));
 	}
-	E[n					] = e_i.x * def_ke;
-	E[(ulong)n+def_N	] = e_i.y * def_ke;
-	E[(ulong)n+def_N*2ul] = e_i.z * def_ke;
+}
+void store_q(const uint n, const float* qhn, global fpxx* qi, const uint* j7, const ulong t) {
+	store(qi, index_f(n, 0u), qhn[0]); // Esoteric-Pull
+	for(uint i=1u; i<7u; i+=2u) {
+		store(qi, index_f(j7[i], t%2ul ? i+1u : i   ), qhn[i   ]);
+		store(qi, index_f(n    , t%2ul ? i    : i+1u), qhn[i+1u]);
+	}
 }
 #endif
 
@@ -373,10 +388,12 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , const global float* F 
 #endif // FORCE_FIELD
 #ifdef MAGNETO_HYDRO
-, const global float* E
-, const global float* B
-, global float* E_dyn
-, global float* B_dyn
+, const global float* E	// static electric field
+, const global float* B	// static magnetic flux density
+, global float* E_dyn	// dynamic electric field
+, global float* B_dyn	// dynamic magnetic flux density
+, global fpxx* qi		// charge ddfs
+, global float* Q		// charge
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -391,16 +408,18 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     float fhn[def_velocity_set]; // local DDFs
     load_f(n, fhn, fi, j, t); // perform streaming (part 2)
 
+	ulong nxi=(ulong)n, nyi=def_N+(ulong)n, nzi=2ul*def_N+(ulong)n; // n indecies for x, y and z components
+
     float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
 
     #ifndef EQUILIBRIUM_BOUNDARIES // EQUILIBRIUM_BOUNDARIES
         calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
     #else
         if(flagsn_bo==TYPE_E) {
-        	rhon = rho[               n]; // apply preset velocity/density
-        	uxn  = u[                 n];
-        	uyn  = u[    def_N+(ulong)n];
-        	uzn  = u[2ul*def_N+(ulong)n];
+        	rhon = rho[n]; // apply preset velocity/density
+        	uxn  = u[nxi];
+        	uyn  = u[nyi];
+        	uzn  = u[nzi];
         } else {
         	calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
         }
@@ -412,42 +431,43 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 	#ifdef FORCE_FIELD
 	{ // separate block to avoid variable name conflicts
-		fxn += F[                 n]; // apply force field
-		fyn += F[    def_N+(ulong)n];
-		fzn += F[2ul*def_N+(ulong)n];
+		fxn += F[nxi]; // apply force field
+		fyn += F[nyi];
+		fzn += F[nzi];
 	}
 	#endif
 
 	#ifdef MAGNETO_HYDRO
-	{
-		// Force = Electric field * ParticlesN * (elemental charge * ionization factor) 
-		// Force = E * (mass / molar mass) * (e * i_fac) 
-		// Force = E * (rhon * volume / molar mass) * (e * i_fac) 
-		// Force = E * rhon * def_volume_molar_e
-		// def_volume_molar_e is calculated at runtime
-		// def_volume_molar_e = (volume / molar mass) * e * i_fac
-		// 
-		//fxn += E[                 n] * rhon * def_charge; // apply electric field * charge = force
-		//fyn += E[    def_N+(ulong)n] * rhon * def_charge;
-		//fzn += E[2ul*def_N+(ulong)n] * rhon * def_charge;
-		//float UcrossB[3] = {
-		//	uyn*B[2ul*def_N+(ulong)n] + uzn*B[    def_N+(ulong)n], 
-		//	uzn*B[                 n] + uxn*B[2ul*def_N+(ulong)n], 
-		//	uxn*B[    def_N+(ulong)n] + uyn*B[                 n]
-		//};
+		// Advection of charge. Cell charge is stored in charge ddfs 'qi' for advection with 'fi'.
+		uint j7[7]; // neighbors of D3Q7 subset
+		neighbors_charge(n, j7);
+		float qhn[7]; // read from qA and stream to gh (D3Q7 subset, periodic boundary conditions)
+		load_q(n, qhn, qi, j7, t); // perform streaming (part 2)
+		float Qn = 0.0f;
+		for(uint i=0u; i<7u; i++) Qn += qhn[i]; // calculate charge from q
+		Qn += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up qi (perturbation method / DDF-shifting)
+		float qeq[7]; // cache f_equilibrium[n]
+		calculate_q_eq(Qn, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
+
+		#ifdef UPDATE_FIELDS
+			Q[n] = Qn; // update charge field
+		#endif // UPDATE_FIELDS
+
+		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-def_w_Q, qhn[i], def_w_Q*qeq[i]); // perform collision
+		store_q(n, qhn, qi, j7, t); // perform streaming (part 1)
+
 		// F = charge * (E + (U cross B))
-		fxn += rhon * def_charge * (E_dyn[                 n] + uyn*B_dyn[2ul*def_N+(ulong)n] - uzn*B_dyn[    def_N+(ulong)n]); // apply electric field * charge = force
-		fyn += rhon * def_charge * (E_dyn[    def_N+(ulong)n] + uzn*B_dyn[                 n] - uxn*B_dyn[2ul*def_N+(ulong)n]);
-		fzn += rhon * def_charge * (E_dyn[2ul*def_N+(ulong)n] + uxn*B_dyn[    def_N+(ulong)n] - uyn*B_dyn[                 n]);
+		fxn += Qn * (E_dyn[nxi] + uyn*B_dyn[nzi] - uzn*B_dyn[nyi]); // force = charge * (electric field + magnetic field x U)
+		fyn += Qn * (E_dyn[nyi] + uzn*B_dyn[nxi] - uxn*B_dyn[nzi]);
+		fzn += Qn * (E_dyn[nzi] + uxn*B_dyn[nyi] - uyn*B_dyn[nxi]);
 
 		// Clear dynamic buffers with static buffers for recomputation
-		B_dyn[                 n] = B[                 n];
-		B_dyn[    def_N+(ulong)n] = B[    def_N+(ulong)n];
-		B_dyn[2ul*def_N+(ulong)n] = B[2ul*def_N+(ulong)n];
-		E_dyn[                 n] = E[                 n];
-		E_dyn[    def_N+(ulong)n] = E[    def_N+(ulong)n];
-		E_dyn[2ul*def_N+(ulong)n] = E[2ul*def_N+(ulong)n];
-	}
+		B_dyn[nxi] = B[nxi];
+		B_dyn[nyi] = B[nyi];
+		B_dyn[nzi] = B[nzi];
+		E_dyn[nxi] = E[nxi];
+		E_dyn[nyi] = E[nyi];
+		E_dyn[nzi] = E[nzi];
 	#endif// MAGNETO_HYDRO
 
 	#ifdef VOLUME_FORCE
@@ -466,18 +486,18 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 	#ifndef EQUILIBRIUM_BOUNDARIES
 	#ifdef UPDATE_FIELDS
-		rho[               n] = rhon; // update density field
-		u[                 n] = uxn; // update velocity field
-		u[    def_N+(ulong)n] = uyn;
-		u[2ul*def_N+(ulong)n] = uzn;
+		rho[n] = rhon; // update density field
+		u[nxi] = uxn; // update velocity field
+		u[nyi] = uyn;
+		u[nzi] = uzn;
 	#endif // UPDATE_FIELDS
 	#else // EQUILIBRIUM_BOUNDARIES
 	#ifdef UPDATE_FIELDS
 		if(flagsn_bo!=TYPE_E) { // only update fields for non-TYPE_E cells
-			rho[               n] = rhon; // update density field
-			u[                 n] = uxn; // update velocity field
-			u[    def_N+(ulong)n] = uyn;
-			u[2ul*def_N+(ulong)n] = uzn;
+			rho[n] = rhon; // update density field
+			u[nxi] = uxn; // update velocity field
+			u[nyi] = uyn;
+			u[nzi] = uzn;
 		}
 	#endif // UPDATE_FIELDS
 	#endif // EQUILIBRIUM_BOUNDARIES
@@ -539,10 +559,23 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 , const global float* B
 , global float* E_dyn
 , global float* B_dyn
+, global fpxx* qi
+, const global float* Q
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)def_N||is_halo(n)) return; // don't execute initialize() on halo
+	if(n>=(uint)def_N) return; // Do not write into unallocated memory space
+	#ifdef MAGNETO_HYDRO
+		// Initialize charge ddfs (need to be set at halo)
+		float qeq[7]; // q_equilibrium
+		calculate_q_eq(Q[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], qeq);
+		uint j7[7]; // neighbors of D3Q7 subset
+		neighbors_charge(n, j7);
+		store_q(n, qeq, qi, j7, 1ul); // write to qi. perform streaming (part 1)
+	#endif // MAGNETO_HYDRO
+
+    if(is_halo(n)) return; // don't execute initialize() on halo
+	ulong nxi=(ulong)n, nyi=def_N+(ulong)n, nzi=2ul*def_N+(ulong)n; // n indecies for x, y and z components
     uchar flagsn = flags[n];
     const uchar flagsn_bo = flagsn&TYPE_BO; // extract boundary flags
     uint j[def_velocity_set]; // neighbor indices
@@ -553,31 +586,32 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 	    bool TYPE_ONLY_S = true; // has only solid neighbors
 	    for(uint i=1u; i<def_velocity_set; i++) TYPE_ONLY_S = TYPE_ONLY_S&&(flagsj[i]&TYPE_BO)==TYPE_S;
 	    if(TYPE_ONLY_S) {
-	    	u[                 n] = 0.0f; // reset velocity for solid lattice points with only boundary neighbors
-	    	u[    def_N+(ulong)n] = 0.0f;
-	    	u[2ul*def_N+(ulong)n] = 0.0f;
+	    	u[nxi] = 0.0f; // reset velocity for solid lattice points with only boundary neighbors
+	    	u[nyi] = 0.0f;
+	    	u[nzi] = 0.0f;
 	    }
         if(flagsn_bo==TYPE_S) {
-	        u[                 n] = 0.0f; // reset velocity for all solid lattice points
-	        u[    def_N+(ulong)n] = 0.0f;
-	        u[2ul*def_N+(ulong)n] = 0.0f;
+	        u[nxi] = 0.0f; // reset velocity for all solid lattice points
+	        u[nyi] = 0.0f;
+	        u[nzi] = 0.0f;
         }
     }
     float feq[def_velocity_set]; // f_equilibrium
     calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
+
 	#ifdef MAGNETO_HYDRO
-		// Clear dyn with static for recomputation
-		B_dyn[                 n] = B[                 n];
-		B_dyn[    def_N+(ulong)n] = B[    def_N+(ulong)n];
-		B_dyn[2ul*def_N+(ulong)n] = B[2ul*def_N+(ulong)n];
-		E_dyn[                 n] = E[                 n];
-		E_dyn[    def_N+(ulong)n] = E[    def_N+(ulong)n];
-		E_dyn[2ul*def_N+(ulong)n] = E[2ul*def_N+(ulong)n];
-	#endif // ELECTRIC FORCE
+		// Clear dyn with static field for recomputation
+		B_dyn[nxi] = B[nxi];
+		B_dyn[nyi] = B[nyi];
+		B_dyn[nzi] = B[nzi];
+		E_dyn[nxi] = E[nxi];
+		E_dyn[nyi] = E[nyi];
+		E_dyn[nzi] = E[nzi];
+	#endif // MAGNETO_HYDRO
 } // initialize()
 
-kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
+__kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_fields() on halo
     const uchar flagsn = flags[n];
@@ -605,10 +639,10 @@ kernel void update_fields(const global fpxx* fi, global float* rho, global float
 	// update charge field (later)
 
 
-}
+} // update_fields()
 
 #ifdef MAGNETO_HYDRO
-__kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* rho, const global float* u, const global uchar* flags) {
+__kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* Q, const global float* u, const global uchar* flags) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
     const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
@@ -616,40 +650,46 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
     if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
 
 	const uint3 coord_n = coordinates(n); // Cell coordinate
-	const float charge = rho[n] * def_charge; // Cell charge
-	const float3 v = {u[n], u[(ulong)n+def_N], u[(ulong)n+def_N*2ul]}; // Cell velocity
+	const float3 coord_nf = convert_float3(coord_n); // Cell coordinate as float vector
 
-	const uint x_upper = int_min(coord_n.x + def_ind_r + 1, def_Nx);
-	const uint y_upper = int_min(coord_n.y + def_ind_r + 1, def_Ny);
-	const uint z_upper = int_min(coord_n.z + def_ind_r + 1, def_Nz);
+	const uint x_upper = int_min(coord_n.x + def_ind_r + 1, def_Dx>1?def_Nx-1:def_Nx); // Do not read at halo offsets
+	const uint y_upper = int_min(coord_n.y + def_ind_r + 1, def_Dy>1?def_Ny-1:def_Ny);
+	const uint z_upper = int_min(coord_n.z + def_ind_r + 1, def_Dz>1?def_Nz-1:def_Nz);
+
+	float3 e = {0.0f, 0.0f, 0.0f}, b = {0.0f, 0.0f, 0.0f};
 	
-
-	for (uint x = int_max(coord_n.x - def_ind_r, 0); x < x_upper; x++) {
-		for (uint y = int_max(coord_n.y - def_ind_r, 0); y < y_upper; y++) {
-			for (uint z = int_max(coord_n.z - def_ind_r, 0); z < z_upper; z++) {
+	for (uint x = (uint)int_max((int)coord_n.x - (int)def_ind_r, def_Dx>1?1:0); x < x_upper; x++) {
+		for (uint y = (uint)int_max((int)coord_n.y - (int)def_ind_r, def_Dy>1?1:0); y < y_upper; y++) {
+			for (uint z = (uint)int_max((int)coord_n.z - (int)def_ind_r, def_Dz>1?1:0); z < z_upper; z++) {
 
 				// _c vars describe surronding cells 
-				const uint n_c = x + (y + z * def_Nx) * def_Ny;
-				if (n != n_c) {
-					// Use the Biot-Savart law
-					const uint3 vec_r_diff = coordinates(n_c) - coord_n;
-					const float3 vec_r =  convert_float3(vec_r_diff) / cbmagnitude(vec_r_diff);
+				const uint n_c = x + (y + z * def_Ny) * def_Nx;
+				if (n == n_c) continue;
+					
+				const float q_c = Q[n_c]; // charge of nearby cell
+				if (q_c == 0.0f) { continue; } // cells without charge have no influence
+				//if (n_c < 100000) {printf("%fq%dn", q_c, n_c);}
+				const float3 v_c = {u[n_c], u[(ulong)n_c+def_N], u[(ulong)n_c+def_N*2ul]}; // velocity of nearby cell
 
-					const float3 e_c = def_ke * charge * vec_r;
-					E_dyn[n_c                 ] += e_c.x;
-					E_dyn[(ulong)n_c+def_N    ] += e_c.y;
-					E_dyn[(ulong)n_c+def_N*2ul] += e_c.z;
+				// precalculation for both fields
+				const float3 vec_r = coord_nf - convert_float3(coordinates(n_c));
+				const float3 pre_field = vec_r / cbmagnitude(vec_r);
 
-					const float3 b_c = def_kmu * charge * cross(v, vec_r);
-					B_dyn[n_c                 ] += b_c.x;
-					B_dyn[(ulong)n_c+def_N    ] += b_c.y;
-					B_dyn[(ulong)n_c+def_N*2ul] += b_c.z;
-				}
+				e += q_c * pre_field; // E imparted by nearby cell (Coulomb)
+				b += q_c * cross(v_c, pre_field); // B imparted by nearby cell (Biot-Savart)
 			}
 		}
 	}
 
-}
+	// update buffers
+	E_dyn[n					] += def_ke * e.x;
+	E_dyn[(ulong)n+def_N	] += def_ke * e.y;
+	E_dyn[(ulong)n+def_N*2ul] += def_ke * e.z;
+
+	B_dyn[n					] += def_kmu * b.x;
+	B_dyn[(ulong)n+def_N	] += def_kmu * b.y;
+	B_dyn[(ulong)n+def_N*2ul] += def_kmu * b.z;
+} // update_e_b_dynamic()
 #endif
 
 // Inter-Domain Transfer kernels
@@ -766,3 +806,32 @@ kernel void transfer__insert_rho_u_flags(const uint direction, const ulong t, co
 	insert_rho_u_flags(a, A, index_insert_p(a, direction), (const global char*) transfer_buffer_p, rho, u, flags);
 	insert_rho_u_flags(a, A, index_insert_m(a, direction), (const global char*) transfer_buffer_m, rho, u, flags);
 }
+// Qi (Charge ddfs) 
+#ifdef MAGNETO_HYDRO
+void extract_qi(const uint a, const uint n, const uint side, const ulong t, global fpxx_copy* transfer_buffer, const global fpxx_copy* qi) {
+	uint j7[7u]; // neighbor indices
+	neighbors_charge(n, j7); // calculate neighbor indices
+	const uint i = side+1u;
+	const ulong index = index_f(i%2u ? j7[i] : n, t%2ul ? (i%2u ? i+1u : i-1u) : i); // Esoteric-Pull: standard store, or streaming part 1/2
+	transfer_buffer[a] = qi[index]; // fpxx_copy allows direct copying without decompression+compression
+}
+void insert_qi(const uint a, const uint n, const uint side, const ulong t, const global fpxx_copy* transfer_buffer, global fpxx_copy* qi) {
+	uint j7[7u]; // neighbor indices
+	neighbors_charge(n, j7); // calculate neighbor indices
+	const uint i = side+1u;
+	const ulong index = index_f(i%2u ? n : j7[i-1u], t%2ul ? i : (i%2u ? i+1u : i-1u)); // Esoteric-Pull: standard load, or streaming part 2/2
+	qi[index] = transfer_buffer[a]; // fpxx_copy allows direct copying without decompression+compression
+}
+kernel void transfer_extract_qi(const uint direction, const ulong t, global uchar* transfer_buffer_p, global uchar* transfer_buffer_m, const global fpxx_copy* qi) {
+	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
+	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
+	extract_qi(a, index_extract_p(a, direction), 2u*direction+0u, t, (global fpxx_copy*)transfer_buffer_p, qi);
+	extract_qi(a, index_extract_m(a, direction), 2u*direction+1u, t, (global fpxx_copy*)transfer_buffer_m, qi);
+}
+kernel void transfer__insert_qi(const uint direction, const ulong t, const global uchar* transfer_buffer_p, const global uchar* transfer_buffer_m, global fpxx_copy* qi) {
+	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
+	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
+	insert_qi(a, index_insert_p(a, direction), 2u*direction+0u, t, (const global fpxx_copy*)transfer_buffer_p, qi);
+	insert_qi(a, index_insert_m(a, direction), 2u*direction+1u, t, (const global fpxx_copy*)transfer_buffer_m, qi);
+}
+#endif // MAGNETO_HYDRO
