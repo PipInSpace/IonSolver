@@ -817,16 +817,16 @@ void insert_qi(const uint a, const uint n, const uint side, const ulong t, const
 	const ulong index = index_f(i%2u ? n : j7[i-1u], t%2ul ? i : (i%2u ? i+1u : i-1u)); // Esoteric-Pull: standard load, or streaming part 2/2
 	qi[index] = transfer_buffer[a]; // fpxx_copy allows direct copying without decompression+compression
 }
-kernel void transfer_extract_qi(const uint direction, const ulong t, global fpxx_copy* transfer_buffer_p, global fpxx_copy* transfer_buffer_m, const global fpxx_copy* qi) {
+kernel void transfer_extract_qi(const uint direction, const ulong t, global uchar* transfer_buffer_p, global uchar* transfer_buffer_m, const global fpxx_copy* qi) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	extract_qi(a, index_extract_p(a, direction), 2u*direction+0u, t, transfer_buffer_p, qi);
-	extract_qi(a, index_extract_m(a, direction), 2u*direction+1u, t, transfer_buffer_m, qi);
+	extract_qi(a, index_extract_p(a, direction), 2u*direction+0u, t, (global fpxx_copy*)transfer_buffer_p, qi);
+	extract_qi(a, index_extract_m(a, direction), 2u*direction+1u, t, (global fpxx_copy*)transfer_buffer_m, qi);
 }
-kernel void transfer__insert_qi(const uint direction, const ulong t, const global fpxx_copy* transfer_buffer_p, const global fpxx_copy* transfer_buffer_m, global fpxx_copy* qi) {
+kernel void transfer__insert_qi(const uint direction, const ulong t, const global uchar* transfer_buffer_p, const global uchar* transfer_buffer_m, global fpxx_copy* qi) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	insert_qi(a, index_insert_p(a, direction), 2u*direction+0u, t, transfer_buffer_p, qi);
-	insert_qi(a, index_insert_m(a, direction), 2u*direction+1u, t, transfer_buffer_m, qi);
+	insert_qi(a, index_insert_p(a, direction), 2u*direction+0u, t, (const global fpxx_copy*)transfer_buffer_p, qi);
+	insert_qi(a, index_insert_m(a, direction), 2u*direction+1u, t, (const global fpxx_copy*)transfer_buffer_m, qi);
 }
 #endif // MAGNETO_HYDRO
