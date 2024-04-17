@@ -275,12 +275,15 @@ impl Lbm {
     pub fn initialize(&mut self) {
         // the communicate calls at initialization need an odd time step
         self.increment_timestep(1);
-        //communicate_rho_u_flags
-        for d in 0..self.get_d_n() {
-            self.domains[d].enqueue_initialize().unwrap();
+        self.communicate_rho_u_flags();
+        self.kernel_initialize();
+        self.communicate_rho_u_flags();
+        self.communicate_fi();
+        if self.config.ext_magneto_hydro && self.config.induction_range != 0 {
+            self.communicate_qi();
+            self.update_e_b_dynamic();
         }
-        //communicate_rho_u_flags
-        //communicate_fi
+
         self.finish_queues();
         self.reset_timestep();
         self.initialized = true;
@@ -327,6 +330,13 @@ impl Lbm {
     pub fn finish_queues(&self) {
         for d in 0..self.domains.len() {
             self.domains[d].queue.finish().unwrap();
+        }
+    }
+
+    /// Executes initialize kernel
+    fn kernel_initialize(&self) {
+        for d in 0..self.get_d_n() {
+            self.domains[d].enqueue_initialize().unwrap();
         }
     }
 
@@ -410,7 +420,7 @@ impl Lbm {
         }
     }
 
-    /// Resets tims steps variable for every `LbmDomain`
+    /// Resets timestep variable for every `LbmDomain`
     fn reset_timestep(&mut self) {
         for d in 0..self.domains.len() {
             self.domains[d].t = 0;

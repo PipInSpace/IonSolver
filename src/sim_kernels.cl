@@ -564,17 +564,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-	if(n>=(uint)def_N) return; // Do not write into unallocated memory space
-	#ifdef MAGNETO_HYDRO
-		// Initialize charge ddfs (need to be set at halo)
-		float qeq[7]; // q_equilibrium
-		calculate_q_eq(Q[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], qeq);
-		uint j7[7]; // neighbors of D3Q7 subset
-		neighbors_charge(n, j7);
-		store_q(n, qeq, qi, j7, 1ul); // write to qi. perform streaming (part 1)
-	#endif // MAGNETO_HYDRO
-
-    if(is_halo(n)) return; // don't execute initialize() on halo
+    if(n>=(uint)def_N||is_halo(n)) return; // don't execute initialize() on halo
 	ulong nxi=(ulong)n, nyi=def_N+(ulong)n, nzi=2ul*def_N+(ulong)n; // n indecies for x, y and z components
     uchar flagsn = flags[n];
     const uchar flagsn_bo = flagsn&TYPE_BO; // extract boundary flags
@@ -601,6 +591,12 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
     store_f(n, feq, fi, j, 1ul); // write to fi
 
 	#ifdef MAGNETO_HYDRO
+		// Initialize charge ddfs
+		float qeq[7]; // q_equilibrium
+		calculate_q_eq(Q[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], qeq);
+		uint j7[7]; // neighbors of D3Q7 subset
+		neighbors_charge(n, j7);
+		store_q(n, qeq, qi, j7, 1ul); // write to qi. perform streaming (part 1)
 		// Clear dyn with static field for recomputation
 		B_dyn[nxi] = B[nxi];
 		B_dyn[nyi] = B[nyi];
