@@ -14,6 +14,8 @@ pub struct Units {
     pub kg: f32,
     /// second
     pub s: f32,
+    /// ampere
+    pub a: f32,
 }
 
 impl Units {
@@ -22,6 +24,7 @@ impl Units {
             m: 1.0,
             kg: 1.0,
             s: 1.0,
+            a: 1.0,
         }
     }
 
@@ -30,13 +33,16 @@ impl Units {
         lbm_length: f32,
         lbm_velocity: f32,
         lbm_rho: f32,
+        lbm_a: f32,
         si_lenght: f32,
         si_velocity: f32,
         si_rho: f32,
+        si_a: f32,
     ) {
         self.m = si_lenght / lbm_length;
         self.kg = si_rho / lbm_rho * cb(self.m);
         self.s = lbm_velocity / si_velocity * self.m;
+        self.a = si_a / lbm_a;
     }
 
     // to si units from lattice units (need to be called after .set();)
@@ -65,18 +71,18 @@ impl Units {
     }
 
     pub fn charge_to_si(&self, q: f32) -> f32 {
-        // Unit: As, A fac is 1
-        q / self.s
+        // Unit: As
+        q * (self.a * self.s)
     }
 
     pub fn mag_flux_to_si(&self, b: f32) -> f32 {
-        // b unit is Tesla (T) = V * s / m^2 = ((kg * m^2 / (s^3 * A)) * s) / m^2 = kg / s^2
-        b * self.kg / sq(self.s)
+        // b unit is Tesla (T) = V * s / m^2 = ((kg * m^2 / (s^3 * A)) * s) / m^2 = kg / (A * s^2)
+        b * self.kg / (self.a * sq(self.s))
     }
 
     pub fn e_field_to_si(&self, e: f32) -> f32 {
-        // E unit: V/m = (kg * m^2 / (s^3 * A)) / m = (m * kg) / s^3
-        e * ((self.m * self.kg) / cb(self.s))
+        // E unit: V/m = (kg * m^2 / (s^3 * A)) / m = (m * kg) / (A * s^3)
+        e * ((self.m * self.kg) / (self.a * cb(self.s)))
     }
 
     // to lattice units from si units (need to be called after .set();)
@@ -112,7 +118,7 @@ impl Units {
         // 8.8541878128E-12 F/m
         // Unit: F/m  ==  A * s / V * m  ==  A * s / (kg*m^2/s^3 * A) * m  ==  s^4 * A^2 / kg * m^3
         // Ampere can be ignored. Conversion factor is 1.
-        8.8541878128E-12 / to4(self.s) * (self.kg / cb(self.m))
+        8.8541878128E-12 / (sq(self.a) * to4(self.s) / (self.kg * cb(self.m)))
     }
 
     pub fn si_to_ke(&self) -> f32 {
@@ -131,12 +137,12 @@ impl Units {
 
     pub fn si_to_charge(&self, q: f32) -> f32 {
         // unit: (A*s)
-        q / self.s
+        q / (self.a * self.s)
     }
 
     pub fn si_to_charge_per_dens(&self, cpd: f32) -> f32 {
-        // unit: (A/s)/(kg/m^3) = m^3/(kg*s)
-        cpd * (cb(self.m) * (self.kg / self.s))
+        // unit: (A/s)/(kg/m^3) = (A * m^3)/(kg*s)
+        cpd / (cb(self.m) * self.a / (self.kg * self.s))
     }
 
     pub fn si_to_k_charge_expansion(&self) -> f32 {

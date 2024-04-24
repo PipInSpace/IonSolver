@@ -17,7 +17,7 @@ pub fn setup() -> Lbm {
     //let now = Instant::now();
     let mut lbm_config = LbmConfig::new();
     //lbm_config.units.print();
-    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 10.0, 1.2250);
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 10.0, 1.2250, 1.0);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
@@ -84,12 +84,13 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
             m: vals.units_m,
             kg: vals.units_kg,
             s: vals.units_s,
+            a: vals.units_c // needs to be A but will fix later
         },
         ext_volume_force: electro_hydro,
         ext_magneto_hydro: electro_hydro,
         ..lbm_config
     };
-    lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.225);
+    lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.0, 1.225, 1.0);
 
     let lbm = Lbm::new(lbm_config);
     if !vals.charges.is_empty() {
@@ -108,7 +109,7 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
 #[allow(unused)]
 fn setup_domain_test() -> Lbm {
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 10.0, 1.2250);
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 10.0, 1.2250, 1.0);
     lbm_config.n_x = 256;
     lbm_config.n_y = 256;
     lbm_config.n_z = 256;
@@ -135,7 +136,7 @@ fn setup_domain_test() -> Lbm {
 #[allow(unused)]
 fn setup_bfield_spin() -> Lbm {
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 1.2250);
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.2250, 1.0);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
