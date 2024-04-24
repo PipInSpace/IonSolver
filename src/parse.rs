@@ -5,7 +5,7 @@ pub struct SimValues {
     pub units_m: f32,
     pub units_kg: f32,
     pub units_s: f32,
-    pub units_c: f32,
+    pub units_a: f32,
     pub flags: Vec<u8>,
     pub charges: Vec<(u64, f32)>,
     pub magnets: Vec<(u64, [f32; 3])>,
@@ -38,7 +38,7 @@ pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
     let units_m = to_f32(get_next_chunk(buffer, &mut pos));
     let units_kg = to_f32(get_next_chunk(buffer, &mut pos));
     let units_s = to_f32(get_next_chunk(buffer, &mut pos));
-    let units_c = to_f32(get_next_chunk(buffer, &mut pos));
+    let units_a = to_f32(get_next_chunk(buffer, &mut pos));
 
     // Walls
     println!("    Parsing Flags...");
@@ -88,7 +88,7 @@ pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
         units_m,
         units_kg,
         units_s,
-        units_c,
+        units_a,
         flags: walls,
         charges,
         magnets,

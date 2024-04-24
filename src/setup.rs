@@ -84,7 +84,7 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
             m: vals.units_m,
             kg: vals.units_kg,
             s: vals.units_s,
-            a: vals.units_c // needs to be A but will fix later
+            a: vals.units_a // needs to be A but will fix later
         },
         ext_volume_force: electro_hydro,
         ext_magneto_hydro: electro_hydro,
