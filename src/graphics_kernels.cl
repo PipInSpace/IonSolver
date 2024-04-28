@@ -393,8 +393,8 @@ bool is_in_camera_frustrum(const float3 p, const float* camera_cache) { // retur
 	return is_above_plane(p, plane_p_top, plane_n_top)&&is_above_plane(p, plane_p_bottom, plane_n_bottom)&&is_above_plane(p, plane_p_left, plane_n_left)&&is_above_plane(p, plane_p_right, plane_n_right);
 } // End Line3D
 
-// Color maps
-int iron_colormap(float x) { // coloring scheme (float [0, 1]-> int color)
+// Color maps. Coloring scheme (float [0, 1]-> int color)
+int iron_colormap(float x) { // Sequential colour map similar to the inferno map. Usable for 2D contexts. Not to be used for 3D surfaces (Too dark at the lower end).
 	x = clamp(4.0f*(1.0f-x), 0.0f, 4.0f);
 	float r=1.0f, g=0.0f, b=0.0f;
 	if(x<0.66666667f) { // white - yellow
@@ -411,7 +411,43 @@ int iron_colormap(float x) { // coloring scheme (float [0, 1]-> int color)
 	}
 	return color_from_floats(r, g, b);
 }
-int rainbow_colormap(float x) { // coloring scheme (float [0, 1]-> int color)
+int viridis_colormap(float x) { // Sequential colour map. Usable for 3D surfaces. (https://bids.github.io/colormap/)
+	x = clamp(x, 0.0f, 1.0f);
+	if(x>=0.86) {
+		return color_mix(0xFDE725, 0x9FDA3A, (x-0.86f)/0.14f);
+	} else if (x >= 0.71f) {
+		return color_mix(0x9FDA3A, 0x4AC26D, (x-0.71f)/0.15f);
+	} else if (x >= 0.57f) {
+		return color_mix(0x4AC26D, 0x1FA187, (x-0.57f)/0.14f);
+	} else if (x >= 0.43f) {
+		return color_mix(0x1FA187, 0x277F8E, (x-0.43f)/0.14f);
+	} else if (x >= 0.29f) {
+		return color_mix(0x277F8E, 0x365C8D, (x-0.29f)/0.14f);
+	} else if (x >= 0.14f) {
+		return color_mix(0x365C8D, 0x46327F, (x-0.14f)/0.15f);
+	}
+	return color_mix(0x46327F, 0x440154, x/0.14f);
+}
+int fast_colormap(float x) { // Diverging colour map. Usable for 3D surfaces. (https://www.kennethmoreland.com/color-advice/)
+	x = clamp(x, 0.0f, 1.0f);
+	if(x>=0.85) {
+		return color_mix(0x96141E, 0xCC5A29, (x-0.85f)/0.15f);
+	} else if (x >= 0.71f) {
+		return color_mix(0xCC5A29, 0xED9E50, (x-0.71f)/0.14f);
+	} else if (x >= 0.59f) {
+		return color_mix(0xED9E50, 0xF4D582, (x-0.59f)/0.12f);
+	} else if (x >= 0.50f) {
+		return color_mix(0xF4D582, 0xE5f1C4, (x-0.50f)/0.09f);
+	} else if (x >= 0.43f) {
+		return color_mix(0xE5f1C4, 0xAFEDEA, (x-0.43f)/0.07f);
+	} else if (x >= 0.30f) {
+		return color_mix(0xAFEDEA, 0x5BBEF3, (x-0.30f)/0.13f);
+	} else if (x >= 0.17f) {
+		return color_mix(0x5BBEF3, 0x3E75CF, (x-0.17f)/0.13f);
+	}
+	return color_mix(0x3E75CF, 0x0E0E78, x/0.17f);
+}
+int rainbow_colormap(float x) { // Is here for legacy reasons. Not to be used because of unclear colours.
 	x = clamp(6.0f*(1.0f-x), 0.0f, 6.0f);
 	float r=0.0f, g=0.0f, b=0.0f; // black
 	if(x<1.2f) { // red - yellow
@@ -435,9 +471,8 @@ int rainbow_colormap(float x) { // coloring scheme (float [0, 1]-> int color)
 	}
 	return color_from_floats(r, g, b);
 }
-int coolwarm_colormap(float x) { // coloring scheme (float [0, 1]-> int color)
-	return x>0.5f ? color_mix(0xB40426, 0xF2F2F2, clamp(2.0f*x-1.0f, 0.0f, 1.0f)) : color_mix(0xF2F2F2, 0x3B4CC0, clamp(2.0f*x, 0.0f, 1.0f)); // Bent cool warm colormap
-}
+
+
 
 // Graphics kernels
 /// Flags as a grid
@@ -561,15 +596,15 @@ kernel void graphics_flags_mc(const global uchar* flags, const global float* cam
 			int c0, c1, c2; {
 				const float x1=p0.x, y1=p0.y, z1=p0.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 				const float3 Fi = (x0*y0*z0)*Fj[0]+(x1*y0*z0)*Fj[1]+(x1*y0*z1)*Fj[2]+(x0*y0*z1)*Fj[3]+(x0*y1*z0)*Fj[4]+(x1*y1*z0)*Fj[5]+(x1*y1*z1)*Fj[6]+(x0*y1*z1)*Fj[7]; // perform trilinear interpolation
-				c0 = shading(rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal)), p0+offset, normal, camera_cache); // rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal));
+				c0 = shading(fast_colormap(0.5f+def_scale_F*dot(Fi, normal)), p0+offset, normal, camera_cache); // fast_colormap(0.5f+def_scale_F*dot(Fi, normal));
 			} {
 				const float x1=p1.x, y1=p1.y, z1=p1.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 				const float3 Fi = (x0*y0*z0)*Fj[0]+(x1*y0*z0)*Fj[1]+(x1*y0*z1)*Fj[2]+(x0*y0*z1)*Fj[3]+(x0*y1*z0)*Fj[4]+(x1*y1*z0)*Fj[5]+(x1*y1*z1)*Fj[6]+(x0*y1*z1)*Fj[7]; // perform trilinear interpolation
-				c1 = shading(rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal)), p1+offset, normal, camera_cache); // rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal));
+				c1 = shading(fast_colormap(0.5f+def_scale_F*dot(Fi, normal)), p1+offset, normal, camera_cache); // fast_colormap(0.5f+def_scale_F*dot(Fi, normal));
 			} {
 				const float x1=p2.x, y1=p2.y, z1=p2.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 				const float3 Fi = (x0*y0*z0)*Fj[0]+(x1*y0*z0)*Fj[1]+(x1*y0*z1)*Fj[2]+(x0*y0*z1)*Fj[3]+(x0*y1*z0)*Fj[4]+(x1*y1*z0)*Fj[5]+(x1*y1*z1)*Fj[6]+(x0*y1*z1)*Fj[7]; // perform trilinear interpolation
-				c2 = shading(rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal)), p2+offset, normal, camera_cache); // rainbow_colormap(0.5f+def_scale_F*dot(Fi, normal));
+				c2 = shading(fast_colormap(0.5f+def_scale_F*dot(Fi, normal)), p2+offset, normal, camera_cache); // fast_colormap(0.5f+def_scale_F*dot(Fi, normal));
 			}
 			draw_triangle_interpolated(p0+offset, p1+offset, p2+offset, c0, c1, c2, camera_cache, bitmap, zbuffer); // draw triangle with interpolated colors
 		#else // FORCE_FIELD
@@ -658,7 +693,7 @@ kernel void graphics_q_field(const global uchar* flags, const global float* u, c
     const float ul = length(un);
     const float Q = calculate_Q(n, u);
     if(Q<def_scale_Q_min||ul==0.0f) return; // don't draw lattice points where the velocity is very low
-    const int c = rainbow_colormap(def_scale_u*ul); // coloring by velocity
+    const int c = viridis_colormap(def_scale_u*ul); // coloring by velocity
     draw_line(p-(0.5f/ul)*un, p+(0.5f/ul)*un, c, camera_cache, bitmap, zbuffer);
 }
 
@@ -740,15 +775,15 @@ kernel void graphics_q(const global uchar* flags, const global float* u, const g
 		int c0, c1, c2; {
 			const float x1=p0.x, y1=p0.y, z1=p0.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c0 = shading(rainbow_colormap(def_scale_u*length(ui)), p+p0, normal, camera_cache); // rainbow_colormap(def_scale_u*length(ui));
+			c0 = shading(viridis_colormap(def_scale_u*length(ui)), p+p0, normal, camera_cache); // viridis_colormap(def_scale_u*length(ui));
 		} {
 			const float x1=p1.x, y1=p1.y, z1=p1.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c1 = shading(rainbow_colormap(def_scale_u*length(ui)), p+p1, normal, camera_cache); // rainbow_colormap(def_scale_u*length(ui));
+			c1 = shading(viridis_colormap(def_scale_u*length(ui)), p+p1, normal, camera_cache); // viridis_colormap(def_scale_u*length(ui));
 		} {
 			const float x1=p2.x, y1=p2.y, z1=p2.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c2 = shading(rainbow_colormap(def_scale_u*length(ui)), p+p2, normal, camera_cache); // rainbow_colormap(def_scale_u*length(ui));
+			c2 = shading(viridis_colormap(def_scale_u*length(ui)), p+p2, normal, camera_cache); // viridis_colormap(def_scale_u*length(ui));
 		}
 		draw_triangle_interpolated(p+p0, p+p1, p+p2, c0, c1, c2, camera_cache, bitmap, zbuffer); // draw triangle with interpolated colors
 	}

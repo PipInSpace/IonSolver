@@ -13,7 +13,7 @@ use crate::*;
 ///
 /// Run `your_lbm.initialize()` and return it with the config.
 pub fn setup() -> Lbm {
-    
+    /*
     //let now = Instant::now();
     let mut lbm_config = LbmConfig::new();
     //lbm_config.units.print();
@@ -49,7 +49,7 @@ pub fn setup() -> Lbm {
     println!("Charge per cell: {}As", lbm_config.units.charge_to_si(cpc));
     let mut charge: Vec<f32> = vec![0.0; (lbm_config.n_x * lbm_config.n_y * lbm_config.n_z) as usize];
     for i in 0..lbm_config.n_x {
-        let n = i + (64 + 64 * lbm_config.n_y) * lbm_config.n_x;
+        let n = i + (64 + 63 * lbm_config.n_y) * lbm_config.n_x;
         charge[n as usize] = cpc;
     }
 
@@ -59,8 +59,10 @@ pub fn setup() -> Lbm {
     lbm.setup_velocity_field((0.01, 0.001, 0.0), 1.0);
 
     lbm
-    
+    */
     //setup_domain_test()
+    //setup_bfield_spin()
+    setup_taylor_green()
 }
 
 #[allow(unused)]
@@ -106,6 +108,29 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
 
 // Complete setups
 #[allow(unused)]
+fn setup_taylor_green() -> Lbm {
+    let mut lbm_config = LbmConfig::new();
+    lbm_config.n_x = 256;
+    lbm_config.n_y = 256;
+    lbm_config.n_z = 256;
+    lbm_config.nu = lbm_config.units.si_to_nu(0.1);
+    lbm_config.velocity_set = VelocitySet::D3Q19;
+    // Graphics
+    lbm_config.graphics_config.graphics_active = true;
+    lbm_config.graphics_config.streamline_every = 8;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+    //lbm_config.graphics_config.streamline_mode = true;
+    lbm_config.graphics_config.axes_mode = true;
+    lbm_config.graphics_config.q_mode = true;
+    lbm_config.graphics_config.q_min = 0.00001;
+
+    let mut lbm = Lbm::new(lbm_config);
+    lbm.set_taylor_green(1);
+
+    lbm
+}
+
+#[allow(unused)]
 fn setup_domain_test() -> Lbm {
     let mut lbm_config = LbmConfig::new();
     lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 10.0, 1.2250);
@@ -127,7 +152,7 @@ fn setup_domain_test() -> Lbm {
     lbm_config.graphics_config.axes_mode = true;
 
     let mut lbm = Lbm::new(lbm_config.clone());
-    lbm.setup_taylor_green(1);
+    lbm.set_taylor_green(1);
 
     lbm
 }
@@ -144,6 +169,7 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
     lbm_config.velocity_set = VelocitySet::D3Q19;
+    lbm_config.induction_range = 0;
     // Extensions
     lbm_config.ext_volume_force = true;
     lbm_config.ext_magneto_hydro = true;
@@ -171,13 +197,19 @@ fn setup_bfield_spin() -> Lbm {
     }
     lbm.domains[0].flags.write(&flags).enq().unwrap();
 
+    let cpc = 0.09;
+    let mut charge: Vec<f32> = vec![cpc; 128 * 128 * 256];
+    lbm.domains[0].q.as_ref().expect("msg").write(&charge);
+
     // magnetic field
     let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
     for i in 0..243 {
-        vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000.0]));
-        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000.0]));
+        vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000000000000000.0]));
+        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000000000000000.0]));
     }
     precompute::precompute_B(&lbm, vec_m);
+
+    
 
     lbm.setup_velocity_field((0.1, 0.01, 0.0), 1.0);
 
@@ -187,7 +219,7 @@ fn setup_bfield_spin() -> Lbm {
 impl Lbm {
     #[allow(unused)]
     /// 3D Taylor-Green vorticies setup.
-    pub fn setup_taylor_green(&mut self, periodicity: u32) {
+    pub fn set_taylor_green(&mut self, periodicity: u32) {
         println!("Setting up Taylor-Green vorticies");
         let nx = self.config.n_x;
         let ny = self.config.n_y;
