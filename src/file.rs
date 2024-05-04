@@ -11,7 +11,13 @@ pub struct SimValues {
     pub magnets: Vec<(u64, [f32; 3])>,
 }
 
-pub fn decode(buffer: &[u8]) -> Result<SimValues, String> {
+pub fn read<P: AsRef<std::path::Path> + std::fmt::Display>(path: P) -> Result<SimValues, String> {
+    println!("Reading simulation state from \"{}\"", path);
+    let buffer: Vec<u8> = std::fs::read(path).expect("Location should exist");
+    decode(&buffer)
+}
+
+fn decode(buffer: &[u8]) -> Result<SimValues, String> {
     println!("    Decoding File");
 
     // Buffer position
