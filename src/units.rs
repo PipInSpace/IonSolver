@@ -147,7 +147,7 @@ impl Units {
     pub fn si_to_k_charge_expansion(&self) -> f32 {
         // TODO: q advection uses an expansion coefficient (org. thermal)
         // This value is set to 1.0 in test simulations, the resulting def_w_T is 0.4
-        1.0//todo!()
+        1.0 //todo!()
     }
 
     /// From lbm.n_x and velocity u

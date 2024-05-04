@@ -119,19 +119,35 @@ fn decode(buffer: &[u8]) -> Result<SimValues, String> {
 }
 
 fn encode(lbm: &Lbm) -> Vec<u8> {
+    // File structure details can be found at https://github.com/PipInSpace/ionsolver-files
     let mut buffer: Vec<u8> = Vec::with_capacity(1);
 
-    buffer.pushname();
-    // Write lenth, width, height
-    buffer.push32(lbm.config.n_x);
-    buffer.push32(lbm.config.n_y);
-    buffer.push32(lbm.config.n_z);
-    buffer.push32(lbm.config.units.m.to_bits());
+    buffer.pushname(); // Header, Human-Readable
+    buffer.push(lbm.config.velocity_set as u8); // Enums as u8
+    buffer.push(lbm.config.relaxation_time as u8);
+    buffer.push(lbm.config.float_type as u8);
+    buffer.push32(lbm.config.units.m.to_bits()); // Units
     buffer.push32(lbm.config.units.kg.to_bits());
     buffer.push32(lbm.config.units.s.to_bits());
-    buffer.push32(0); // Ampere
+    buffer.push32(lbm.config.units.a.to_bits());
+    buffer.push32(lbm.config.n_x); // Simulation sizes
+    buffer.push32(lbm.config.n_y);
+    buffer.push32(lbm.config.n_z);
+    buffer.push(0); // Fixed domain sizes. Should the following domain sizes be used or dynamically generated?
+    buffer.push32(lbm.config.d_x); // Domain sizes
+    buffer.push32(lbm.config.d_y);
+    buffer.push32(lbm.config.d_z);
+    buffer.push32(lbm.config.nu.to_bits()); // Nu
+    buffer.push32(lbm.config.f_x.to_bits()); // Volume force
+    buffer.push32(lbm.config.f_y.to_bits());
+    buffer.push32(lbm.config.f_z.to_bits());
+    let ext: u8 = lbm.config.ext_equilibrium_boudaries as u8
+        + ((lbm.config.ext_volume_force as u8) << 1)
+        + ((lbm.config.ext_force_field as u8) << 2)
+        + ((lbm.config.ext_magneto_hydro as u8) << 3);
+    buffer.push(ext);
+    buffer.push(lbm.config.induction_range);
 
-    
     buffer
 }
 
@@ -185,14 +201,16 @@ impl ByteBuffer for Vec<u8> {
         self.push(b'p');
         self.push(b'\n');
     }
+    /// Push 32 bits
     fn push32(&mut self, x: u32) {
         for i in 0..4 {
-            self.push(((x >> (i*8)) &0xFF).try_into().unwrap());
+            self.push(((x >> (i * 8)) & 0xFF).try_into().unwrap());
         }
     }
+    /// Push 64 bits
     fn push64(&mut self, x: u64) {
         for i in 0..8 {
-            self.push(((x >> (i*8)) &0xFF).try_into().unwrap());
+            self.push(((x >> (i * 8)) & 0xFF).try_into().unwrap());
         }
     }
 }

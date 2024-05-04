@@ -150,9 +150,9 @@ pub struct LbmConfig {
     pub d_z: u32,
 
     pub nu: f32,
-    pub fx: f32,
-    pub fy: f32,
-    pub fz: f32,
+    pub f_x: f32,
+    pub f_y: f32,
+    pub f_z: f32,
 
     pub ext_equilibrium_boudaries: bool, //Extensions
     pub ext_volume_force: bool,
@@ -182,9 +182,9 @@ impl LbmConfig {
             d_y: 1,
             d_z: 1,
             nu: 1.0f32 / 6.0f32,
-            fx: 0.0f32,
-            fy: 0.0f32,
-            fz: 0.0f32,
+            f_x: 0.0f32,
+            f_y: 0.0f32,
+            f_z: 0.0f32,
 
             ext_equilibrium_boudaries: false,
             ext_volume_force: false,
@@ -305,7 +305,7 @@ impl Lbm {
 
     /// Executes one LBM time step.
     /// Executes `kernel_stream_collide` Kernels for every `LbmDomain` and updates domain transfer buffers.
-    /// Updates the dynamic E and B fields. 
+    /// Updates the dynamic E and B fields.
     pub fn do_time_step(&mut self) {
         // call kernel stream_collide to perform one LBM time step
         self.stream_collide();
@@ -313,13 +313,15 @@ impl Lbm {
             self.communicate_rho_u_flags();
         }
         self.communicate_fi();
-        
+
         if self.config.ext_magneto_hydro && self.config.induction_range != 0 {
             self.communicate_qi();
             self.update_e_b_dynamic();
         }
 
-        if self.get_d_n() == 1 || (self.config.ext_magneto_hydro && self.config.induction_range != 0) {
+        if self.get_d_n() == 1
+            || (self.config.ext_magneto_hydro && self.config.induction_range != 0)
+        {
             // Additional synchronization only needed in single-GPU or after E&B update
             self.finish_queues();
         }
@@ -398,7 +400,7 @@ impl Lbm {
     /// Communicate Fi across domain boundaries
     fn communicate_fi(&mut self) {
         let bytes_per_cell =
-            self.config.float_type.size_of() * self.config.velocity_set.get_transfers();  // FP type size * transfers.
+            self.config.float_type.size_of() * self.config.velocity_set.get_transfers(); // FP type size * transfers.
         self.communicate_field(TransferField::Fi, bytes_per_cell);
     }
     /// Communicate rho, u and flags across domain boundaries (needed for graphics)
@@ -590,17 +592,17 @@ impl LbmDomain {
             .arg_named("u", &u)
             .arg_named("flags", &flags)
             .arg_named("t", t)
-            .arg_named("fx", lbm_config.fx)
-            .arg_named("fy", lbm_config.fy)
-            .arg_named("fz", lbm_config.fz);
+            .arg_named("fx", lbm_config.f_x)
+            .arg_named("fy", lbm_config.f_y)
+            .arg_named("fz", lbm_config.f_z);
         kernel_update_fields_builder
             .arg_named("rho", &rho)
             .arg_named("u", &u)
             .arg_named("flags", &flags)
             .arg_named("t", t)
-            .arg_named("fx", lbm_config.fx)
-            .arg_named("fy", lbm_config.fy)
-            .arg_named("fz", lbm_config.fz);
+            .arg_named("fx", lbm_config.f_x)
+            .arg_named("fy", lbm_config.f_y)
+            .arg_named("fz", lbm_config.f_z);
         // Conditional arguments. Place at end of kernel functions
         if lbm_config.ext_force_field {
             kernel_stream_collide_builder
@@ -824,7 +826,7 @@ impl LbmDomain {
             kernel_update_e_b_dyn,
 
             n_x, n_y, n_z,
-            fx: lbm_config.fx, fy: lbm_config.fy, fz: lbm_config.fz,
+            fx: lbm_config.f_x, fy: lbm_config.f_y, fz: lbm_config.f_z,
             fi, rho, u, flags,
 
             transfer_p, transfer_m,
@@ -1015,7 +1017,9 @@ impl LbmDomain {
         bytes_per_cell: usize,
     ) -> ocl::Result<()> {
         // Enqueue extraction kernel
-        let kernel = self.transfer_kernels[field as usize][0].as_ref().expect("transfer kernel should be initialized"); // [0] is the extraction kernel
+        let kernel = self.transfer_kernels[field as usize][0]
+            .as_ref()
+            .expect("transfer kernel should be initialized"); // [0] is the extraction kernel
         kernel.set_arg("direction", direction)?;
         kernel.set_arg("time_step", self.t)?;
         unsafe {
@@ -1029,7 +1033,8 @@ impl LbmDomain {
         self.transfer_p
             .read(&mut self.transfer_p_host)
             .len(field_length)
-            .enq().unwrap();
+            .enq()
+            .unwrap();
         self.transfer_m
             .read(&mut self.transfer_m_host)
             .len(field_length)
@@ -1053,7 +1058,9 @@ impl LbmDomain {
             .write(&self.transfer_m_host)
             .len(field_length)
             .enq()?;
-        let kernel = self.transfer_kernels[field as usize][1].as_ref().expect("transfer kernel should be initialized"); // [1] is the insertion kernel
+        let kernel = self.transfer_kernels[field as usize][1]
+            .as_ref()
+            .expect("transfer kernel should be initialized"); // [1] is the insertion kernel
         kernel.set_arg("direction", direction)?;
         kernel.set_arg("time_step", self.t)?;
         unsafe {

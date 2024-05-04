@@ -64,7 +64,7 @@ pub fn get_devices() -> Vec<Device> {
 }
 
 /// Combines the graphics and simulation source files and
-/// removes embedded default defines needed for syntax highlighting 
+/// removes embedded default defines needed for syntax highlighting
 pub fn get_opencl_code() -> String {
     let sim_source: Vec<&str> = include_str!("sim_kernels.cl")
         .split("EndTempDefines%")

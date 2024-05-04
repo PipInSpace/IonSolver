@@ -3,11 +3,11 @@ extern crate ocl;
 use std::time::{Duration, Instant};
 use std::{f32::consts::PI, fs, sync::mpsc, thread};
 
+mod file;
 mod graphics;
 mod info;
 mod lbm;
 mod opencl;
-mod file;
 mod precompute;
 mod setup;
 #[cfg(not(feature = "headless"))]
