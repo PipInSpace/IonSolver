@@ -754,7 +754,7 @@ impl LbmDomain {
             ], // Rho, u and flags (needed for graphics)
             [
                 if lbm_config.ext_magneto_hydro {
-                    Some(match &qi.as_ref().expect("qi should be defined") { // TODO: qi may be undefined. This needs to be an option
+                    Some(match &qi.as_ref().expect("qi should be defined") {
                     VariableFloatBuffer::U16(qi_u16) => Kernel::builder()
                             .program(&program)
                             .name("transfer_extract_qi")
@@ -813,7 +813,7 @@ impl LbmDomain {
         ];
         println!("    Kernels for domain compiled.");
 
-        let graphics: Option<graphics::Graphics> = if lbm_config.graphics_config.graphics_active { Some(graphics::Graphics::new(lbm_config, &program, &queue, &flags, &u)) } else { None };
+        let graphics: Option<graphics::Graphics> = if lbm_config.graphics_config.graphics_active { Some(graphics::Graphics::new(lbm_config, &program, &queue, &flags, &u, (n_x, n_y, n_z))) } else { None };
 
         LbmDomain {
             queue,

@@ -114,10 +114,11 @@ impl Graphics {
         queue: &Queue,
         flags: &Buffer<u8>,
         u: &Buffer<f32>,
+        n_d: (u32, u32, u32),
     ) -> Graphics {
         let width = lbm_config.graphics_config.camera_width;
         let height = lbm_config.graphics_config.camera_height;
-        let n = lbm_config.n_x as u64 * lbm_config.n_y as u64 * lbm_config.n_z as u64; //TODO: use domain size
+        let n = n_d.0 as u64 * n_d.1 as u64 * n_d.2 as u64;
         let bitmap = opencl::create_buffer(queue, [width, height], 0i32);
         let zbuffer = opencl::create_buffer(queue, [width, height], 0i32);
         let camera_params = opencl::create_buffer(queue, 15, 0.0f32);
@@ -227,7 +228,7 @@ impl Graphics {
             .program(program)
             .name("graphics_q")
             .queue(queue.clone())
-            .global_work_size([n]) //TODO: this is incorrect, need own dimension size
+            .global_work_size([n])
             .arg_named("flags", flags)
             .arg_named("u", u)
             .arg_named("camera_params", &camera_params)
@@ -239,7 +240,7 @@ impl Graphics {
             .program(program)
             .name("graphics_q_field")
             .queue(queue.clone())
-            .global_work_size([n]) //TODO: this is incorrect, need own dimension size
+            .global_work_size([n])
             .arg_named("flags", flags)
             .arg_named("u", u)
             .arg_named("camera_params", &camera_params)
