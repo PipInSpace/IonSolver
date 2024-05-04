@@ -71,9 +71,7 @@ pub fn setup() -> Lbm {
 ///
 /// Format documented under https://github.com/PipInSpace/ionsolver-files/blob/main/src/FILE.txt
 pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
-    println!("Parsing from \"{}\"", path);
-    let buffer: Vec<u8> = std::fs::read(path).expect("Location should exist");
-    let vals = file::decode(&buffer).unwrap();
+    let vals = file::read(path).unwrap();
 
     // Extension is disabled when not needed
     let electro_hydro = !vals.charges.is_empty() || !vals.magnets.is_empty();
