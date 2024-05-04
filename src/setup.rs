@@ -73,7 +73,7 @@ pub fn setup() -> Lbm {
 pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
     println!("Parsing from \"{}\"", path);
     let buffer: Vec<u8> = std::fs::read(path).expect("Location should exist");
-    let vals = parse::decode(&buffer).unwrap();
+    let vals = file::decode(&buffer).unwrap();
 
     // Extension is disabled when not needed
     let electro_hydro = !vals.charges.is_empty() || !vals.magnets.is_empty();

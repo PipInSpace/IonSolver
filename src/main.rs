@@ -7,7 +7,7 @@ mod graphics;
 mod info;
 mod lbm;
 mod opencl;
-mod parse;
+mod file;
 mod precompute;
 mod setup;
 #[cfg(not(feature = "headless"))]
