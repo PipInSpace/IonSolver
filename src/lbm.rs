@@ -1140,7 +1140,7 @@ impl LbmDomain {
     b:      {}x, {}y {}z / {}x, {}y {}z T
     e_dyn:  {}x, {}y {}z / {}x, {}y {}z V/m
     b_dyn:  {}x, {}y {}z / {}x, {}y {}z T
-    charge: {} / {} A/s",
+    charge: {} / {} As",
             c,
             x,
             y,
