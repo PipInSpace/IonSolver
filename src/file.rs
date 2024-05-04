@@ -1,3 +1,7 @@
+use std::{fs::File, io::Write};
+
+use crate::Lbm;
+
 pub struct SimValues {
     pub n_x: u32,
     pub n_y: u32,
@@ -15,6 +19,15 @@ pub fn read<P: AsRef<std::path::Path> + std::fmt::Display>(path: P) -> Result<Si
     println!("Reading simulation state from \"{}\"", path);
     let buffer: Vec<u8> = std::fs::read(path).expect("Location should exist");
     decode(&buffer)
+}
+
+impl Lbm {
+    #[allow(unused)]
+    pub fn write(&self) {
+        let buffer = encode(self);
+        let mut simfile = File::create(format!("frame{}.ion", self.get_time_step())).unwrap();
+        simfile.write_all(&buffer).unwrap();
+    }
 }
 
 fn decode(buffer: &[u8]) -> Result<SimValues, String> {
@@ -105,6 +118,23 @@ fn decode(buffer: &[u8]) -> Result<SimValues, String> {
     Ok(values)
 }
 
+fn encode(lbm: &Lbm) -> Vec<u8> {
+    let mut buffer: Vec<u8> = Vec::with_capacity(1);
+
+    buffer.pushname();
+    // Write lenth, width, height
+    buffer.push32(lbm.config.n_x);
+    buffer.push32(lbm.config.n_y);
+    buffer.push32(lbm.config.n_z);
+    buffer.push32(lbm.config.units.m.to_bits());
+    buffer.push32(lbm.config.units.kg.to_bits());
+    buffer.push32(lbm.config.units.s.to_bits());
+    buffer.push32(0); // Ampere
+
+    
+    buffer
+}
+
 fn get_next_chunk(buffer: &[u8], pos: &mut usize) -> [u8; 4] {
     let mut v = [0; 4];
     v[0] = buffer[*pos];
@@ -126,4 +156,43 @@ fn to_u64(vlow: [u8; 4], vhigh: [u8; 4]) -> u64 {
 
 fn to_f32(v: [u8; 4]) -> f32 {
     f32::from_le_bytes(v)
+}
+
+/// Push different byte sizes to 8-Bit Buffer
+pub trait ByteBuffer {
+    fn push32(&mut self, x: u32);
+    fn push64(&mut self, x: u64);
+    fn pushname(&mut self);
+}
+
+impl ByteBuffer for Vec<u8> {
+    /// Pushes the human-readable fileheader
+    fn pushname(&mut self) {
+        self.push(b'I');
+        self.push(b'o');
+        self.push(b'n');
+        self.push(b'S');
+        self.push(b'o');
+        self.push(b'l');
+        self.push(b'v');
+        self.push(b'e');
+        self.push(b'r');
+        self.push(b' ');
+        self.push(b's');
+        self.push(b'e');
+        self.push(b't');
+        self.push(b'u');
+        self.push(b'p');
+        self.push(b'\n');
+    }
+    fn push32(&mut self, x: u32) {
+        for i in 0..4 {
+            self.push(((x >> (i*8)) &0xFF).try_into().unwrap());
+        }
+    }
+    fn push64(&mut self, x: u64) {
+        for i in 0..8 {
+            self.push(((x >> (i*8)) &0xFF).try_into().unwrap());
+        }
+    }
 }

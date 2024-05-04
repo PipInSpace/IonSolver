@@ -412,7 +412,6 @@ impl Lbm {
     }
 
     // Helper functions
-
     /// Increments time steps variable for every `LbmDomain`
     fn increment_timestep(&mut self, steps: u32) {
         for d in 0..self.domains.len() {
@@ -430,6 +429,11 @@ impl Lbm {
     /// Returns the amount of domains for this lbm
     pub fn get_d_n(&self) -> usize {
         self.domains.len()
+    }
+
+    /// Returns the current simulation timestep
+    pub fn get_time_step(&self) -> u64 {
+        self.domains[0].t
     }
 
     /// Get `x, y, z` coordinates from 1D index `n`.
