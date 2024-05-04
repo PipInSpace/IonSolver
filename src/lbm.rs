@@ -216,10 +216,13 @@ impl LbmConfig {
 pub struct Lbm {
     pub domains: Vec<LbmDomain>,
     pub config: LbmConfig,
+    pub charges: Option<Vec<(u64, f32)>>,
+    pub magnets: Option<Vec<(u64, [f32; 3])>>,
     initialized: bool,
 }
 
 impl Lbm {
+    // TODO: add read for charges and magnets
     /// Returns new `Lbm` struct from pre-configured `LbmConfig` struct. `LbmDomain` setup is handled automatically.
     /// Configures Domains
     pub fn new(mut lbm_config: LbmConfig) -> Lbm {
@@ -266,6 +269,8 @@ impl Lbm {
         Lbm {
             domains: lbm_domains,
             config: lbm_config,
+            charges: None,
+            magnets: None,
             initialized: false,
         }
     }

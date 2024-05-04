@@ -31,8 +31,11 @@ pub fn constant_E(lbm: &Lbm, e: [f32; 3]) {
 
 #[allow(unused_mut)] // Variables are mutated with deborrow
 /// Precomputes the electric field from a Vector of charges
-pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
-    // TODO: Make multi-domain compatible
+pub fn precompute_E(lbm: &Lbm) {
+    if lbm.charges.is_none() {
+        println!("Cannot precompute E because there are no charges");
+        return;
+    }
 
     // Set variables
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
@@ -40,6 +43,7 @@ pub fn precompute_E(lbm: &Lbm, charges: Vec<(u64, f32)>) {
     let dtotal = dsx as u64 * dsy as u64 * dsz as u64;
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     let def_ke = lbm.config.units.si_to_ke();
+    let charges = lbm.charges.as_ref().unwrap();
 
     println!(
         "Precomputing electric field for {} charges and {} cells. (This may take a while)",
@@ -151,8 +155,12 @@ pub fn constant_B(lbm: &Lbm, b: [f32; 3]) {
 
 #[allow(unused_mut)] // Variables are mutated with deborrow
 /// Precomputes the magnetic field from a Vector of magnetic scalar potentials
-pub fn precompute_B(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) {
-    let vec_psi = precompute::calculate_psi_field(lbm, magnets);
+pub fn precompute_B(lbm: &Lbm) {
+    if lbm.magnets.is_none() {
+        print!("Cannot precompute B because there are no magnets");
+        return;
+    }
+    let vec_psi = precompute::calculate_psi_field(lbm);
 
     // Set variables
     let n = lbm.config.n_x as u64 * lbm.config.n_y as u64 * lbm.config.n_z as u64;
@@ -222,10 +230,11 @@ fn calculate_b_at(psi: &[f32], coord: [u32; 3], lengths: (u32, u32, u32), def_mu
 
 #[allow(unused_mut)]
 /// Calculate a psi field with one cell padding on all sides (Needed for nabla operator in B field)
-pub fn calculate_psi_field(lbm: &Lbm, magnets: Vec<(u64, [f32; 3])>) -> Vec<f32> {
+pub fn calculate_psi_field(lbm: &Lbm) -> Vec<f32> {
     // Set variables
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
     let n = ((lengths.0 + 2) as u64) * ((lengths.1 + 2) as u64) * ((lengths.2 + 2) as u64);
+    let magnets = lbm.magnets.as_ref().unwrap();
     // 1 padding on each side
     let mut psi_field = vec![0.0f32; n as usize];
 

@@ -94,10 +94,10 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
 
     let lbm = Lbm::new(lbm_config);
     if !vals.charges.is_empty() {
-        precompute::precompute_E(&lbm, vals.charges);
+        precompute::precompute_E(&lbm);
     }
     if !vals.magnets.is_empty() {
-        precompute::precompute_B(&lbm, vals.magnets);
+        precompute::precompute_B(&lbm);
     }
 
     lbm.domains[0].flags.write(&vals.flags).enq().unwrap();
@@ -178,7 +178,7 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.graphics_config.camera_width = 1920;
     lbm_config.graphics_config.camera_height = 1080;
     lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
     lbm_config.graphics_config.streamline_mode = true;
     lbm_config.graphics_config.axes_mode = true;
     lbm_config.graphics_config.q_mode = true;
@@ -206,9 +206,10 @@ fn setup_bfield_spin() -> Lbm {
         vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000000000000000.0]));
         vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000000000000000.0]));
     }
-    precompute::precompute_B(&lbm, vec_m);
 
-    
+    lbm.magnets = Some(vec_m);
+    precompute::precompute_B(&lbm);
+    precompute::precompute_E(&lbm);
 
     lbm.setup_velocity_field((0.1, 0.01, 0.0), 1.0);
 
