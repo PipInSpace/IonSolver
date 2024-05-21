@@ -61,8 +61,9 @@ pub fn setup() -> Lbm {
     lbm
     */
     //setup_domain_test()
-    setup_bfield_spin()
+    //setup_bfield_spin()
     //setup_taylor_green()
+    setup_verification()
 }
 
 #[allow(unused)]
@@ -213,6 +214,46 @@ fn setup_bfield_spin() -> Lbm {
 
     lbm.setup_velocity_field((0.1, 0.01, 0.0), 1.0);
 
+    lbm
+}
+
+fn setup_verification() -> Lbm {
+    let mut lbm_config = LbmConfig::new();
+    lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    lbm_config.units.print();
+    lbm_config.n_x = 128;
+    lbm_config.n_y = 128;
+    lbm_config.n_z = 128;
+    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
+    println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
+    lbm_config.velocity_set = VelocitySet::D3Q19;
+    lbm_config.induction_range = 10;
+    // Extensions
+    lbm_config.ext_volume_force = true;
+    lbm_config.ext_magneto_hydro = true;
+    // Graphics
+    lbm_config.graphics_config.graphics_active = true;
+    lbm_config.graphics_config.background_color = 0x1c1b22;
+    lbm_config.graphics_config.camera_width = 1920;
+    lbm_config.graphics_config.camera_height = 1080;
+    lbm_config.graphics_config.streamline_every = 8;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
+    lbm_config.graphics_config.streamline_mode = true;
+    lbm_config.graphics_config.axes_mode = true;
+    lbm_config.graphics_config.q_mode = true;
+    lbm_config.graphics_config.flags_surface_mode = true;
+    lbm_config.graphics_config.flags_mode = true;
+
+    let mut lbm = Lbm::new(lbm_config);
+
+    let mut charge = vec![0.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z) as usize];
+    charge[0] = 1.0; // 1C
+    lbm.domains[0].q.as_ref().expect("oh no").write(&charge).enq().unwrap();
+    let mut vel = vec![0.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z * 3) as usize];
+    vel[0] = 1.0; // 1m/s in x+
+    lbm.domains[0].u.write(&vel).enq().unwrap();
+    let mut rho = vec![1.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z) as usize];
+    lbm.domains[0].rho.write(&rho).enq().unwrap();
     lbm
 }
 

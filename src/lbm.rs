@@ -1091,6 +1091,7 @@ impl LbmDomain {
         let mut rho: Vec<f32> = vec![0.0; n as usize];
         let mut u: Vec<f32> = vec![0.0; n as usize * 3];
         let mut flags: Vec<u8> = vec![0; n as usize];
+        let mut q: Vec<f32> = vec![0.0; n as usize];
         let mut e: Vec<f32> = vec![0.0; n as usize * 3];
         let mut b: Vec<f32> = vec![0.0; n as usize * 3];
         let mut e_dyn: Vec<f32> = vec![0.0; n as usize * 3];
@@ -1099,6 +1100,12 @@ impl LbmDomain {
         self.rho.read(&mut rho).enq().unwrap();
         self.u.read(&mut u).enq().unwrap();
         self.flags.read(&mut flags).enq().unwrap();
+        match &self.q {
+            Some(q_s) => {
+                q_s.read(&mut q).enq().unwrap();
+            }
+            None => {}
+        }
         match &self.e {
             Some(e_s) => {
                 e_s.read(&mut e).enq().unwrap();
@@ -1140,18 +1147,18 @@ impl LbmDomain {
         let e_dyn_x_si = cfg.units.e_field_to_si(e_dyn[c_x]);
         let e_dyn_y_si = cfg.units.e_field_to_si(e_dyn[c_y]);
         let e_dyn_z_si = cfg.units.e_field_to_si(e_dyn[c_z]);
-        let charge = cfg.units.charge_to_si(rho[c] * 0.0000000005);
+        let charge = cfg.units.charge_to_si(q[c]);
 
         println!(
             "Dumping cell {}:
     x: {}, y: {}, z: {}
-    rho:    {} / {} kg
-    u:      {}x, {}y {}z / {}x, {}y {}z m/s
+    rho:    {} / {} kg/m³
+    u:      {}, {}, {} / {}, {}, {} m/s
     flags:  {}
-    e:      {}x, {}y {}z / {}x, {}y {}z V/m
-    b:      {}x, {}y {}z / {}x, {}y {}z T
-    e_dyn:  {}x, {}y {}z / {}x, {}y {}z V/m
-    b_dyn:  {}x, {}y {}z / {}x, {}y {}z T
+    e:      {}, {}, {} / {}, {}, {} V/m
+    b:      {}, {}, {} / {}, {}, {} T
+    e_dyn:  {}, {}, {} / {}, {}, {} V/m
+    b_dyn:  {}, {}, {} / {}, {}, {} T
     charge: {} / {} As",
             c,
             x,
@@ -1190,7 +1197,7 @@ impl LbmDomain {
             b_dyn_x_si,
             b_dyn_y_si,
             b_dyn_z_si,
-            rho[c] * 0.0000000005,
+            q[c],
             charge
         )
     }
