@@ -61,9 +61,9 @@ pub fn setup() -> Lbm {
     lbm
     */
     //setup_domain_test()
-    //setup_bfield_spin()
+    setup_bfield_spin()
     //setup_taylor_green()
-    setup_verification()
+    //setup_verification()
 }
 
 #[allow(unused)]
@@ -160,7 +160,7 @@ fn setup_domain_test() -> Lbm {
 #[allow(unused)]
 fn setup_bfield_spin() -> Lbm {
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.2250, 1.0);
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 0.1, 1.0, 1.2250, 0.0000000001);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
@@ -169,7 +169,7 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
     lbm_config.velocity_set = VelocitySet::D3Q19;
-    lbm_config.induction_range = 0;
+    lbm_config.induction_range = 5;
     // Extensions
     lbm_config.ext_volume_force = true;
     lbm_config.ext_magneto_hydro = true;
@@ -179,10 +179,10 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.graphics_config.camera_width = 1920;
     lbm_config.graphics_config.camera_height = 1080;
     lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
     lbm_config.graphics_config.streamline_mode = true;
     lbm_config.graphics_config.axes_mode = true;
-    lbm_config.graphics_config.q_mode = true;
+    lbm_config.graphics_config.q_mode = false;
     lbm_config.graphics_config.flags_surface_mode = true;
     lbm_config.graphics_config.flags_mode = true;
 
@@ -197,15 +197,15 @@ fn setup_bfield_spin() -> Lbm {
     }
     lbm.domains[0].flags.write(&flags).enq().unwrap();
 
-    let cpc = 0.09;
+    let cpc = 0.002;
     let mut charge: Vec<f32> = vec![cpc; 128 * 128 * 256];
-    lbm.domains[0].q.as_ref().expect("msg").write(&charge);
+    lbm.domains[0].q.as_ref().expect("msg").write(&charge).enq().unwrap();
 
     // magnetic field
     let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
     for i in 0..243 {
-        vec_m.push((i * 68, [0.0, 0.0, 1000000000000000000000000000000.0]));
-        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 1000000000000000000000000000000.0]));
+        vec_m.push((i * 68, [0.0, 0.0, 100000000000000000.0]));
+        vec_m.push((i * 68 + 2097152 * 2, [0.0, 0.0, 100000000000000000.0]));
     }
 
     lbm.magnets = Some(vec_m);

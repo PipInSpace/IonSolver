@@ -557,7 +557,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 , global float* E_dyn
 , global float* B_dyn
 , global fpxx* qi
-, const global float* Q
+, global float* Q
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -576,11 +576,13 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 	    	u[nxi] = 0.0f; // reset velocity for solid lattice points with only boundary neighbors
 	    	u[nyi] = 0.0f;
 	    	u[nzi] = 0.0f;
+			Q[n] = 0.0f;
 	    }
         if(flagsn_bo==TYPE_S) {
 	        u[nxi] = 0.0f; // reset velocity for all solid lattice points
 	        u[nyi] = 0.0f;
 	        u[nzi] = 0.0f;
+			Q[n] = 0.0f;
         }
     }
     float feq[def_velocity_set]; // f_equilibrium
