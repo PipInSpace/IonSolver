@@ -954,7 +954,6 @@ impl LbmDomain {
         + &if lbm_config.ext_magneto_hydro {"\n	        #define MAGNETO_HYDRO".to_owned()
         +"\n	#define def_ke "+ &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
         +"\n	#define def_kmu "+ &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
-        +"\n	#define def_charge "+ &format!("{:?}f", lbm_config.units.si_to_charge_per_dens(lbm_config.charge_per_dens)) // charge held per density unit
         +"\n	#define def_ind_r "+ &lbm_config.induction_range.to_string()
         +"\n	#define def_w_Q  "+  &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
         } else {"".to_string()}
@@ -1131,7 +1130,7 @@ impl LbmDomain {
             None => {}
         }
 
-        let rho_si = cfg.units.mass_to_si(rho[c]);
+        let rho_si = cfg.units.dens_to_si(rho[c]);
         let u_x_si = cfg.units.speed_to_si(u[c_x]);
         let u_y_si = cfg.units.speed_to_si(u[c_y]);
         let u_z_si = cfg.units.speed_to_si(u[c_z]);

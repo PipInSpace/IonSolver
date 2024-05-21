@@ -92,7 +92,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     //lbm.update_e_b_dynamic();
     lbm.domains[0].dump_cell(0, &lbm.config);
     lbm.domains[0].dump_cell(1, &lbm.config);
-    lbm.domains[0].dump_cell(lbm.config.n_x as usize, &lbm.config);
+    lbm.domains[0].dump_cell((1 * lbm.config.n_x) as usize, &lbm.config);
 
 
     // Clearing out folder if requested

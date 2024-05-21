@@ -30,7 +30,6 @@
 #define def_we (1.0f/36.0f)
 #define def_ke 8.9875517923E9f
 #define def_kmu 0.0f
-#define def_charge 0.1f // Electric charge of a cell
 #define def_ind_r 5 // Range of induction fill around cell
 #define def_w_Q 0.1f
 
@@ -449,9 +448,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		float qeq[7]; // cache f_equilibrium[n]
 		calculate_q_eq(Qn, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
 
-		#ifdef UPDATE_FIELDS
-			Q[n] = Qn; // update charge field
-		#endif // UPDATE_FIELDS
+		Q[n] = Qn; // update charge field
 
 		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-def_w_Q, qhn[i], def_w_Q*qeq[i]); // perform collision
 		store_q(n, qhn, qi, j7, t); // perform streaming (part 1)
@@ -664,7 +661,6 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 					
 				const float q_c = Q[n_c]; // charge of nearby cell
 				if (q_c == 0.0f) { continue; } // cells without charge have no influence
-				//if (n_c < 100000) {printf("%fq%dn", q_c, n_c);}
 				const float3 v_c = {u[n_c], u[(ulong)n_c+def_N], u[(ulong)n_c+def_N*2ul]}; // velocity of nearby cell
 
 				// precalculation for both fields

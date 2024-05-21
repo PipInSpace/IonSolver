@@ -219,7 +219,7 @@ fn setup_bfield_spin() -> Lbm {
 
 fn setup_verification() -> Lbm {
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
