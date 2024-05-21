@@ -217,9 +217,10 @@ fn setup_bfield_spin() -> Lbm {
     lbm
 }
 
+#[allow(unused)]
 fn setup_verification() -> Lbm {
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0);
+    lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 10.0);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
@@ -244,7 +245,7 @@ fn setup_verification() -> Lbm {
     lbm_config.graphics_config.flags_surface_mode = true;
     lbm_config.graphics_config.flags_mode = true;
 
-    let mut lbm = Lbm::new(lbm_config);
+    let lbm = Lbm::new(lbm_config);
 
     let mut charge = vec![0.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z) as usize];
     charge[0] = 1.0; // 1C
@@ -252,7 +253,7 @@ fn setup_verification() -> Lbm {
     let mut vel = vec![0.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z * 3) as usize];
     vel[0] = 1.0; // 1m/s in x+
     lbm.domains[0].u.write(&vel).enq().unwrap();
-    let mut rho = vec![1.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z) as usize];
+    let rho = vec![1.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z) as usize];
     lbm.domains[0].rho.write(&rho).enq().unwrap();
     lbm
 }
