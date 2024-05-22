@@ -90,12 +90,12 @@ pub struct Graphics {
     pub camera_params: Buffer<f32>,
 
     kernel_graphics_axes: Kernel,
+    kernel_graphics_field: Kernel,
     kernel_graphics_flags: Kernel,
     kernel_graphics_flags_mc: Kernel,
-    kernel_graphics_field: Kernel,
-    kernel_graphics_streamline: Kernel,
     kernel_graphics_q: Kernel,
     kernel_graphics_q_field: Kernel,
+    kernel_graphics_streamline: Kernel,
 
     pub streamline_mode: bool,    // Draw streamline mode
     pub field_mode: bool,         // Draw field
@@ -120,7 +120,7 @@ impl Graphics {
         let width =  lbm_config.graphics_config.camera_width;
         let height = lbm_config.graphics_config.camera_height;
         let n = n_d.0 as u64 * n_d.1 as u64 * n_d.2 as u64;
-        
+
         let bitmap =        opencl::create_buffer(queue, [width, height], 0i32);
         let zbuffer =       opencl::create_buffer(queue, [width, height], 0i32);
         let camera_params = opencl::create_buffer(queue, 15, 0.0f32);
@@ -135,13 +135,13 @@ impl Graphics {
         let kernel_clear = kernel_n!(program, queue, "graphics_clear", bitmap.len(), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
 
         // Graphics/Visualization kernels:
-        let kernel_graphics_axes =       kernel_n!(program, queue, "graphics_axes",           1, ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_flags =      kernel_n!(program, queue, "graphics_flags",        [n], ("flags", flags), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_flags_mc =   kernel_n!(program, queue, "graphics_flags_mc",     [n], ("flags", flags), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_axes =       kernel_n!(program, queue, "graphics_axes",           1,                             ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
         let kernel_graphics_field =      kernel_n!(program, queue, "graphics_field",        [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
-        let kernel_graphics_streamline = kernel_n!(program, queue, "graphics_streamline", [sln], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
+        let kernel_graphics_flags =      kernel_n!(program, queue, "graphics_flags",        [n], ("flags", flags),           ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_flags_mc =   kernel_n!(program, queue, "graphics_flags_mc",     [n], ("flags", flags),           ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
         let kernel_graphics_q =          kernel_n!(program, queue, "graphics_q",            [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
         let kernel_graphics_q_field =    kernel_n!(program, queue, "graphics_q_field",      [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_streamline = kernel_n!(program, queue, "graphics_streamline", [sln], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
 
         Graphics {
             kernel_clear,
@@ -150,12 +150,12 @@ impl Graphics {
             camera_params,
 
             kernel_graphics_axes,
+            kernel_graphics_field,
             kernel_graphics_flags,
             kernel_graphics_flags_mc,
-            kernel_graphics_field,
-            kernel_graphics_streamline,
             kernel_graphics_q,
             kernel_graphics_q_field,
+            kernel_graphics_streamline,
             vec_vis_mode: lbm_config.graphics_config.vec_vis_mode,
             streamline_mode: lbm_config.graphics_config.streamline_mode,
             field_mode: lbm_config.graphics_config.field_mode,
