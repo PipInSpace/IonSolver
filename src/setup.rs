@@ -195,11 +195,11 @@ fn setup_bfield_spin() -> Lbm {
         flags[i] = 0x01;
         flags[len - i] = 0x01;
     }
-    lbm.domains[0].flags.write(&flags).enq().unwrap();
+    bwrite!(lbm.domains[0].flags, flags);
 
     let cpc = 0.002;
     let mut charge: Vec<f32> = vec![cpc; 128 * 128 * 256];
-    lbm.domains[0].q.as_ref().expect("msg").write(&charge).enq().unwrap();
+    bwrite!(lbm.domains[0].q.as_ref().expect("q"), charge);
 
     // magnetic field
     let mut vec_m: Vec<(u64, [f32; 3])> = vec![];

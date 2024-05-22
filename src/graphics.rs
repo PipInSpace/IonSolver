@@ -135,12 +135,12 @@ impl Graphics {
         let kernel_clear = kernel_n!(program, queue, "graphics_clear", bitmap.len(), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
 
         // Graphics/Visualization kernels:
-        let kernel_graphics_axes =       kernel_n!(program, queue, "graphics_axes",           1,                             ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_field =      kernel_n!(program, queue, "graphics_field",        [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
-        let kernel_graphics_flags =      kernel_n!(program, queue, "graphics_flags",        [n], ("flags", flags),           ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_flags_mc =   kernel_n!(program, queue, "graphics_flags_mc",     [n], ("flags", flags),           ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_q =          kernel_n!(program, queue, "graphics_q",            [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_q_field =    kernel_n!(program, queue, "graphics_q_field",      [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_axes       = kernel_n!(program, queue, "graphics_axes",           1,                             ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_field      = kernel_n!(program, queue, "graphics_field",        [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
+        let kernel_graphics_flags      = kernel_n!(program, queue, "graphics_flags",        [n], ("flags", flags),           ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_flags_mc   = kernel_n!(program, queue, "graphics_flags_mc",     [n], ("flags", flags),           ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_q          = kernel_n!(program, queue, "graphics_q",            [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_q_field    = kernel_n!(program, queue, "graphics_q_field",      [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
         let kernel_graphics_streamline = kernel_n!(program, queue, "graphics_streamline", [sln], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
 
         Graphics {
