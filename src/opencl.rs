@@ -1,5 +1,5 @@
 // OpenCL functions
-use ocl::{flags, Buffer, Device, Platform, Queue};
+use ocl::{Device, Platform};
 
 pub fn device_selection(domains: u32) -> Vec<Device> {
     let devices = get_devices();
@@ -75,30 +75,6 @@ pub fn get_opencl_code() -> String {
     sim_source[1].to_string() + graphics_source[1]
 }
 
-pub fn create_buffer<T: ocl::OclPrm, I: Into<ocl::SpatialDims> + Clone>(
-    queue: &Queue,
-    size: I,
-    fill_value: T,
-) -> Buffer<T> {
-    if (size.clone().into() as ocl::SpatialDims).to_len() >= 1 {
-        return Buffer::<T>::builder()
-            .queue(queue.clone())
-            .len(size)
-            .fill_val(fill_value)
-            .flags(flags::MEM_READ_WRITE)
-            .build()
-            .unwrap();
-    }
-    // use size of 1 if invalid
-    return Buffer::<T>::builder()
-        .queue(queue.clone())
-        .len([1])
-        .fill_val(fill_value)
-        .flags(flags::MEM_READ_WRITE)
-        .build()
-        .unwrap();
-}
-
 fn get_tflops(device: Device) -> i32 {
     let freq: i32 = device
         .info(ocl::enums::DeviceInfo::MaxClockFrequency)
@@ -127,66 +103,4 @@ fn get_device_with_most_flops() -> Device {
         }
     }
     devices[best_i as usize]
-}
-
-#[macro_export]
-/// Builds a kernel with named arguments from a program, queue, kernel name and work size. Adds named arguments given as tuples of ("name", arg).
-macro_rules! kernel_n {
-    ($p:expr, $q:expr, $name:expr, $n:expr, $( $arg:expr),*) => {
-        {
-            let mut kernel_builder = Kernel::builder();
-            kernel_builder.program(&$p).name($name).queue($q.clone()).global_work_size($n);
-            $(
-                kernel_builder.arg_named($arg.0, $arg.1);
-            )*
-            kernel_builder.build().unwrap()
-        }
-    };
-}
-
-#[macro_export]
-/// Builds a kernel with unnamed arguments from a program, queue, kernel name and work size. Adds unnamed arguments.
-macro_rules! kernel {
-    ($p:expr, $q:expr, $name:expr, $n:expr, $( $arg:expr),*) => {
-        {
-            let mut kernel_builder = Kernel::builder();
-            kernel_builder.program(&$p).name($name).queue($q.clone()).global_work_size($n);
-            $(
-                kernel_builder.arg($arg);
-            )*
-            kernel_builder.build().unwrap()
-        }
-    };
-}
-
-#[macro_export]
-/// Creates a KernelBuilder from a program, queue, kernel name and work size.
-macro_rules! kernel_builder {
-    ($p:expr, $q:expr, $name:expr, $n:expr) => {
-        {
-            let mut kernel_builder = Kernel::builder();
-            kernel_builder.program(&$p).name($name).queue($q.clone()).global_work_size($n);
-            kernel_builder
-        }
-    };
-}
-
-#[macro_export]
-/// Appends named arguments given as tuples of ("name", arg).
-macro_rules! kernel_args_n {
-    ($kernel:expr, $( $arg:expr),*) => {
-        $(
-            $kernel.arg_named($arg.0, $arg.1);
-        )*
-    };
-}
-
-#[macro_export]
-/// Appends unnamed arguments.
-macro_rules! kernel_args {
-    ($kernel:expr, $( $arg:expr),*) => {
-        $(
-            $kernel.arg($arg);
-        )*
-    };
 }

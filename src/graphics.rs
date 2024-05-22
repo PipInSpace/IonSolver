@@ -121,9 +121,9 @@ impl Graphics {
         let height = lbm_config.graphics_config.camera_height;
         let n = n_d.0 as u64 * n_d.1 as u64 * n_d.2 as u64;
 
-        let bitmap =        opencl::create_buffer(queue, [width, height], 0i32);
-        let zbuffer =       opencl::create_buffer(queue, [width, height], 0i32);
-        let camera_params = opencl::create_buffer(queue, 15, 0.0f32);
+        let bitmap =        buffer!(queue, [width, height], 0i32);
+        let zbuffer =       buffer!(queue, [width, height], 0i32);
+        let camera_params = buffer!(queue, 15, 0.0f32);
         camera_params.write(&new_camera_params()).enq().unwrap();
 
         let sln = match lbm_config.velocity_set {

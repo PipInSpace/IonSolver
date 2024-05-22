@@ -542,31 +542,32 @@ impl LbmDomain {
 
         // Allocate Buffers
         let fi: VariableFloatBuffer = match lbm_config.float_type {
-            FloatType::FP32 => { VariableFloatBuffer::F32(opencl::create_buffer(&queue,[n * velocity_set as u64],0.0f32)) } // Float Type F32
-            _               => { VariableFloatBuffer::U16(opencl::create_buffer(&queue,[n * velocity_set as u64],0u16)) }   // Float Type F16S/F16C
+            FloatType::FP32 => { VariableFloatBuffer::F32(buffer!(&queue,[n * velocity_set as u64],0.0f32)) } // Float Type F32
+            _               => { VariableFloatBuffer::U16(buffer!(&queue,[n * velocity_set as u64],0u16)) }   // Float Type F16S/F16C
         };
-        let rho = opencl::create_buffer(&queue, [n], 1.0f32);
-        let u = opencl::create_buffer(&queue, [n * 3], 0f32);
-        let flags = opencl::create_buffer(&queue, [n], 0u8);
+        //let rho = opencl::create_buffer(&queue, [n], 1.0f32);
+        let rho =  buffer!(&queue, [n], 1.0f32);
+        let u =    buffer!(&queue, [n * 3], 0f32);
+        let flags = buffer!(&queue, [n], 0u8);
 
         // VOLUME_FORCE extension
         // Force field buffer as 3D Vectors
-        let f: Option<Buffer<f32>> = if lbm_config.ext_force_field { Some(opencl::create_buffer(&queue, [n * 3], 0f32)) } else { None };
+        let f: Option<Buffer<f32>> = if lbm_config.ext_force_field { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
         // MAGNETO_HYDRO extension
         // Electric field buffer as 3D Vectors
-        let e: Option<Buffer<f32>> =     if lbm_config.ext_magneto_hydro { Some(opencl::create_buffer(&queue, [n * 3], 0f32)) } else { None };
-        let e_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(opencl::create_buffer(&queue, [n * 3], 0f32)) } else { None };
+        let e: Option<Buffer<f32>> =     if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
+        let e_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
         // Magnetic field buffers as 3D Vectors
-        let b: Option<Buffer<f32>> =     if lbm_config.ext_magneto_hydro { Some(opencl::create_buffer(&queue, [n * 3], 0f32)) } else { None };
-        let b_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(opencl::create_buffer(&queue, [n * 3], 0f32)) } else { None };
+        let b: Option<Buffer<f32>> =     if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
+        let b_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
         // Charge ddfs and charge field buffers
         let qi: Option<VariableFloatBuffer> = if lbm_config.ext_magneto_hydro {
             Some(match lbm_config.float_type {
-                FloatType::FP32 => { VariableFloatBuffer::F32(opencl::create_buffer(&queue, [n * 7], 0.0f32)) } // Float Type F32
-                _               => { VariableFloatBuffer::U16(opencl::create_buffer(&queue, [n * 7], 0u16)) }   // Float Type F16S/F16C
+                FloatType::FP32 => { VariableFloatBuffer::F32(buffer!(&queue, [n * 7], 0.0f32)) } // Float Type F32
+                _               => { VariableFloatBuffer::U16(buffer!(&queue, [n * 7], 0u16)) }   // Float Type F16S/F16C
             })
         } else { None };
-        let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(opencl::create_buffer(&queue, [n], 0f32)) } else { None };
+        let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n], 0f32)) } else { None };
 
         // Initialize Kernels
         let mut initialize_builder = kernel_builder!(program, queue, "initialize", [n]);
@@ -623,8 +624,8 @@ impl LbmDomain {
         if lbm_config.d_z > 1 { a_max = cmp::max(a_max, n_x as usize * n_y as usize); } // Az
         let transfer_buffer_size = a_max * cmp::max(17, transfers as usize * lbm_config.float_type.size_of());
 
-        let transfer_p = opencl::create_buffer(&queue, transfer_buffer_size, 0_u8); // Size is maxiumum 17 bytes or bytes needed for fi
-        let transfer_m = opencl::create_buffer(&queue, transfer_buffer_size, 0_u8); // Size is maxiumum 17 bytes or bytes needed for fi
+        let transfer_p = buffer!(&queue, transfer_buffer_size, 0_u8); // Size is maxiumum 17 bytes or bytes needed for fi
+        let transfer_m = buffer!(&queue, transfer_buffer_size, 0_u8); // Size is maxiumum 17 bytes or bytes needed for fi
         let transfer_p_host: Vec<u8> = vec![0_u8; transfer_buffer_size];
         let transfer_m_host: Vec<u8> = vec![0_u8; transfer_buffer_size];
 

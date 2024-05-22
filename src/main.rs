@@ -2,6 +2,7 @@
 extern crate ocl;
 use std::time::{Duration, Instant};
 use std::{f32::consts::PI, fs, sync::mpsc, thread};
+use ocl_macros::*;
 
 mod file;
 mod graphics;
