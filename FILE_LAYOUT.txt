@@ -24,11 +24,38 @@ fz: 4 Byte (f32)
 extensions: 1 Byte (4 bools in a u8) // bit 1: equilibrium_boundaries; bit 2: volume_force; bit 4: force_field; bit 8: magneto_hydro
 induction_range: 1 byte (u8)
 
-- Flags. One byte per cell for all flag bits. Length is 1 Byte * N
-flags: 1 Byte per cell (u8)
+N = n_x * n_y * n_z // N is total number of cells, derived from other values
 
-- Point charges. u64 cell index and f32 charge. Length is 12 Byte * N
-[pos, charge]: 12 Byte (u64 + f32)
+--Section Flags: N Byte--
+    flags: 1 Byte (u8)
 
-- Point magnets. u64 cell index and 3*f32 magnetization vector. Length is 20 Byte * N
-[pos, mag_x, mag_y, mag_z]: 20 Byte (u64 + f32 + f32 + f32)
+N_C: 4 Byte (u32) // number of fixed charges, only relevant for reading, discarded after
+
+--Section Fixed Charges: 12N_C Byte--
+    //u64 cell index and f32 Charge
+    index: 8 Byte (u64)
+    charge: 4 Byte (f32)
+
+N_M: 4 Byte (u32) // number of magnets, only relevant for reading, discarded after
+
+--Section Magnets: 20N_M Byte--
+    //u64 cell index and 3*f32 magnetization vector
+    index: 8 Byte (u64)
+    magnetization: 12 Byte (f32; 3)
+
+
+//................... Possibly optional for uninitialized Sim (Probably kept for simplicity)....................
+
+// all values of one type together to make reading easier
+
+--Section Densities: 4N Byte--
+    density: 4 Byte (f32)
+
+--Section Charges: 4N Byte-- // charges in fluid, different from fixed charges
+    charge: 4 Byte (f32)
+
+--Section Velocities: 12N Byte--
+    velocity: 12 Byte (f32; 3)
+
+
+<EOF>
