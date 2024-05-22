@@ -1,0 +1,34 @@
+// Data is stored in Little Endian byte order
+- Header. Length: 16 Byte
+"IonSolver setup\n" 16 Byte
+
+- Saved LbmConfig. Does not save the graphics config. Length: 62 Bytes
+velocity_set: 1 Byte (u8 casted enum)
+relaxation_time: 1 Byte (u8 casted enum)
+float_type: 1 Byte (u8 casted enum)
+unit_m: 4 Byte (f32)
+unit_kg: 4 Byte (f32)
+unit_s: 4 Byte (f32)
+unit_a: 4 Byte (f32)
+n_x: 4 Byte (u32)
+n_y: 4 Byte (u32)
+n_z: 4 Byte (u32)
+fixed_domains: 1 Byte (bool) // Should the following domain sizes be used or dynamically generated?
+d_x: 4 Byte (u32)
+d_y: 4 Byte (u32)
+d_z: 4 Byte (u32)
+nu: 4 Byte (f32)
+fx: 4 Byte (f32)
+fy: 4 Byte (f32)
+fz: 4 Byte (f32)
+extensions: 1 Byte (4 bools in a u8) // bit 1: equilibrium_boundaries; bit 2: volume_force; bit 4: force_field; bit 8: magneto_hydro
+induction_range: 1 byte (u8)
+
+- Flags. One byte per cell for all flag bits. Length is 1 Byte * N
+flags: 1 Byte per cell (u8)
+
+- Point charges. u64 cell index and f32 charge. Length is 12 Byte * N
+[pos, charge]: 12 Byte (u64 + f32)
+
+- Point magnets. u64 cell index and 3*f32 magnetization vector. Length is 20 Byte * N
+[pos, mag_x, mag_y, mag_z]: 20 Byte (u64 + f32 + f32 + f32)
