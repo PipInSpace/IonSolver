@@ -108,6 +108,7 @@ pub struct Graphics {
 }
 
 impl Graphics {
+    #[rustfmt::skip]
     pub fn new(
         lbm_config: &LbmConfig,
         program: &Program,
@@ -116,138 +117,31 @@ impl Graphics {
         u: &Buffer<f32>,
         n_d: (u32, u32, u32),
     ) -> Graphics {
-        let width = lbm_config.graphics_config.camera_width;
+        let width =  lbm_config.graphics_config.camera_width;
         let height = lbm_config.graphics_config.camera_height;
         let n = n_d.0 as u64 * n_d.1 as u64 * n_d.2 as u64;
-        let bitmap = opencl::create_buffer(queue, [width, height], 0i32);
-        let zbuffer = opencl::create_buffer(queue, [width, height], 0i32);
+        
+        let bitmap =        opencl::create_buffer(queue, [width, height], 0i32);
+        let zbuffer =       opencl::create_buffer(queue, [width, height], 0i32);
         let camera_params = opencl::create_buffer(queue, 15, 0.0f32);
         camera_params.write(&new_camera_params()).enq().unwrap();
 
-        let kernel_clear = Kernel::builder()
-            .program(program)
-            .name("graphics_clear")
-            .queue(queue.clone())
-            .global_work_size(bitmap.len())
-            .arg_named("bitmap", &bitmap)
-            .arg_named("zbuffer", &zbuffer)
-            .build()
-            .unwrap();
-
-        //Basic graphics kernels:
-        let kernel_graphics_axes = Kernel::builder()
-            .program(program)
-            .name("graphics_axes")
-            .queue(queue.clone())
-            .global_work_size(1)
-            .arg_named("camera_params", &camera_params)
-            .arg_named("bitmap", &bitmap)
-            .arg_named("zbuffer", &zbuffer)
-            .build()
-            .unwrap();
-        let kernel_graphics_flags = Kernel::builder()
-            .program(program)
-            .name("graphics_flags")
-            .queue(queue.clone())
-            .global_work_size([n])
-            .arg_named("flags", flags)
-            .arg_named("camera_params", &camera_params)
-            .arg_named("bitmap", &bitmap)
-            .arg_named("zbuffer", &zbuffer)
-            .build()
-            .unwrap();
-        let kernel_graphics_flags_mc = Kernel::builder()
-            .program(program)
-            .name("graphics_flags_mc")
-            .queue(queue.clone())
-            .global_work_size([n])
-            .arg_named("flags", flags)
-            .arg_named("camera_params", &camera_params)
-            .arg_named("bitmap", &bitmap)
-            .arg_named("zbuffer", &zbuffer)
-            .build()
-            .unwrap();
-        let kernel_graphics_field = Kernel::builder()
-            .program(program)
-            .name("graphics_field")
-            .queue(queue.clone())
-            .global_work_size([n])
-            .arg_named("flags", flags)
-            .arg_named("u", u)
-            .arg_named("camera_params", &camera_params)
-            .arg_named("bitmap", &bitmap)
-            .arg_named("zbuffer", &zbuffer)
-            .arg_named("slice_mode", 0)
-            .arg_named("slice_x", 0)
-            .arg_named("slice_y", 0)
-            .arg_named("slice_z", 0)
-            .build()
-            .unwrap();
-        let kernel_graphics_streamline = match lbm_config.velocity_set {
-            VelocitySet::D2Q9 => Kernel::builder()
-                .program(program)
-                .name("graphics_streamline")
-                .queue(queue.clone())
-                .global_work_size([
-                    (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64
-                        * (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64,
-                ])
-                .arg_named("flags", flags)
-                .arg_named("u", u)
-                .arg_named("camera_params", &camera_params)
-                .arg_named("bitmap", &bitmap)
-                .arg_named("zbuffer", &zbuffer)
-                .arg_named("slice_mode", 0)
-                .arg_named("slice_x", 0)
-                .arg_named("slice_y", 0)
-                .arg_named("slice_z", 0)
-                .build()
-                .unwrap(),
-            _ => Kernel::builder()
-                .program(program)
-                .name("graphics_streamline")
-                .queue(queue.clone())
-                .global_work_size([
-                    (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64
-                        * (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64
-                        * (lbm_config.n_z / lbm_config.graphics_config.streamline_every) as u64,
-                ])
-                .arg_named("flags", flags)
-                .arg_named("u", u)
-                .arg_named("camera_params", &camera_params)
-                .arg_named("bitmap", &bitmap)
-                .arg_named("zbuffer", &zbuffer)
-                .arg_named("slice_mode", 0)
-                .arg_named("slice_x", 0)
-                .arg_named("slice_y", 0)
-                .arg_named("slice_z", 0)
-                .build()
-                .unwrap(),
+        let sln = match lbm_config.velocity_set {
+            VelocitySet::D2Q9 => (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64 * (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64,
+            _ => (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64 * (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64 * (lbm_config.n_z / lbm_config.graphics_config.streamline_every) as u64,
         };
-        let kernel_graphics_q = Kernel::builder()
-            .program(program)
-            .name("graphics_q")
-            .queue(queue.clone())
-            .global_work_size([n])
-            .arg_named("flags", flags)
-            .arg_named("u", u)
-            .arg_named("camera_params", &camera_params)
-            .arg_named("bitmap", &bitmap)
-            .arg_named("zbuffer", &zbuffer)
-            .build()
-            .unwrap();
-        let kernel_graphics_q_field = Kernel::builder()
-            .program(program)
-            .name("graphics_q_field")
-            .queue(queue.clone())
-            .global_work_size([n])
-            .arg_named("flags", flags)
-            .arg_named("u", u)
-            .arg_named("camera_params", &camera_params)
-            .arg_named("bitmap", &bitmap)
-            .arg_named("zbuffer", &zbuffer)
-            .build()
-            .unwrap();
+
+        // Clear kernel
+        let kernel_clear = kernel_n!(program, queue, "graphics_clear", bitmap.len(), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+
+        // Graphics/Visualization kernels:
+        let kernel_graphics_axes =       kernel_n!(program, queue, "graphics_axes",           1, ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_flags =      kernel_n!(program, queue, "graphics_flags",        [n], ("flags", flags), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_flags_mc =   kernel_n!(program, queue, "graphics_flags_mc",     [n], ("flags", flags), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_field =      kernel_n!(program, queue, "graphics_field",        [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
+        let kernel_graphics_streamline = kernel_n!(program, queue, "graphics_streamline", [sln], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
+        let kernel_graphics_q =          kernel_n!(program, queue, "graphics_q",            [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_q_field =    kernel_n!(program, queue, "graphics_q_field",      [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
 
         Graphics {
             kernel_clear,
