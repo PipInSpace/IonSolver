@@ -101,7 +101,7 @@ pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
         precompute::precompute_B(&lbm);
     }
 
-    lbm.domains[0].flags.write(&vals.flags).enq().unwrap();
+    bwrite!(lbm.domains[0].flags, vals.flags);
 
     lbm
 }
@@ -249,12 +249,12 @@ fn setup_verification() -> Lbm {
 
     let mut charge = vec![0.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z) as usize];
     charge[0] = 1.0; // 1C
-    lbm.domains[0].q.as_ref().expect("oh no").write(&charge).enq().unwrap();
+    bwrite!(lbm.domains[0].q.as_ref().expect("q"), charge);
     let mut vel = vec![0.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z * 3) as usize];
     vel[0] = 1.0; // 1m/s in x+
-    lbm.domains[0].u.write(&vel).enq().unwrap();
+    bwrite!(lbm.domains[0].u, vel);
     let rho = vec![1.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z) as usize];
-    lbm.domains[0].rho.write(&rho).enq().unwrap();
+    bwrite!(lbm.domains[0].rho, rho);
     lbm
 }
 
@@ -340,16 +340,8 @@ impl Lbm {
             }
 
             // Write to domain buffers
-            self.domains[d as usize]
-                .u
-                .write(&domain_vec_u)
-                .enq()
-                .unwrap();
-            self.domains[d as usize]
-                .rho
-                .write(&domain_vec_rho)
-                .enq()
-                .unwrap();
+            bwrite!(self.domains[d as usize].u, domain_vec_u);
+            bwrite!(self.domains[d as usize].rho, domain_vec_rho);
             self.domains[d as usize].queue.finish().unwrap();
         }
         println!();
@@ -403,16 +395,8 @@ impl Lbm {
             }
 
             // Write to domain buffers
-            self.domains[d as usize]
-                .u
-                .write(&domain_vec_u)
-                .enq()
-                .unwrap();
-            self.domains[d as usize]
-                .rho
-                .write(&domain_vec_rho)
-                .enq()
-                .unwrap();
+            bwrite!(self.domains[d as usize].u, domain_vec_u);
+            bwrite!(self.domains[d as usize].rho, domain_vec_rho);
             self.domains[d as usize].queue.finish().unwrap();
         }
         println!();

@@ -577,37 +577,37 @@ impl LbmDomain {
         match &fi {
             //Initialize kernels. Different Float types need different arguments (Fi-Buffer specifically)
             VariableFloatBuffer::F32(fif32) => { // Float Type F32
-                kernel_args_n!(initialize_builder, ("fi", fif32));
-                kernel_args_n!(stream_collide_builder, ("fi", fif32));
-                kernel_args_n!(update_fields_builder, ("fi", fif32));
+                kernel_args!(initialize_builder, ("fi", fif32));
+                kernel_args!(stream_collide_builder, ("fi", fif32));
+                kernel_args!(update_fields_builder, ("fi", fif32));
             }
             VariableFloatBuffer::U16(fiu16) => { // Float Type F16S/F16C
-                kernel_args_n!(initialize_builder, ("fi", fiu16));
-                kernel_args_n!(stream_collide_builder, ("fi", fiu16));
-                kernel_args_n!(update_fields_builder, ("fi", fiu16));
+                kernel_args!(initialize_builder, ("fi", fiu16));
+                kernel_args!(stream_collide_builder, ("fi", fiu16));
+                kernel_args!(update_fields_builder, ("fi", fiu16));
             }
         }
-        kernel_args_n!(initialize_builder,     ("rho", &rho), ("u", &u), ("flags", &flags));
-        kernel_args_n!(stream_collide_builder, ("rho", &rho), ("u", &u), ("flags", &flags), ("t", t), ("fx", lbm_config.f_x), ("fy", lbm_config.f_y), ("fz", lbm_config.f_z));
-        kernel_args_n!(update_fields_builder,  ("rho", &rho), ("u", &u), ("flags", &flags), ("t", t), ("fx", lbm_config.f_x), ("fy", lbm_config.f_y), ("fz", lbm_config.f_z));
+        kernel_args!(initialize_builder,     ("rho", &rho), ("u", &u), ("flags", &flags));
+        kernel_args!(stream_collide_builder, ("rho", &rho), ("u", &u), ("flags", &flags), ("t", t), ("fx", lbm_config.f_x), ("fy", lbm_config.f_y), ("fz", lbm_config.f_z));
+        kernel_args!(update_fields_builder,  ("rho", &rho), ("u", &u), ("flags", &flags), ("t", t), ("fx", lbm_config.f_x), ("fy", lbm_config.f_y), ("fz", lbm_config.f_z));
 
         // Conditional arguments. Place at end of kernel functions
-        if lbm_config.ext_force_field { kernel_args_n!(stream_collide_builder, ("F", f.as_ref().expect("F"))); }
+        if lbm_config.ext_force_field { kernel_args!(stream_collide_builder, ("F", f.as_ref().expect("F"))); }
         if lbm_config.ext_magneto_hydro {
-            kernel_args_n!(stream_collide_builder, ("E", e.as_ref().expect("e")), ("B", b.as_ref().expect("b")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
-            kernel_args_n!(initialize_builder,     ("E", e.as_ref().expect("e")), ("B", b.as_ref().expect("b")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
+            kernel_args!(stream_collide_builder, ("E", e.as_ref().expect("e")), ("B", b.as_ref().expect("b")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
+            kernel_args!(initialize_builder,     ("E", e.as_ref().expect("e")), ("B", b.as_ref().expect("b")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
             
             match qi.as_ref().expect("qi should be initialized") {
-                VariableFloatBuffer::U16(qi_u16) => {kernel_args_n!(stream_collide_builder, ("qi", qi_u16)); kernel_args_n!(initialize_builder, ("qi", qi_u16));},
-                VariableFloatBuffer::F32(qi_f32) => {kernel_args_n!(stream_collide_builder, ("qi", qi_f32)); kernel_args_n!(initialize_builder, ("qi", qi_f32));},
+                VariableFloatBuffer::U16(qi_u16) => {kernel_args!(stream_collide_builder, ("qi", qi_u16)); kernel_args!(initialize_builder, ("qi", qi_u16));},
+                VariableFloatBuffer::F32(qi_f32) => {kernel_args!(stream_collide_builder, ("qi", qi_f32)); kernel_args!(initialize_builder, ("qi", qi_f32));},
             };
 
-            kernel_args_n!(initialize_builder,     ("Q", q.as_ref().expect("Q")));
-            kernel_args_n!(stream_collide_builder, ("Q", q.as_ref().expect("Q")));
+            kernel_args!(initialize_builder,     ("Q", q.as_ref().expect("Q")));
+            kernel_args!(stream_collide_builder, ("Q", q.as_ref().expect("Q")));
 
             // Dynamic E/B kernel
             kernel_update_e_b_dyn = Some(
-                kernel_n!(program, queue, "update_e_b_dynamic", [n], ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")), ("Q", q.as_ref().expect("q")), ("u", &u), ("flags", &flags))
+                kernel!(program, queue, "update_e_b_dynamic", [n], ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")), ("Q", q.as_ref().expect("q")), ("u", &u), ("flags", &flags))
             )
         }
         
@@ -633,29 +633,29 @@ impl LbmDomain {
         let transfer_kernels = [
             [
                 Some(match &fi {
-                    VariableFloatBuffer::U16(fi_u16) => kernel_n!(program, queue, "transfer_extract_fi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fi", fi_u16)),
-                    VariableFloatBuffer::F32(fi_f32) => kernel_n!(program, queue, "transfer_extract_fi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fi", fi_f32)),
+                    VariableFloatBuffer::U16(fi_u16) => kernel!(program, queue, "transfer_extract_fi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fi", fi_u16)),
+                    VariableFloatBuffer::F32(fi_f32) => kernel!(program, queue, "transfer_extract_fi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fi", fi_f32)),
                 }), // Extract Fi
                 Some(match &fi {
-                    VariableFloatBuffer::U16(fi_u16) => kernel_n!(program, queue, "transfer__insert_fi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fi", fi_u16)),
-                    VariableFloatBuffer::F32(fi_f32) => kernel_n!(program, queue, "transfer__insert_fi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fi", fi_f32)),
+                    VariableFloatBuffer::U16(fi_u16) => kernel!(program, queue, "transfer__insert_fi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fi", fi_u16)),
+                    VariableFloatBuffer::F32(fi_f32) => kernel!(program, queue, "transfer__insert_fi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fi", fi_f32)),
                 }), // Insert Fi
             ], // Fi
             [
-                Some(kernel_n!(program, queue, "transfer_extract_rho_u_flags", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("rho", &rho), ("u", &u), ("flags", &flags))), // Extract rho, u, flags
-                Some(kernel_n!(program, queue, "transfer__insert_rho_u_flags", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("rho", &rho), ("u", &u), ("flags", &flags))), // Insert  rho, u, flags
+                Some(kernel!(program, queue, "transfer_extract_rho_u_flags", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("rho", &rho), ("u", &u), ("flags", &flags))), // Extract rho, u, flags
+                Some(kernel!(program, queue, "transfer__insert_rho_u_flags", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("rho", &rho), ("u", &u), ("flags", &flags))), // Insert  rho, u, flags
             ], // Rho, u and flags (needed for graphics)
             [
                 if lbm_config.ext_magneto_hydro {
                     Some(match &qi.as_ref().expect("qi should be defined") {
-                        VariableFloatBuffer::U16(qi_u16) => kernel_n!(program, queue, "transfer_extract_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_u16)),
-                        VariableFloatBuffer::F32(qi_f32) => kernel_n!(program, queue, "transfer_extract_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_f32)),
+                        VariableFloatBuffer::U16(qi_u16) => kernel!(program, queue, "transfer_extract_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_u16)),
+                        VariableFloatBuffer::F32(qi_f32) => kernel!(program, queue, "transfer_extract_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_f32)),
                     })
                 } else { None } , // Extract Qi
                 if lbm_config.ext_magneto_hydro {
                     Some(match &qi.as_ref().expect("qi should be defined") {
-                        VariableFloatBuffer::U16(qi_u16) => kernel_n!(program, queue, "transfer__insert_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_u16)),
-                        VariableFloatBuffer::F32(qi_f32) => kernel_n!(program, queue, "transfer__insert_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_f32)),
+                        VariableFloatBuffer::U16(qi_u16) => kernel!(program, queue, "transfer__insert_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_u16)),
+                        VariableFloatBuffer::F32(qi_f32) => kernel!(program, queue, "transfer__insert_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_f32)),
                     })
                 } else { None }, // Insert Qi
             ], // Qi charge ddfs

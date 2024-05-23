@@ -19,13 +19,7 @@ pub fn constant_E(lbm: &Lbm, e: [f32; 3]) {
         });
     
         // Write to device
-        lbm.domains[d as usize]
-            .e
-            .as_ref()
-            .expect("E buffer used but not initialized")
-            .write(&e_field)
-            .enq()
-            .unwrap();
+        bwrite!(lbm.domains[d as usize].e.as_ref().expect("e"), e_field);
     }
 }
 
@@ -78,13 +72,7 @@ pub fn precompute_E(lbm: &Lbm) {
         });
     
         // Write to device
-        lbm.domains[d as usize]
-            .e
-            .as_ref()
-            .expect("E buffer used but not initialized")
-            .write(&e_field)
-            .enq()
-            .unwrap();
+        bwrite!(lbm.domains[d as usize].e.as_ref().expect("e"), e_field);
     }
 }
 
@@ -143,13 +131,7 @@ pub fn constant_B(lbm: &Lbm, b: [f32; 3]) {
         });
     
         // Write to device
-        lbm.domains[d as usize]
-            .b
-            .as_ref()
-            .expect("B buffer used but not initialized")
-            .write(&b_field)
-            .enq()
-            .unwrap();
+        bwrite!(lbm.domains[d as usize].b.as_ref().expect("b"), b_field);
     }
 }
 
@@ -199,13 +181,7 @@ pub fn precompute_B(lbm: &Lbm) {
         });
     
         // Write to device
-        lbm.domains[d as usize]
-            .b
-            .as_ref()
-            .expect("B buffer used but not initialized")
-            .write(&b_field)
-            .enq()
-            .unwrap();
+        bwrite!(lbm.domains[d as usize].b.as_ref().expect("b"), b_field);
     }
 }
 

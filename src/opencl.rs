@@ -1,8 +1,9 @@
 // OpenCL functions
-use ocl::{Device, Platform};
+use ocl::Device;
+use ocl_macros::device_vec;
 
 pub fn device_selection(domains: u32) -> Vec<Device> {
-    let devices = get_devices();
+    let devices = device_vec!();
     if devices.is_empty() {
         println!("No OpenCL Device detected. Aborting...");
         std::process::exit(1);
@@ -57,12 +58,6 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
     device_infos
 }
 
-pub fn get_devices() -> Vec<Device> {
-    let platform = Platform::default();
-
-    Device::list_all(platform).expect("Cannot find devices")
-}
-
 /// Combines the graphics and simulation source files and
 /// removes embedded default defines needed for syntax highlighting
 pub fn get_opencl_code() -> String {
@@ -93,7 +88,7 @@ fn get_tflops(device: Device) -> i32 {
 }
 
 fn get_device_with_most_flops() -> Device {
-    let devices = get_devices();
+    let devices = device_vec!();
     let mut best_value = 0;
     let mut best_i = -1i32;
     for (i, &device) in devices.iter().enumerate() {

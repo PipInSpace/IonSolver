@@ -124,7 +124,7 @@ impl Graphics {
         let bitmap =        buffer!(queue, [width, height], 0i32);
         let zbuffer =       buffer!(queue, [width, height], 0i32);
         let camera_params = buffer!(queue, 15, 0.0f32);
-        camera_params.write(&new_camera_params()).enq().unwrap();
+        bwrite!(camera_params, new_camera_params());
 
         let sln = match lbm_config.velocity_set {
             VelocitySet::D2Q9 => (lbm_config.n_x / lbm_config.graphics_config.streamline_every) as u64 * (lbm_config.n_y / lbm_config.graphics_config.streamline_every) as u64,
@@ -132,16 +132,16 @@ impl Graphics {
         };
 
         // Clear kernel
-        let kernel_clear = kernel_n!(program, queue, "graphics_clear", bitmap.len(), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_clear = kernel!(program, queue, "graphics_clear", bitmap.len(), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
 
         // Graphics/Visualization kernels:
-        let kernel_graphics_axes       = kernel_n!(program, queue, "graphics_axes",           1,                             ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_field      = kernel_n!(program, queue, "graphics_field",        [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
-        let kernel_graphics_flags      = kernel_n!(program, queue, "graphics_flags",        [n], ("flags", flags),           ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_flags_mc   = kernel_n!(program, queue, "graphics_flags_mc",     [n], ("flags", flags),           ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_q          = kernel_n!(program, queue, "graphics_q",            [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_q_field    = kernel_n!(program, queue, "graphics_q_field",      [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
-        let kernel_graphics_streamline = kernel_n!(program, queue, "graphics_streamline", [sln], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
+        let kernel_graphics_axes       = kernel!(program, queue, "graphics_axes",           1,                             ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_field      = kernel!(program, queue, "graphics_field",        [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
+        let kernel_graphics_flags      = kernel!(program, queue, "graphics_flags",        [n], ("flags", flags),           ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_flags_mc   = kernel!(program, queue, "graphics_flags_mc",     [n], ("flags", flags),           ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_q          = kernel!(program, queue, "graphics_q",            [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_q_field    = kernel!(program, queue, "graphics_q_field",      [n], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer));
+        let kernel_graphics_streamline = kernel!(program, queue, "graphics_streamline", [sln], ("flags", flags), ("u", u), ("camera_params", &camera_params), ("bitmap", &bitmap), ("zbuffer", &zbuffer), ("slice_mode", 0), ("slice_x", 0), ("slice_y", 0), ("slice_z", 0));
 
         Graphics {
             kernel_clear,
@@ -187,39 +187,11 @@ impl Lbm {
             self.domains[d].queue.finish().unwrap();
 
             if d == 0 {
-                self.domains[d]
-                    .graphics
-                    .as_ref()
-                    .expect("graphics not enabled")
-                    .bitmap
-                    .read(&mut bitmap)
-                    .enq()
-                    .unwrap();
-                self.domains[d]
-                    .graphics
-                    .as_ref()
-                    .expect("graphics not enabled")
-                    .zbuffer
-                    .read(&mut zbuffer)
-                    .enq()
-                    .unwrap();
+                bread!(self.domains[d].graphics.as_ref().expect("graphics").bitmap, bitmap);
+                bread!(self.domains[d].graphics.as_ref().expect("graphics").zbuffer, zbuffer);
             } else {
-                self.domains[d]
-                    .graphics
-                    .as_ref()
-                    .expect("graphics not enabled")
-                    .bitmap
-                    .read(&mut bitmaps[d - 1])
-                    .enq()
-                    .unwrap();
-                self.domains[d]
-                    .graphics
-                    .as_ref()
-                    .expect("graphics not enabled")
-                    .zbuffer
-                    .read(&mut zbuffers[d - 1])
-                    .enq()
-                    .unwrap();
+                bread!(self.domains[d].graphics.as_ref().expect("graphics").bitmap, bitmaps[d - 1]);
+                bread!(self.domains[d].graphics.as_ref().expect("graphics").zbuffer, zbuffers[d - 1]);
             }
         }
         self.finish_queues();

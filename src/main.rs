@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 extern crate ocl;
+use ocl_macros::*;
 use std::time::{Duration, Instant};
 use std::{f32::consts::PI, fs, sync::mpsc, thread};
-use ocl_macros::*;
 
 mod file;
 mod graphics;
@@ -142,13 +142,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     );
                     params[0] = state.camera_zoom;
                     for d in &lbm.domains {
-                        d.graphics
-                            .as_ref()
-                            .expect("graphics used but not enabled")
-                            .camera_params
-                            .write(&params)
-                            .enq()
-                            .unwrap();
+                        bwrite!(d.graphics.as_ref().expect("graphics").camera_params, params);
                     }
                 }
                 if (camera_changed || (!state.paused && frame_changed))
@@ -182,7 +176,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                 }
 
                 lbm.do_time_step();
-                
+
                 t_p_s = (loop_time.elapsed().as_micros() / step_count_time) as u32;
                 //Calculate simulation speed
                 if step_c % 200 == 0 {
