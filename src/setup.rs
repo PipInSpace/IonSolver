@@ -61,49 +61,34 @@ pub fn setup() -> Lbm {
     lbm
     */
     //setup_domain_test()
-    setup_bfield_spin()
+    file::write(&setup_bfield_spin(), "./testfile.ion");
+    setup_from_file("./testfile.ion")
     //setup_taylor_green()
     //setup_verification()
 }
 
 #[allow(unused)]
-/// Set up Lbm from file. Requires LbmConfig for additional customization at compilation (Graphics etc.).
+/// Set up Lbm from file.
 /// Use in setup();
 ///
-/// Format documented under https://github.com/PipInSpace/ionsolver-files/blob/main/src/FILE.txt
-pub fn setup_from_file(path: &str, lbm_config: LbmConfig) -> Lbm {
-    let vals = file::read(path).unwrap();
+/// Format documented in FILE_LAYOUT.txt
+pub fn setup_from_file(path: &str) -> Lbm {
+    let mut config = LbmConfig::new();
 
-    // Extension is disabled when not needed
-    let electro_hydro = !vals.charges.is_empty() || !vals.magnets.is_empty();
+    // Graphics setup because these are not saved
+    config.graphics_config.graphics_active = true;
+    config.graphics_config.background_color = 0x1c1b22;
+    config.graphics_config.camera_width = 1920;
+    config.graphics_config.camera_height = 1080;
+    config.graphics_config.streamline_every = 8;
+    config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+    config.graphics_config.streamline_mode = true;
+    config.graphics_config.axes_mode = true;
+    config.graphics_config.q_mode = false;
+    config.graphics_config.flags_surface_mode = true;
+    config.graphics_config.flags_mode = true;
 
-    let mut lbm_config = LbmConfig {
-        n_x: vals.n_x,
-        n_y: vals.n_y,
-        n_z: vals.n_z,
-        units: units::Units {
-            m: vals.units_m,
-            kg: vals.units_kg,
-            s: vals.units_s,
-            a: 1.0, // TODO actally add
-        },
-        ext_volume_force: electro_hydro,
-        ext_magneto_hydro: electro_hydro,
-        ..lbm_config
-    };
-    //lbm_config.units.set(128.0, 0.1, 1.0, 1.0, 1.0, 1.225);
-
-    let lbm = Lbm::new(lbm_config);
-    if !vals.charges.is_empty() {
-        precompute::precompute_E(&lbm);
-    }
-    if !vals.magnets.is_empty() {
-        precompute::precompute_B(&lbm);
-    }
-
-    bwrite!(lbm.domains[0].flags, vals.flags);
-
-    lbm
+    file::read(path, &mut config).unwrap()
 }
 
 // Complete setups

@@ -16,13 +16,13 @@ use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 pub enum VelocitySet {
     #[default]
     /// 2D
-    D2Q9,
+    D2Q9 = 0,
     /// 3D low precision
-    D3Q15,
+    D3Q15 = 1,
     /// 3D recommended
-    D3Q19,
+    D3Q19 = 2,
     /// 3D highest precision
-    D3Q27,
+    D3Q27 = 3,
 }
 
 impl VelocitySet {
@@ -55,9 +55,9 @@ impl VelocitySet {
 pub enum RelaxationTime {
     #[default]
     /// Single relaxation time, more efficient
-    Srt,
+    Srt = 0,
     /// Two-relaxation time, more precise
-    Trt,
+    Trt = 1,
 }
 
 /// Enum for different floating-point number types used in the simulation.
@@ -75,11 +75,11 @@ pub enum RelaxationTime {
 pub enum FloatType {
     #[default]
     /// Custom float type represented as a u16, recommended
-    FP16S,
+    FP16S = 0,
     /// Custom float type represented as a u16
-    FP16C,
+    FP16C = 1,
     /// Default float type
-    FP32,
+    FP32 = 2,
 }
 
 impl FloatType {

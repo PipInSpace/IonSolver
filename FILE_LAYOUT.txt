@@ -21,7 +21,7 @@ nu: 4 Byte (f32)
 fx: 4 Byte (f32)
 fy: 4 Byte (f32)
 fz: 4 Byte (f32)
-extensions: 1 Byte (4 bools in a u8) // bit 1: equilibrium_boundaries; bit 2: volume_force; bit 4: force_field; bit 8: magneto_hydro
+extensions: 1 Byte (4 bools in a u8) // bit 0: equilibrium_boundaries; bit 1: volume_force; bit 2: force_field; bit 3: magneto_hydro
 induction_range: 1 byte (u8)
 
 N = n_x * n_y * n_z // N is total number of cells, derived from other values
@@ -34,13 +34,12 @@ N = n_x * n_y * n_z // N is total number of cells, derived from other values
 --Section Densities: 4N Byte--
     density: 4 Byte (f32)
 
---Section Charges: 4N Byte-- // charges in fluid, different from fixed charges
-    charge: 4 Byte (f32)
-
 --Section Velocities: 12N Byte--
     // split into sections for x, y and z like in opencl code
     velocity: 12 Byte (f32; 3)
 
+--Section Charges: 4N Byte-- // charges in fluid, different from fixed charges
+    charge: 4 Byte (f32)
 
 // Length of these is not related to Sim size -------------------------------------------------
 

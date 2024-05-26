@@ -1,24 +1,19 @@
-use std::{borrow::Borrow, fs::File, io::Write};
+use std::{fs::File, io::Write};
 
-use crate::Lbm;
+use ocl_macros::{bread, bwrite};
 
-pub struct SimValues {
-    pub n_x: u32,
-    pub n_y: u32,
-    pub n_z: u32,
-    pub units_m: f32,
-    pub units_kg: f32,
-    pub units_s: f32,
-    pub units_c: f32,
-    pub flags: Vec<u8>,
-    pub charges: Vec<(u64, f32)>,
-    pub magnets: Vec<(u64, [f32; 3])>,
-}
+use crate::{Lbm, LbmConfig, VelocitySet, RelaxationTime, FloatType};
 
-pub fn read<P: AsRef<std::path::Path> + std::fmt::Display>(path: P) -> Result<SimValues, String> {
+pub fn read<P: AsRef<std::path::Path> + std::fmt::Display>(path: P, config: &mut LbmConfig) -> Result<Lbm, String> {
     println!("Reading simulation state from \"{}\"", path);
     let buffer: Vec<u8> = std::fs::read(path).expect("Location should exist");
-    decode(&buffer)
+    decode(&buffer, config)
+}
+
+pub fn write<P: AsRef<std::path::Path> + std::fmt::Display>(lbm: &Lbm, path: P) {
+    println!("Writing simulation state to \"{}\"", path);
+    let buffer = encode(lbm);
+    std::fs::write(path, buffer).expect("writing went wrong");
 }
 
 impl Lbm {
@@ -30,12 +25,152 @@ impl Lbm {
     }
 }
 
-fn decode(buffer: &[u8]) -> Result<Lbm, String> {
+fn decode(buffer: &[u8], config: &mut LbmConfig) -> Result<Lbm, String> {
+    let mut stream = ByteStream::from_buffer(buffer);
+
+    let mut header = String::new();
+    for _ in 0..16 {
+        header.push(stream.next_char());
+    }
+
+    if !header.eq("IonSolver setup\n") {
+        return Err("Invalid Format!".to_owned());
+    }
+
+    config.velocity_set = match stream.next_u8() {
+        0 => VelocitySet::D2Q9,
+        1 => VelocitySet::D3Q15,
+        2 => VelocitySet::D3Q19,
+        3 => VelocitySet::D3Q27,
+        _ => VelocitySet::D2Q9, // should never happen
+    };
+
+    config.relaxation_time = match stream.next_u8() {
+        0 => RelaxationTime::Srt,
+        1 => RelaxationTime::Trt,
+        _ => RelaxationTime::Srt, // should never happen
+    };
+
+    config.float_type = match stream.next_u8() {
+        0 => FloatType::FP16C,
+        1 => FloatType::FP16S,
+        2 => FloatType::FP32,
+        _ => FloatType::FP16C, // should never happen
+    };
+
+    config.units.m = stream.next_f32();
+    config.units.kg = stream.next_f32();
+    config.units.s = stream.next_f32();
+    config.units.a = stream.next_f32();
+
+    config.n_x = stream.next_u32();
+    config.n_y = stream.next_u32();
+    config.n_z = stream.next_u32();
     
+    // fixed domains are skipped for now
+    stream.next_u8();
+
+    config.d_x = stream.next_u32();
+    config.d_y = stream.next_u32();
+    config.d_z = stream.next_u32();
+
+    config.nu = stream.next_f32();
+
+    config.f_x = stream.next_f32();
+    config.f_y = stream.next_f32();
+    config.f_z = stream.next_f32();
+
+    let ext = stream.next_u8();
+
+    config.ext_equilibrium_boudaries = (ext & 0x1) != 0;
+    config.ext_volume_force = (ext & 0x2) != 0;
+    config.ext_force_field = (ext & 0x4) != 0;
+    config.ext_magneto_hydro = (ext & 0x8) != 0;
+
+    config.induction_range = stream.next_u8();
+
+    let mut lbm = Lbm::new(config.to_owned());
+
+    let d_total = lbm.config.d_x * lbm.config.d_y * lbm.config.d_z;
+    let d_n = (lbm.config.n_x / lbm.config.d_x) * (lbm.config.n_y / lbm.config.d_y) * (lbm.config.n_z / lbm.config.d_z);
+    
+    // flags
+    for d in 0..d_total {
+        let mut flags: Vec<u8> = vec![];
+        for _ in 0..d_n {
+            flags.push(stream.next_u8());
+        }
+
+        bwrite!(lbm.domains[d as usize].flags, flags);
+    }
+
+    // densities
+    for d in 0..d_total {
+        let mut densities: Vec<f32> = vec![];
+        for _ in 0..d_n {
+            densities.push(stream.next_f32());
+        }
+
+        bwrite!(lbm.domains[d as usize].rho, densities);
+    }
+
+    // velocities
+    for d in 0..d_total {
+        let mut velocities: Vec<f32> = vec![];
+        for _ in 0..(d_n * 3) {
+            velocities.push(stream.next_f32());
+        }
+
+        bwrite!(lbm.domains[d as usize].u, velocities);
+    }
+
+    if !lbm.config.ext_magneto_hydro {
+        return Ok(lbm);
+    }
+
+    // charges
+    for d in 0..d_total {
+        let mut charges: Vec<f32> = vec![];
+        for _ in 0..d_n {
+            charges.push(stream.next_f32());
+        }
+
+        bwrite!(lbm.domains[d as usize].q.as_ref().unwrap(), charges);
+    }
+
+    // static charges
+    let n_charges = stream.next_u32();
+
+    let mut static_charges: Vec<(u64, f32)> = vec![];
+    for _ in 0..n_charges {
+        let mut static_charge = (0u64, 0f32);
+        static_charge.0 = stream.next_u64();
+        static_charge.1 = stream.next_f32();
+        static_charges.push(static_charge);
+    }
+
+    lbm.charges = Some(static_charges);
+
+    // static magnets
+    let n_magnets = stream.next_u32();
+
+    let mut static_magnets: Vec<(u64, [f32; 3])> = vec![];
+    for _ in 0..n_magnets {
+        let mut static_magnet = (0u64, [0f32; 3]);
+        static_magnet.0 = stream.next_u64();
+        static_magnet.1[0] = stream.next_f32();
+        static_magnet.1[1] = stream.next_f32();
+        static_magnet.1[2] = stream.next_f32();
+        static_magnets.push(static_magnet);
+    }
+
+    lbm.magnets = Some(static_magnets);
+
+    return Ok(lbm);
 }
 
 fn encode(lbm: &Lbm) -> Vec<u8> {
-    // File structure details can be found at https://github.com/PipInSpace/ionsolver-files
+    // File structure details can be found at FILE_LAYOUT.txt
     let mut buffer: Vec<u8> = Vec::with_capacity(1);
 
     // always present and same length
@@ -69,15 +204,14 @@ fn encode(lbm: &Lbm) -> Vec<u8> {
     // domains will be saved regardless of actual coordinates to simplify
     // reading is done in the same order so it doesn't matter
 
-    let n = lbm.config.n_x * lbm.config.n_y * lbm.config.n_z;
     let domain_count = lbm.config.d_x * lbm.config.d_y * lbm.config.d_z;
-    let domain_n = lbm.domains[0].n_x * lbm.domains[0].n_y * lbm.domains[0].n_z; // since all domains are the same size this never changes
+    let d_n = (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z) / domain_count;
 
     // flags
     let mut flags: Vec<u8> = vec![];
     for d_index in 0..domain_count {
-        let mut flags_temp: Vec<u8>;
-        lbm.domains[d_index as usize].flags.read(&flags_temp).enq().unwrap();
+        let mut flags_temp: Vec<u8> = vec![0; d_n as usize];
+        bread!(lbm.domains[d_index as usize].flags, flags_temp);
         flags.extend(flags_temp.iter());
     }
 
@@ -86,8 +220,8 @@ fn encode(lbm: &Lbm) -> Vec<u8> {
     // densities
     let mut densities: Vec<f32> = vec![];
     for d_index in 0..domain_count {
-        let mut dens_temp: Vec<f32>;
-        lbm.domains[d_index as usize].rho.read(&dens_temp).enq().unwrap();
+        let mut dens_temp: Vec<f32> = vec![0.0f32; d_n as usize];
+        bread!(lbm.domains[d_index as usize].rho, dens_temp);
         densities.extend(dens_temp.iter());
     }
 
@@ -95,23 +229,11 @@ fn encode(lbm: &Lbm) -> Vec<u8> {
         buffer.push32(rho.to_bits());
     }
 
-    // charges
-    let mut charges: Vec<f32> = vec![];
-    for d_index in 0..domain_count {
-        let mut charge_temp: Vec<f32>;
-        lbm.domains[d_index as usize].q.read(&charge_temp).enq().unwrap();
-        charges.extend(charge_temp.iter());
-    }
-
-    for q in charges {
-        buffer.push32(q.to_bits());
-    }
-
     // velocities
     let mut velocities: Vec<f32> = vec![];
     for d_index in 0..domain_count {
-        let mut vel_temp: Vec<f32>;
-        lbm.domains[d_index as usize].u.read(&vel_temp).enq().unwrap();
+        let mut vel_temp: Vec<f32> = vec![0.0f32; (d_n * 3) as usize];
+        bread!(lbm.domains[d_index as usize].u, vel_temp);
         velocities.extend(vel_temp.iter());
     }
 
@@ -119,17 +241,30 @@ fn encode(lbm: &Lbm) -> Vec<u8> {
         buffer.push32(v.to_bits());
     }
 
+    if lbm.config.ext_magneto_hydro {
+        // charges
+        let mut charges: Vec<f32> = vec![];
+        for d_index in 0..domain_count {
+            let mut charge_temp: Vec<f32> = vec![0.0f32; d_n as usize];
+            bread!(lbm.domains[d_index as usize].q.as_ref().unwrap(), charge_temp);
+            charges.extend(charge_temp.iter());
+        }
+
+        for q in charges {
+            buffer.push32(q.to_bits());
+        }
+    }
+    
     // static charges and magnets
     
     // static charges
     if lbm.charges.is_none() {
         buffer.push32(0);
     } else {
-        let charges_temp = lbm.charges.unwrap();
+        let charges_temp = lbm.charges.as_ref().unwrap();
         buffer.push32(charges_temp.len() as u32);
         for charge in charges_temp {
-            buffer.push32(charge.0 & 0x00000000FFFFFFFF); // low 4 bytes n
-            buffer.push32(charge.0 >> 32); // high 4 bytes n
+            buffer.push64(charge.0);
             buffer.push32(charge.1.to_bits()); // charge
         }
     }
@@ -138,41 +273,17 @@ fn encode(lbm: &Lbm) -> Vec<u8> {
     if lbm.magnets.is_none() {
         buffer.push32(0);
     } else {
-        let magnets_temp = lbm.magnets.unwrap();
+        let magnets_temp = lbm.magnets.as_ref().unwrap();
         buffer.push32(magnets_temp.len() as u32);
         for magnet in magnets_temp {
-            buffer.push32(magnet.0 & 0x00000000FFFFFFFF); // low 4 bytes n
-            buffer.push32(magnet.0 >> 32); // high 4 bytes n
-            buffer.push32(magnet.1.0.to_bits()); // magnetization x
-            buffer.push32(magnet.1.1.to_bits()); // magnetization y
-            buffer.push32(magnet.1.2.to_bits()); // magnetization z
+            buffer.push64(magnet.0);
+            buffer.push32(magnet.1[0].to_bits()); // magnetization x
+            buffer.push32(magnet.1[1].to_bits()); // magnetization y
+            buffer.push32(magnet.1[2].to_bits()); // magnetization z
         }
     }
 
     buffer
-}
-
-fn get_next_chunk(buffer: &[u8], pos: &mut usize) -> [u8; 4] {
-    let mut v = [0; 4];
-    v[0] = buffer[*pos];
-    v[1] = buffer[*pos + 1];
-    v[2] = buffer[*pos + 2];
-    v[3] = buffer[*pos + 3];
-    *pos += 4;
-
-    v
-}
-
-fn to_u32(v: [u8; 4]) -> u32 {
-    v[0] as u32 + ((v[1] as u32) << 8) + ((v[2] as u32) << 16) + ((v[3] as u32) << 24)
-}
-
-fn to_u64(vlow: [u8; 4], vhigh: [u8; 4]) -> u64 {
-    to_u32(vlow) as u64 + ((to_u32(vhigh) as u64) << 32)
-}
-
-fn to_f32(v: [u8; 4]) -> f32 {
-    f32::from_le_bytes(v)
 }
 
 /// Push different byte sizes to 8-Bit Buffer
@@ -217,13 +328,13 @@ impl ByteBuffer for Vec<u8> {
 }
 
 pub struct ByteStream {
-    buffer: &[u8],
+    buffer: Vec<u8>,
     pos: usize,
 }
 
 impl ByteStream {
     pub fn from_buffer(buffer: &[u8]) -> ByteStream {
-        ByteBuffer{buffer, 0}
+        ByteStream{buffer: buffer.to_vec(), pos: 0}
     }
 
     /// gets the next byte from stream
@@ -236,7 +347,7 @@ impl ByteStream {
     pub fn next_u32(&mut self) -> u32 {
         let mut value: u32 = 0;
         for i in 0..4 {
-            value += self.buffer[self.pos] << (i * 8);
+            value += (self.buffer[self.pos] as u32) << (i * 8);
             self.pos += 1;
         }
         value
@@ -245,13 +356,17 @@ impl ByteStream {
     pub fn next_u64(&mut self) -> u64 {
         let mut value: u64 = 0;
         for i in 0..8 {
-            value += self.buffer[self.pos] << (i * 8);
+            value += (self.buffer[self.pos] as u64) << (i * 8);
             self.pos += 1;
         }
         value
     }
     /// gets the next f32 from stream (Little endian encoding)
     pub fn next_f32(&mut self) -> f32 {
-        f32::from_le_bytes(self.next_u32())
+        f32::from_le_bytes(self.next_u32().to_le_bytes())
+    }
+    /// gets the next char from stream
+    pub fn next_char(&mut self) -> char {
+        self.next_u8() as char
     }
 }
