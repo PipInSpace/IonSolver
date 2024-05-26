@@ -26,8 +26,23 @@ induction_range: 1 byte (u8)
 
 N = n_x * n_y * n_z // N is total number of cells, derived from other values
 
+// all values of one type together to make reading easier
+
 --Section Flags: N Byte--
     flags: 1 Byte (u8)
+
+--Section Densities: 4N Byte--
+    density: 4 Byte (f32)
+
+--Section Charges: 4N Byte-- // charges in fluid, different from fixed charges
+    charge: 4 Byte (f32)
+
+--Section Velocities: 12N Byte--
+    // split into sections for x, y and z like in opencl code
+    velocity: 12 Byte (f32; 3)
+
+
+// Length of these is not related to Sim size -------------------------------------------------
 
 N_C: 4 Byte (u32) // number of fixed charges, only relevant for reading, discarded after
 
@@ -42,20 +57,5 @@ N_M: 4 Byte (u32) // number of magnets, only relevant for reading, discarded aft
     //u64 cell index and 3*f32 magnetization vector
     index: 8 Byte (u64)
     magnetization: 12 Byte (f32; 3)
-
-
-//................... Possibly optional for uninitialized Sim (Probably kept for simplicity)....................
-
-// all values of one type together to make reading easier
-
---Section Densities: 4N Byte--
-    density: 4 Byte (f32)
-
---Section Charges: 4N Byte-- // charges in fluid, different from fixed charges
-    charge: 4 Byte (f32)
-
---Section Velocities: 12N Byte--
-    velocity: 12 Byte (f32; 3)
-
 
 <EOF>

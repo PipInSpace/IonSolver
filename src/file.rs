@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write};
+use std::{borrow::Borrow, fs::File, io::Write};
 
 use crate::Lbm;
 
@@ -30,98 +30,15 @@ impl Lbm {
     }
 }
 
-fn decode(buffer: &[u8]) -> Result<SimValues, String> {
-    println!("    Decoding File");
-
-    // Buffer position
-    let mut pos: usize = 0;
-    // Check header
-    let mut header = "".to_owned();
-    for _ in 0..15 {
-        header.push(buffer[pos] as char);
-        pos += 1;
-    }
-    if header != "IonSolver setup" {
-        println!("    Invalid format!");
-        return Err("Invalid format!".to_owned());
-    }
-
-    pos += 1; // increment to skip next byte so we are 4 byte aligned again
-
-    // Values
-    let n_x = to_u32(get_next_chunk(buffer, &mut pos));
-    let n_y = to_u32(get_next_chunk(buffer, &mut pos));
-    let n_z = to_u32(get_next_chunk(buffer, &mut pos));
-    println!("    Sim size: {}, {}, {}", n_x, n_y, n_z);
-
-    let units_m = to_f32(get_next_chunk(buffer, &mut pos));
-    let units_kg = to_f32(get_next_chunk(buffer, &mut pos));
-    let units_s = to_f32(get_next_chunk(buffer, &mut pos));
-    let units_c = to_f32(get_next_chunk(buffer, &mut pos));
-
-    // Walls
-    println!("    Parsing Flags...");
-    let mut walls: Vec<u8> = vec![];
-    for _ in 0..(n_x * n_y * n_z / (4 * 8)) {
-        let chunk = get_next_chunk(buffer, &mut pos);
-        for byte in chunk {
-            for bit in 0..8 {
-                walls.push((byte >> (7 - bit)) & 1_u8);
-            }
-        }
-    }
-
-    // Charges
-    let len = to_u32(get_next_chunk(buffer, &mut pos));
-    println!("    Parsing {} Charges...", len);
-    let mut charges: Vec<(u64, f32)> = Vec::with_capacity(len as usize);
-    for _ in 0..len {
-        let charge = to_f32(get_next_chunk(buffer, &mut pos));
-        let i1 = get_next_chunk(buffer, &mut pos);
-        let i2 = get_next_chunk(buffer, &mut pos);
-        charges.push((to_u64(i1, i2), charge))
-    }
-
-    // Magnets
-    let len = to_u32(get_next_chunk(buffer, &mut pos));
-    println!("    Parsing {} Magnets...", len);
-    let mut magnets: Vec<(u64, [f32; 3])> = Vec::with_capacity(len as usize);
-    for _ in 0..len {
-        magnets.push((
-            to_u64(
-                get_next_chunk(buffer, &mut pos),
-                get_next_chunk(buffer, &mut pos),
-            ),
-            [
-                to_f32(get_next_chunk(buffer, &mut pos)),
-                to_f32(get_next_chunk(buffer, &mut pos)),
-                to_f32(get_next_chunk(buffer, &mut pos)),
-            ],
-        ))
-    }
-
-    let values = SimValues {
-        n_x,
-        n_y,
-        n_z,
-        units_m,
-        units_kg,
-        units_s,
-        units_c,
-        flags: walls,
-        charges,
-        magnets,
-    };
-
-    println!("Completed reading file.");
-
-    Ok(values)
+fn decode(buffer: &[u8]) -> Result<Lbm, String> {
+    
 }
 
 fn encode(lbm: &Lbm) -> Vec<u8> {
     // File structure details can be found at https://github.com/PipInSpace/ionsolver-files
     let mut buffer: Vec<u8> = Vec::with_capacity(1);
 
+    // always present and same length
     buffer.pushname(); // Header, Human-Readable
     buffer.push(lbm.config.velocity_set as u8); // Enums as u8
     buffer.push(lbm.config.relaxation_time as u8);
@@ -147,6 +64,90 @@ fn encode(lbm: &Lbm) -> Vec<u8> {
         + ((lbm.config.ext_magneto_hydro as u8) << 3);
     buffer.push(ext);
     buffer.push(lbm.config.induction_range);
+
+    // values relating to simulation volume
+    // domains will be saved regardless of actual coordinates to simplify
+    // reading is done in the same order so it doesn't matter
+
+    let n = lbm.config.n_x * lbm.config.n_y * lbm.config.n_z;
+    let domain_count = lbm.config.d_x * lbm.config.d_y * lbm.config.d_z;
+    let domain_n = lbm.domains[0].n_x * lbm.domains[0].n_y * lbm.domains[0].n_z; // since all domains are the same size this never changes
+
+    // flags
+    let mut flags: Vec<u8> = vec![];
+    for d_index in 0..domain_count {
+        let mut flags_temp: Vec<u8>;
+        lbm.domains[d_index as usize].flags.read(&flags_temp).enq().unwrap();
+        flags.extend(flags_temp.iter());
+    }
+
+    buffer.extend(flags.iter());
+
+    // densities
+    let mut densities: Vec<f32> = vec![];
+    for d_index in 0..domain_count {
+        let mut dens_temp: Vec<f32>;
+        lbm.domains[d_index as usize].rho.read(&dens_temp).enq().unwrap();
+        densities.extend(dens_temp.iter());
+    }
+
+    for rho in densities {
+        buffer.push32(rho.to_bits());
+    }
+
+    // charges
+    let mut charges: Vec<f32> = vec![];
+    for d_index in 0..domain_count {
+        let mut charge_temp: Vec<f32>;
+        lbm.domains[d_index as usize].q.read(&charge_temp).enq().unwrap();
+        charges.extend(charge_temp.iter());
+    }
+
+    for q in charges {
+        buffer.push32(q.to_bits());
+    }
+
+    // velocities
+    let mut velocities: Vec<f32> = vec![];
+    for d_index in 0..domain_count {
+        let mut vel_temp: Vec<f32>;
+        lbm.domains[d_index as usize].u.read(&vel_temp).enq().unwrap();
+        velocities.extend(vel_temp.iter());
+    }
+
+    for v in velocities {
+        buffer.push32(v.to_bits());
+    }
+
+    // static charges and magnets
+    
+    // static charges
+    if lbm.charges.is_none() {
+        buffer.push32(0);
+    } else {
+        let charges_temp = lbm.charges.unwrap();
+        buffer.push32(charges_temp.len() as u32);
+        for charge in charges_temp {
+            buffer.push32(charge.0 & 0x00000000FFFFFFFF); // low 4 bytes n
+            buffer.push32(charge.0 >> 32); // high 4 bytes n
+            buffer.push32(charge.1.to_bits()); // charge
+        }
+    }
+
+    // static magnets
+    if lbm.magnets.is_none() {
+        buffer.push32(0);
+    } else {
+        let magnets_temp = lbm.magnets.unwrap();
+        buffer.push32(magnets_temp.len() as u32);
+        for magnet in magnets_temp {
+            buffer.push32(magnet.0 & 0x00000000FFFFFFFF); // low 4 bytes n
+            buffer.push32(magnet.0 >> 32); // high 4 bytes n
+            buffer.push32(magnet.1.0.to_bits()); // magnetization x
+            buffer.push32(magnet.1.1.to_bits()); // magnetization y
+            buffer.push32(magnet.1.2.to_bits()); // magnetization z
+        }
+    }
 
     buffer
 }
@@ -212,5 +213,45 @@ impl ByteBuffer for Vec<u8> {
         for i in 0..8 {
             self.push(((x >> (i * 8)) & 0xFF).try_into().unwrap());
         }
+    }
+}
+
+pub struct ByteStream {
+    buffer: &[u8],
+    pos: usize,
+}
+
+impl ByteStream {
+    pub fn from_buffer(buffer: &[u8]) -> ByteStream {
+        ByteBuffer{buffer, 0}
+    }
+
+    /// gets the next byte from stream
+    pub fn next_u8(&mut self) -> u8 {
+        let value = self.buffer[self.pos];
+        self.pos += 1;
+        value
+    }
+    /// gets the next u32 from stream
+    pub fn next_u32(&mut self) -> u32 {
+        let mut value: u32 = 0;
+        for i in 0..4 {
+            value += self.buffer[self.pos] << (i * 8);
+            self.pos += 1;
+        }
+        value
+    }
+    /// gets the next u64 from stream
+    pub fn next_u64(&mut self) -> u64 {
+        let mut value: u64 = 0;
+        for i in 0..8 {
+            value += self.buffer[self.pos] << (i * 8);
+            self.pos += 1;
+        }
+        value
+    }
+    /// gets the next f32 from stream (Little endian encoding)
+    pub fn next_f32(&mut self) -> f32 {
+        f32::from_le_bytes(self.next_u32())
     }
 }
