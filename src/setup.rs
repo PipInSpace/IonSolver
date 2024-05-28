@@ -61,9 +61,10 @@ pub fn setup() -> Lbm {
     lbm
     */
     //setup_domain_test()
-    file::write(&setup_bfield_spin(), "./testfile.ion");
-    setup_from_file("./testfile.ion")
-    //setup_taylor_green()
+    //setup_bfield_spin()
+    //file::write(&setup_bfield_spin(), "./testfile.ion");
+    //setup_from_file("./testfile.ion")
+    setup_taylor_green()
     //setup_verification()
 }
 

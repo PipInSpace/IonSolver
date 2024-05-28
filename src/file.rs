@@ -5,15 +5,22 @@ use ocl_macros::{bread, bwrite};
 use crate::{Lbm, LbmConfig, VelocitySet, RelaxationTime, FloatType};
 
 pub fn read<P: AsRef<std::path::Path> + std::fmt::Display>(path: P, config: &mut LbmConfig) -> Result<Lbm, String> {
-    println!("Reading simulation state from \"{}\"", path);
-    let buffer: Vec<u8> = std::fs::read(path).expect("Location should exist");
+    println!("\nReading simulation state from \"{}\"", path);
+    let buffer: Vec<u8> = match std::fs::read(path) {
+        Ok(vec) => vec,
+        Err(_) => { return Err("Could not find file.".to_owned())},
+    };
     decode(&buffer, config)
 }
 
-pub fn write<P: AsRef<std::path::Path> + std::fmt::Display>(lbm: &Lbm, path: P) {
-    println!("Writing simulation state to \"{}\"", path);
+pub fn write<P: AsRef<std::path::Path> + std::fmt::Display>(lbm: &Lbm, path: P) -> Result<(), String> {
+    println!("\nWriting simulation state to \"{}\"", path);
     let buffer = encode(lbm);
-    std::fs::write(path, buffer).expect("writing went wrong");
+    match std::fs::write(path, buffer) {
+        Ok(_) => { Ok(()) },
+        Err(_) => { Err("writing went wrong".to_owned()) }
+
+    }
 }
 
 impl Lbm {
@@ -166,7 +173,11 @@ fn decode(buffer: &[u8], config: &mut LbmConfig) -> Result<Lbm, String> {
 
     lbm.magnets = Some(static_magnets);
 
-    return Ok(lbm);
+    if !stream.at_end() {
+        return Err("Not all data could be read, file may be corrupted.".to_owned());
+    }
+
+    Ok(lbm)
 }
 
 fn encode(lbm: &Lbm) -> Vec<u8> {
@@ -368,5 +379,9 @@ impl ByteStream {
     /// gets the next char from stream
     pub fn next_char(&mut self) -> char {
         self.next_u8() as char
+    }
+
+    pub fn at_end(&self) -> bool {
+        self.pos == self.buffer.len()
     }
 }

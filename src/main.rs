@@ -35,9 +35,12 @@ impl SimState {
 /// SimControlTx sends information/commands to the simulation
 pub struct SimControlTx {
     paused: bool,
-    save: bool,
+    save_img: bool,
+    save_file: bool,
+    load_file: bool,
     clear_images: bool,
     frame_spacing: u32,
+    file_name: String,
     active: bool,
     camera_rotation: Vec<f32>,
     camera_zoom: f32,
@@ -63,9 +66,12 @@ fn main() {
     // Send exit control message
     _ = exit_ctrl_tx.send(SimControlTx {
         paused: true,
-        save: false,
+        save_img: false,
+        save_file: false,
+        load_file: false,
         clear_images: false,
         frame_spacing: 10,
+        file_name: "".to_string(),
         active: false,
         camera_rotation: vec![0.0; 2],
         camera_zoom: 3.0,
@@ -79,9 +85,12 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     //sim_tx.send(state) sends data to the main window loop
     let mut state = SimControlTx {
         paused: true,
-        save: false,
+        save_img: false,
+        save_file: false,
+        load_file: false,
         clear_images: true,
         frame_spacing: 10,
+        file_name: "".to_string(),
         active: true,
         camera_rotation: vec![0.0; 2],
         camera_zoom: 3.0,
@@ -92,7 +101,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
     lbm.initialize();
 
     // Clearing out folder if requested
-    if state.save && state.clear_images {
+    if state.save_img && state.clear_images {
         match fs::remove_dir_all("out") {
             Ok(_) => (),
             Err(_) => println!("Did not find out folder. Creating it."),
@@ -185,13 +194,45 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
 
                 // Saves frames if needed
                 if step_c % state.frame_spacing == 0
-                    && state.save
+                    && state.save_img
                     && lbm.config.graphics_config.graphics_active
                 {
                     lbm.draw_frame(true, sim_tx.clone(), &step_c);
                 }
                 step_c += 1;
                 step_count_time += 1;
+            }
+        } else {
+            if state.save_file {
+                match file::write(&lbm, state.file_name.as_str()) {
+                    Ok(_) => {},
+                    Err(msg) => {println!("ERROR: Could not write file \"{}\"!\nReason: {}", state.file_name.as_str(), msg)},
+                }
+                state.save_file = false;
+            }
+            if state.load_file {
+                // copy config to keep graphics settings
+                let mut new_lbm_config: LbmConfig = LbmConfig::new();
+                new_lbm_config.graphics_config.graphics_active = true;
+                new_lbm_config.graphics_config.background_color = 0x1c1b22;
+                new_lbm_config.graphics_config.camera_width = 1920;
+                new_lbm_config.graphics_config.camera_height = 1080;
+                new_lbm_config.graphics_config.streamline_every = 8;
+                new_lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+                new_lbm_config.graphics_config.streamline_mode = true;
+                new_lbm_config.graphics_config.axes_mode = true;
+                new_lbm_config.graphics_config.q_mode = false;
+                new_lbm_config.graphics_config.flags_surface_mode = true;
+                new_lbm_config.graphics_config.flags_mode = true;
+
+                match file::read(state.file_name.as_str(), &mut new_lbm_config) {
+                    Ok(new_lbm) => { 
+                        lbm = new_lbm;
+                        lbm.initialize();
+                    },
+                    Err(msg) => { println!("ERROR: Could not read file \"{}\"!\nReason: {}", state.file_name.as_str(), msg)},
+                }
+                state.load_file = false;
             }
         }
         if !state.active {

@@ -10,11 +10,15 @@ use crate::{SimControlTx, SimState};
 struct SimControl {
     //SimControl handles control/displaying of the Simulation over the UI
     paused: bool,
-    save: bool,
+    save_img: bool,
+    save_file: bool,
+    load_file: bool,
     step: u32,
     clear_images: bool,
     frame_spacing: u32,
     frame_spacing_str: String,
+    file_name: String,
+    file_name_str: String,
     display_img: Option<egui::TextureHandle>,
     camera_rotation: Vec<f32>,
     camera_zoom: f32,
@@ -28,18 +32,25 @@ impl SimControl {
         self.paused = true;
     }
 
-    pub fn send_control(&self) {
+    pub fn send_control(&mut self) {
         self.ctrl_tx
             .send(SimControlTx {
                 paused: self.paused,
-                save: self.save,
+                save_img: self.save_img,
+                save_file: self.save_file,
+                load_file: self.load_file,
                 clear_images: self.clear_images,
                 frame_spacing: self.frame_spacing,
+                file_name: self.file_name.clone(),
                 active: true,
                 camera_rotation: self.camera_rotation.clone(),
                 camera_zoom: self.camera_zoom,
             })
             .expect("GUI cannot communicate with sim thread");
+
+        // save and load commands should only be sent once
+        self.save_file = false;
+        self.load_file = false;
     }
 
     // Egui response ro
@@ -104,14 +115,14 @@ impl SimControl {
                         self.reset_sim();
                     }
                     if ui
-                        .add(egui::Button::new(if self.save {
+                        .add(egui::Button::new(if self.save_img {
                             "Saving Enabled"
                         } else {
                             "Saving Disabled"
                         }))
                         .clicked()
                     {
-                        self.save = !self.save;
+                        self.save_img = !self.save_img;
                         *send_control = true;
                     }
                     ui.add(egui::Label::new("Saving interval:"));
@@ -135,6 +146,38 @@ impl SimControl {
                             Err(_) => println!("Did not find out folder. Creating it."),
                         }
                         fs::create_dir("out").unwrap();
+                    }
+                    if ui.add(egui::Button::new("Save Simulation")).clicked() {
+                        // do not try to save with no name
+                        if !self.file_name.is_empty() {
+                            if !self.file_name.ends_with(".ion") {
+                                self.file_name.push_str(".ion");
+                            }
+                            self.save_file = true;
+                            *send_control = true;
+                        }
+                    }
+                    if ui.add(egui::Button::new("Load Simulation")).clicked() {
+                        // do not try to load with no name
+                        if !self.file_name.is_empty() {
+                            if !self.file_name.ends_with(".ion") {
+                                self.file_name.push_str(".ion");
+                            }
+                            self.load_file = true;
+                            *send_control = true;
+                        }
+                    }
+                    text = self.file_name_str.clone();
+                    ui.add(egui::Label::new("File Name:"));
+                    if ui
+                        .add(egui::TextEdit::singleline(&mut text).desired_width(300.0))
+                        .changed()
+                    {
+                        self.file_name_str = text.clone();
+
+                        let mut temp: String = "./".to_string();
+                        temp.push_str(self.file_name_str.clone().as_str());
+                        self.file_name = temp;
                     }
                 })
             })
@@ -269,11 +312,15 @@ pub fn run_ui(sim_rx: Receiver<SimState>, ctrl_tx: Sender<SimControlTx>) {
     // setup simcontrol struc to pass params and channels to GUI
     let simcontrol = SimControl {
         paused: true,
-        save: false,
+        save_img: false,
+        save_file: false,
+        load_file: false,
         step: 0,
         clear_images: false,
         frame_spacing: 100,
         frame_spacing_str: "100".to_string(),
+        file_name: "".to_string(),
+        file_name_str: "".to_string(),
         display_img: None,
         camera_rotation: vec![0.0; 2],
         camera_zoom: 3.0,
