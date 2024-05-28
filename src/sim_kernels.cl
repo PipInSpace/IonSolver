@@ -576,13 +576,17 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 	    	u[nxi] = 0.0f; // reset velocity for solid lattice points with only boundary neighbors
 	    	u[nyi] = 0.0f;
 	    	u[nzi] = 0.0f;
+			#ifdef MAGNETO_HYDRO
 			Q[n] = 0.0f;
+			#endif
 	    }
         if(flagsn_bo==TYPE_S) {
 	        u[nxi] = 0.0f; // reset velocity for all solid lattice points
 	        u[nyi] = 0.0f;
 	        u[nzi] = 0.0f;
+			#ifdef MAGNETO_HYDRO
 			Q[n] = 0.0f;
+			#endif
         }
     }
     float feq[def_velocity_set]; // f_equilibrium
