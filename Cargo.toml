@@ -6,12 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eframe = "0.22.0"
-egui = "0.22.0"
+eframe = { version = "0.22.0", optional = true }
+egui = { version = "0.22.0", optional = true }
 image = "0.24.7"
-ocl = "0.19.4"
+ocl = "0.19.7"
 ocl-macros = "0.0.4"
 rayon = "1.8.0"
 
 [features]
-headless = []
+gui = ["dep:eframe", "dep:egui"]

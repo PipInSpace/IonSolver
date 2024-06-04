@@ -11,14 +11,14 @@ mod lbm;
 mod opencl;
 mod precompute;
 mod setup;
-#[cfg(not(feature = "headless"))]
+#[cfg(feature = "gui")]
 mod ui;
 mod units;
 use lbm::*;
 
 pub struct SimState {
     pub step: u32,
-    #[cfg(not(feature = "headless"))]
+    #[cfg(feature = "gui")]
     pub img: egui::ColorImage,
 }
 
@@ -26,7 +26,7 @@ impl SimState {
     pub fn new() -> SimState {
         Self {
             step: 0,
-            #[cfg(not(feature = "headless"))]
+            #[cfg(feature = "gui")]
             img: egui::ColorImage::default(),
         }
     }
@@ -60,7 +60,7 @@ fn main() {
         simloop(sim_tx, ctrl_rx);
     });
 
-    #[cfg(not(feature = "headless"))]
+    #[cfg(feature = "gui")]
     ui::run_ui(sim_rx, ctrl_tx);
 
     // Send exit control message

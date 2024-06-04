@@ -213,13 +213,13 @@ impl Lbm {
 
             let mut save_buffer: Vec<u8> = Vec::with_capacity(bitmap.len());
 
-            #[cfg(not(feature = "headless"))]
+            #[cfg(feature = "gui")]
             let mut pixels: Vec<egui::Color32> = Vec::with_capacity(bitmap.len());
 
             for pixel in &bitmap {
                 let color = pixel & 0xFFFFFF;
 
-                #[cfg(not(feature = "headless"))]
+                #[cfg(feature = "gui")]
                 pixels.push(egui::Color32::from_rgb(
                     ((color >> 16) & 0xFF) as u8,
                     ((color >> 8) & 0xFF) as u8,
@@ -233,7 +233,7 @@ impl Lbm {
                 }
             }
 
-            #[cfg(not(feature = "headless"))]
+            #[cfg(feature = "gui")]
             let color_image = egui::ColorImage {
                 size: [width as usize, height as usize],
                 pixels,
@@ -241,7 +241,7 @@ impl Lbm {
 
             _ = sim_tx.send(SimState {
                 step: i,
-                #[cfg(not(feature = "headless"))]
+                #[cfg(feature = "gui")]
                 img: color_image,
             }); // This may fail if the simulation is terminated, but a frame is still being generated. Error can be ignored.
 
