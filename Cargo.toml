@@ -9,9 +9,12 @@ edition = "2021"
 eframe = { version = "0.22.0", optional = true }
 egui = { version = "0.22.0", optional = true }
 image = "0.24.7"
+mpi = { version = "0.8.0", features = ["user-operations", "derive"], optional = true }
 ocl = "0.19.7"
 ocl-macros = "0.0.4"
 rayon = "1.8.0"
 
+
 [features]
 gui = ["dep:eframe", "dep:egui"]
+multi-node = ["dep:mpi"]
