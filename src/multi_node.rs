@@ -3,6 +3,7 @@
 //! ## MPI Error codes
 //! - **100**: Incompatible domain number and number of execution nodes
 
+use image::{ImageBuffer, Rgb};
 use mpi::{point_to_point, traits::*};
 use ocl_macros::default_device;
 use crate::*;
@@ -14,9 +15,7 @@ pub fn run_node() {
     let world: mpi::topology::SimpleCommunicator = universe.world();
     let size = world.size();
     let rank = world.rank();
-    if rank == 0 {
-        println!("IonSolver - © 2024\n");
-    }
+    rprintln!("IonSolver - © 2024\n", world);
     println!("Launched Node {} of {}", rank, size);
 
     let mut cfg: LbmConfig;
@@ -32,7 +31,7 @@ pub fn run_node() {
         cfg.graphics_config.graphics_active = true;
         cfg.graphics_config.streamline_every = 8;
         cfg.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
-        //lbm_config.graphics_config.streamline_mode = true;
+        cfg.graphics_config.streamline_mode = true;
         cfg.graphics_config.axes_mode = true;
         cfg.graphics_config.q_mode = true;
         cfg.graphics_config.q_min = 0.00001;
@@ -57,12 +56,23 @@ pub fn run_node() {
     let mut domain = node_domain(&mut cfg, rank as u32); // Build domain for node
     println!("Build domain at Node {}", rank);
     world.barrier();
-    if rank == 0 {
-        println!("Beginning execution");
-    }
+    rprintln!("Beginning execution", world);
     domain.node_initialize(&world);
-    for _ in 0..1000 {
+
+    // Set correct camera parameters
+    let mut params = graphics::camera_params_rot(
+        0.0 * (PI / 180.0),
+        0.0 * (PI / 180.0),
+    );
+    params[0] = 3.0;
+    bwrite!(domain.graphics.as_ref().expect("graphics").camera_params, params);
+
+    // Run for 100 steps
+    for s in 0..1000 {
         domain.node_do_time_step(&world);
+        if s % 10 == 0 {
+            domain.node_draw_frame(s+1, &world);
+        }
     }
 }
 
@@ -181,4 +191,65 @@ impl LbmDomain {
         let bytes_per_cell = self.cfg.float_type.size_of() * 1; // FP type size * transfers. The fixed D3Q7 lattice has 1 transfer
         self.node_communicate_field(TransferField::Qi, bytes_per_cell, world);
     }
+
+    /// Draw one frame of the simulation.
+    /// Each node/domain renders its own frame. Frames are transmitted to the root node, stitched together and saved.
+    #[rustfmt::skip]
+    fn node_draw_frame(&mut self, step: u64, world: &mpi::topology::SimpleCommunicator) {
+        let width = self.cfg.graphics_config.camera_width;
+        let height = self.cfg.graphics_config.camera_height;
+        let pixel_n = (width * height) as usize;
+        let mut bitmap: Vec<i32> = vec![0; pixel_n]; // Base bitmap
+        let mut zbuffer: Vec<i32> = vec![0; pixel_n];
+        let d_n = world.size();
+
+        self.enqueue_draw_frame(); // Draw domain frame and read into host buffers
+        self.queue.finish().unwrap();
+        bread!(self.graphics.as_ref().expect("graphics").bitmap, bitmap);
+        bread!(self.graphics.as_ref().expect("graphics").zbuffer, zbuffer);
+
+        if world.rank() != 0 { // Transmit buffers to root
+            world.process_at_rank(0).gather_into(&bitmap);
+            world.process_at_rank(0).gather_into(&zbuffer);
+        } else { // Root: Receive buffers from all nodes and assemble images
+            let mut bitmaps = vec![0i32; pixel_n * d_n as usize]; // Master bitmap containing pixels of all domains
+            let mut zbuffers = vec![0i32; pixel_n * d_n as usize];
+            world.process_at_rank(0).gather_into_root(&bitmap, &mut bitmaps[..]); // Receive buffers
+            world.process_at_rank(0).gather_into_root(&zbuffer, &mut zbuffers[..]);
+
+            thread::spawn(move || { // Generating images needs own thread for performance reasons
+                for d in 1..d_n as usize { // Assemble image from domain pixels
+                    let offset = pixel_n * d;
+                    for i in 0..pixel_n {
+                        let zdi = zbuffers[offset + i];
+                        if zdi > zbuffer[i] {
+                            bitmap[i] = bitmaps[offset + i];
+                            zbuffer[i] = zbuffers[offset + i];
+                        }
+                    }
+                }
+
+                let mut save_buffer: Vec<u8> = Vec::with_capacity(bitmap.len());
+                for pixel in &bitmap {
+                    let color = pixel & 0xFFFFFF;
+                    save_buffer.push(((color >> 16) & 0xFF) as u8);
+                    save_buffer.push(((color >> 8) & 0xFF) as u8);
+                    save_buffer.push((color & 0xFF) as u8);
+                }
+                let imgbuffer: ImageBuffer<Rgb<u8>, _> = ImageBuffer::from_raw(width, height, save_buffer).unwrap();
+                imgbuffer.save(format!(r"{}/../out/frame_{}.png", std::env::current_exe().unwrap().display(), step)).unwrap();
+                
+            });
+        }
+    }
+}
+
+/// Print only if root process. Needs access to comm-world 
+#[macro_export]
+macro_rules! rprintln {
+    ($str:expr, $world:expr) => {
+        if $world.rank() == 0 {
+            println!($str);
+        }
+    };
 }
