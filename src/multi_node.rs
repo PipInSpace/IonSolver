@@ -4,7 +4,6 @@
 //! - **100**: Incompatible domain number and number of execution nodes
 
 use image::{ImageBuffer, Rgb};
-use image::{ImageBuffer, Rgb};
 use mpi::{point_to_point, traits::*};
 use ocl_macros::default_device;
 use crate::*;
@@ -34,7 +33,6 @@ pub fn run_node() {
         cfg.graphics_config.streamline_every = 8;
         cfg.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
         cfg.graphics_config.streamline_mode = true;
-        cfg.graphics_config.streamline_mode = true;
         cfg.graphics_config.axes_mode = true;
         cfg.graphics_config.q_mode = true;
         cfg.graphics_config.q_min = 0.00001;
@@ -60,7 +58,6 @@ pub fn run_node() {
     println!("Build domain at Node {}", rank);
     world.barrier();
     rprintln!("Beginning execution", world);
-    rprintln!("Beginning execution", world);
     domain.node_initialize(&world);
 
     // Set correct camera parameters
@@ -73,21 +70,7 @@ pub fn run_node() {
 
     // Run for 100 steps
     for s in 0..1000 {
-
-    // Set correct camera parameters
-    let mut params = graphics::camera_params_rot(
-        0.0 * (PI / 180.0),
-        0.0 * (PI / 180.0),
-    );
-    params[0] = 3.0;
-    bwrite!(domain.graphics.as_ref().expect("graphics").camera_params, params);
-
-    // Run for 100 steps
-    for s in 0..1000 {
         domain.node_do_time_step(&world);
-        if s % 10 == 0 {
-            domain.node_draw_frame(s+1, &world);
-        }
         if s % 10 == 0 {
             domain.node_draw_frame(s+1, &world);
         }
