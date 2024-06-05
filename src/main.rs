@@ -8,6 +8,8 @@ mod file;
 mod graphics;
 mod info;
 mod lbm;
+#[cfg(feature = "multi-node")]
+mod multi_node;
 mod opencl;
 mod precompute;
 mod setup;
@@ -47,9 +49,19 @@ pub struct SimControlTx {
 }
 
 fn main() {
+    #[cfg(feature = "multi-node")]
+    multi_node::run_node();
+    #[cfg(not(feature = "multi-node"))]
+    run_gpu();
+}
+
+#[allow(dead_code)]
+#[cfg(not(feature = "multi-node"))]
+/// Run IonSolver on a single compute node with multi-gpu support.
+fn run_gpu() {
     //println!("{}", info::LOGO_COLOR);
     println!("IonSolver - © 2024\n");
-
+    
     // Create channels
     let (sim_tx, sim_rx) = mpsc::channel();
     let (ctrl_tx, ctrl_rx) = mpsc::channel();

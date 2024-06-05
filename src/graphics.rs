@@ -5,9 +5,10 @@ use ocl::{Buffer, Kernel, Program, Queue};
 
 use crate::*;
 
+/// The vector field used in visualizations like field and streamline
 #[allow(unused)]
 #[derive(Clone, Copy)]
-/// The vector field used in visualizations like field and streamline
+#[cfg_attr(feature = "multi-node", derive(serde::Serialize, serde::Deserialize))]
 pub enum VecVisMode {
     U,
     E,
@@ -16,8 +17,9 @@ pub enum VecVisMode {
     BDyn,
 }
 
-#[derive(Clone, Copy)]
 /// Bundles arguments for graphics initialization
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "multi-node", derive(serde::Serialize, serde::Deserialize))]
 pub struct GraphicsConfig {
     /// Is the graphics engine active (default: false)
     pub graphics_active: bool,
