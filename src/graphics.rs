@@ -87,8 +87,8 @@ impl GraphicsConfig {
 /// Each LbmDomain renders its own frame. Different domain frames are stitched back together in the Lbm draw_frame function.
 pub struct Graphics {
     kernel_clear: Kernel,
-    bitmap: Buffer<i32>,
-    zbuffer: Buffer<i32>,
+    pub bitmap: Buffer<i32>,
+    pub zbuffer: Buffer<i32>,
     pub camera_params: Buffer<f32>,
 
     kernel_graphics_axes: Kernel,
@@ -262,7 +262,7 @@ impl Lbm {
 // enqueue_draw_frame function for LbmDomain
 #[rustfmt::skip]
 impl LbmDomain {
-    fn enqueue_draw_frame(&self) {
+    pub fn enqueue_draw_frame(&self) {
         let graphics = self
             .graphics
             .as_ref()

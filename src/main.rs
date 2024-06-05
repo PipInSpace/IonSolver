@@ -61,7 +61,7 @@ fn main() {
 fn run_gpu() {
     //println!("{}", info::LOGO_COLOR);
     println!("IonSolver - © 2024\n");
-    
+
     // Create channels
     let (sim_tx, sim_rx) = mpsc::channel();
     let (ctrl_tx, ctrl_rx) = mpsc::channel();
@@ -92,7 +92,8 @@ fn run_gpu() {
     handle.join().unwrap();
 }
 
-/// Runs the simulation and it's control logic in a different thread
+/// Runs the simulation and it's control logic in a different thread, used in single-node multi-gpu mode
+#[allow(dead_code)]
 fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>) {
     //sim_tx.send(state) sends data to the main window loop
     let mut state = SimControlTx {
