@@ -497,7 +497,7 @@ pub struct LbmDomain {
     pub transfer_p_host: Vec<u8>,
     pub transfer_m_host: Vec<u8>,
     #[cfg(feature = "multi-node")]
-    pub transfer_temp_host: Vec<u8>,
+    pub transfer_t_host: Vec<u8>,
 
     pub e: Option<Buffer<f32>>, // Optional Buffers
     pub b: Option<Buffer<f32>>,
@@ -636,7 +636,7 @@ impl LbmDomain {
         let transfer_p_host: Vec<u8> = vec![0_u8; transfer_buffer_size];
         let transfer_m_host: Vec<u8> = vec![0_u8; transfer_buffer_size];
         #[cfg(feature = "multi-node")]
-        let transfer_temp_host: Vec<u8> = vec![0_u8; transfer_buffer_size];
+        let transfer_t_host: Vec<u8> = vec![0_u8; transfer_buffer_size]; // Temporary buffer for node communication
 
         // Transfer kernels
         let transfer_kernels = [
@@ -691,7 +691,7 @@ impl LbmDomain {
             transfer_p, transfer_m,
             transfer_p_host, transfer_m_host,
             #[cfg(feature = "multi-node")]
-            transfer_temp_host,
+            transfer_t_host,
 
             e, b, e_dyn, b_dyn, qi, q, f, t, graphics, cfg: lbm_config.clone()
         } //Returns initialised domain

@@ -138,34 +138,28 @@ impl LbmDomain {
             self.enqueue_transfer_extract_field(field, 0, bytes_per_cell).unwrap(); // Extract into transfer buffers
             let dxp = ((x + 1) % d_x) + (y + z * d_y) * d_x;       // domain index of domain at x+1
             let dxm = ((x + d_x - 1) % d_x) + (y + z * d_y) * d_x; // domain index of domain at x-1
-            point_to_point::send_receive_into(&self.transfer_p_host[..], &world.process_at_rank(dxp as i32), &mut self.transfer_temp_host, &world.process_at_rank(dxm as i32));
-            point_to_point::send_receive_into(&self.transfer_m_host[..], &world.process_at_rank(dxm as i32), &mut self.transfer_p_host, &world.process_at_rank(dxp as i32));
-            unsafe {std::ptr::swap(&mut self.transfer_m_host as *mut _, &mut self.transfer_temp_host as *mut _);} // Swap transfer buffers without copying them
+            point_to_point::send_receive_into(&self.transfer_p_host[..], &world.process_at_rank(dxp as i32), &mut self.transfer_t_host, &world.process_at_rank(dxm as i32)); // Communicate in x-positive direction
+            point_to_point::send_receive_into(&self.transfer_m_host[..], &world.process_at_rank(dxm as i32), &mut self.transfer_p_host, &world.process_at_rank(dxp as i32)); // Communicate in x-negative direction
+            unsafe {std::ptr::swap(&mut self.transfer_m_host as *mut _, &mut self.transfer_t_host as *mut _);} // Swap transfer buffers without copying them
             self.enqueue_transfer_insert_field(field, 0, bytes_per_cell).unwrap(); // Insert from transfer buffers
-
-            
         }
         if d_y > 1 { // Communicate y-axis
             self.enqueue_transfer_extract_field(field, 1, bytes_per_cell).unwrap(); // Extract into transfer buffers
             let dyp = x + (((y + 1) % d_y) + z * d_y) * d_x;       // domain index of domain at y+1
             let dym = x + (((y + d_y - 1) % d_y) + z * d_y) * d_x; // domain index of domain at y-1
-            let field_length = self.get_area(1) * bytes_per_cell;
-            world.process_at_rank(dyp as i32).send(&self.transfer_p_host[..]); // Communicate in y-positive direction
-            self.transfer_m.write(&world.process_at_rank(dym as i32).receive_vec::<u8>().0).len(field_length).enq().unwrap();
-            world.process_at_rank(dym as i32).send(&self.transfer_m_host[..]); // Communicate in y-negative direction
-            self.transfer_p.write(&world.process_at_rank(dyp as i32).receive_vec::<u8>().0).len(field_length).enq().unwrap();
-            self.node_enqueue_transfer_insert_field(field, 1).unwrap(); // Insert from transfer buffers
+            point_to_point::send_receive_into(&self.transfer_p_host[..], &world.process_at_rank(dyp as i32), &mut self.transfer_t_host, &world.process_at_rank(dym as i32)); // Communicate in y-positive direction
+            point_to_point::send_receive_into(&self.transfer_m_host[..], &world.process_at_rank(dym as i32), &mut self.transfer_p_host, &world.process_at_rank(dyp as i32)); // Communicate in y-negative direction
+            unsafe {std::ptr::swap(&mut self.transfer_m_host as *mut _, &mut self.transfer_t_host as *mut _);} // Swap transfer buffers without copying them
+            self.enqueue_transfer_insert_field(field, 1, bytes_per_cell).unwrap(); // Insert from transfer buffers
         }
         if d_z > 1 { // Communicate z-axis
             self.enqueue_transfer_extract_field(field, 2, bytes_per_cell).unwrap(); // Extract into transfer buffers
             let dzp = x + (y + ((z + 1) % d_z) * d_y) * d_x;       // domain index of domain at z+1
             let dzm = x + (y + ((z + d_z - 1) % d_z) * d_y) * d_x; // domain index of domain at z-1
-            let field_length = self.get_area(2) * bytes_per_cell;
-            world.process_at_rank(dzp as i32).send(&self.transfer_p_host[..]); // Communicate in y-positive direction
-            self.transfer_m.write(&world.process_at_rank(dzm as i32).receive_vec::<u8>().0).len(field_length).enq().unwrap();
-            world.process_at_rank(dzm as i32).send(&self.transfer_m_host[..]); // Communicate in y-negative direction
-            self.transfer_p.write(&world.process_at_rank(dzp as i32).receive_vec::<u8>().0).len(field_length).enq().unwrap();
-            self.node_enqueue_transfer_insert_field(field, 2).unwrap(); // Insert from transfer buffers
+            point_to_point::send_receive_into(&self.transfer_p_host[..], &world.process_at_rank(dzp as i32), &mut self.transfer_t_host, &world.process_at_rank(dzm as i32)); // Communicate in z-positive direction
+            point_to_point::send_receive_into(&self.transfer_m_host[..], &world.process_at_rank(dzm as i32), &mut self.transfer_p_host, &world.process_at_rank(dzp as i32)); // Communicate in z-negative direction
+            unsafe {std::ptr::swap(&mut self.transfer_m_host as *mut _, &mut self.transfer_t_host as *mut _);} // Swap transfer buffers without copying them
+            self.enqueue_transfer_insert_field(field, 2, bytes_per_cell).unwrap(); // Insert from transfer buffers
         }
     }
 
@@ -187,21 +181,4 @@ impl LbmDomain {
         let bytes_per_cell = self.cfg.float_type.size_of() * 1; // FP type size * transfers. The fixed D3Q7 lattice has 1 transfer
         self.node_communicate_field(TransferField::Qi, bytes_per_cell, world);
     }
-
-    /// Insert field.
-    /// Node insert field function does not need to write transfer buffer content to device
-    fn node_enqueue_transfer_insert_field(&mut self,field: TransferField,direction: u32) -> ocl::Result<()> {
-        let kernel = self.transfer_kernels[field as usize][1]
-            .as_ref()
-            .expect("transfer kernel should be initialized"); // [1] is the insertion kernel
-        kernel.set_arg("direction", direction)?;
-        kernel.set_arg("time_step", self.t)?;
-        unsafe {
-            kernel
-                .cmd()
-                .global_work_size(self.get_area(direction))
-                .enq()
-        }
-    }
-
 }
