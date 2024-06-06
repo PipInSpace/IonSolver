@@ -25,7 +25,7 @@ pub fn run_node() {
         cfg.n_x = 256;
         cfg.n_y = 256;
         cfg.n_z = 256;
-        cfg.d_x = 2;
+        cfg.d_y = 2;
         cfg.nu = cfg.units.si_to_nu(0.1);
         cfg.velocity_set = VelocitySet::D3Q19;
         // Graphics
@@ -34,7 +34,7 @@ pub fn run_node() {
         cfg.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
         cfg.graphics_config.streamline_mode = true;
         cfg.graphics_config.axes_mode = true;
-        cfg.graphics_config.q_mode = true;
+        //cfg.graphics_config.q_mode = true;
         cfg.graphics_config.q_min = 0.00001;
 
         let ser_cfg = bincode::serialize(&cfg).unwrap(); 
@@ -58,14 +58,23 @@ pub fn run_node() {
     println!("Build domain at Node {}", rank);
     world.barrier();
     rprintln!("Beginning execution", world);
+    //domain.node_taylor_green(1.0, &world);
+    //if rank == 0 {
+    //    let ds = ((domain.cfg.n_x * domain.cfg.n_y * domain.cfg.n_z) / domain_numbers) as usize;
+    //    let mut domain_vec_u: Vec<f32> = vec![0.0; (ds * 3) as usize];
+    //    for i in 0..ds {
+    //        domain_vec_u[i + ds] = 0.1;
+    //    }
+    //    bwrite!(domain.u, domain_vec_u);
+    //}
     domain.node_initialize(&world);
 
     // Set correct camera parameters
     let mut params = graphics::camera_params_rot(
-        0.0 * (PI / 180.0),
-        0.0 * (PI / 180.0),
+        50.0 * (PI / 180.0),
+        -40.0 * (PI / 180.0),
     );
-    params[0] = 3.0;
+    params[0] = 2.0;
     bwrite!(domain.graphics.as_ref().expect("graphics").camera_params, params);
 
     // Run for 100 steps
@@ -100,7 +109,7 @@ fn node_domain(cfg: &mut LbmConfig, rank: u32) -> LbmDomain {
 // Additional functionality needed for multi-node exectution
 impl LbmDomain {
     /// Readies the LBM Simulation to be run.
-    /// Executes `kernel_initialize` Kernels for every `LbmDomain` and fills domain transfer buffers.
+    /// Executes `kernel_initialize` Kernels for the domain and communicates between nodes
     pub fn node_initialize(&mut self, world: &mpi::topology::SimpleCommunicator) {
         // the communicate calls at initialization need an odd time step
         self.t = 1;
@@ -122,6 +131,7 @@ impl LbmDomain {
     fn node_do_time_step(&mut self, world: &mpi::topology::SimpleCommunicator) {
         // call kernel stream_collide to perform one LBM time step
         self.enqueue_stream_collide().unwrap();
+        self.queue.finish().unwrap();
         if self.cfg.graphics_config.graphics_active {
             self.node_communicate_rho_u_flags(world);
         }
@@ -136,6 +146,8 @@ impl LbmDomain {
         self.t += 1;
     }
 
+    // Domain communication
+    /// Communicate a field across domain barriers
     #[rustfmt::skip]
     pub fn node_communicate_field(&mut self, field: TransferField, bytes_per_cell: usize, world: &mpi::topology::SimpleCommunicator) {
         world.barrier(); // Get all nodes ready for transfer
@@ -188,11 +200,13 @@ impl LbmDomain {
         self.node_communicate_field(TransferField::RhoUFlags, 17, world);
     }
 
+    /// Communicate Qi across domain boundaries (needed for magnetohydrodynamics)
     fn node_communicate_qi(&mut self, world: &mpi::topology::SimpleCommunicator) {
         let bytes_per_cell = self.cfg.float_type.size_of() * 1; // FP type size * transfers. The fixed D3Q7 lattice has 1 transfer
         self.node_communicate_field(TransferField::Qi, bytes_per_cell, world);
     }
 
+    // Multi-node graphics
     /// Draw one frame of the simulation.
     /// Each node/domain renders its own frame. Frames are transmitted to the root node, stitched together and saved.
     #[rustfmt::skip]
@@ -242,6 +256,69 @@ impl LbmDomain {
                 
             });
         }
+    }
+
+    #[rustfmt::skip]
+    #[allow(dead_code)]
+    fn node_taylor_green(&mut self, periodicity: f32, world: &mpi::topology::SimpleCommunicator) {
+        let nx = self.cfg.n_x;
+        let ny = self.cfg.n_y;
+        let nz = self.cfg.n_z;
+        let dx = self.cfg.d_x;
+        let dy = self.cfg.d_y;
+        let dz = self.cfg.d_z;
+        let dsx = nx as u64 / dx as u64 + (dx > 1u32) as u64 * 2; // Domain size on each axis
+        let dsy = ny as u64 / dy as u64 + (dy > 1u32) as u64 * 2; // Needs to account for halo offsets
+        let dsz = nz as u64 / dz as u64 + (dz > 1u32) as u64 * 2;
+        let dst = dsx * dsy * dsz;
+        let pif = std::f32::consts::PI;
+        let A = 0.25f32;
+        let a = nx as f32 / periodicity as f32;
+        let b = ny as f32 / periodicity as f32;
+        let c = nz as f32 / periodicity as f32;
+
+        let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx * dsy * dsz * 3) as usize];
+        let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize];
+        let d = world.rank() as u32;
+        let x = (d % (dx * dy)) % dx; // Current Domain coordinates
+        let y = (d % (dx * dy)) / dx;
+        let z = d / (dx * dy);
+        for zi in 0..dsz { // iterates over every cell in the domain, filling it with the velocity field
+            for yi in 0..dsy {
+                for xi in 0..dsx {
+                    if !self.is_halo(xi as u32, yi as u32, zi as u32){
+                        //do not set at halo offsets
+                        let dn = (zi * dsx * dsy) + (yi * dsx) + xi; // Domain 1D index
+                        let gx = xi - (dx > 1u32) as u64 + x as u64 * (dsx - (dx > 1u32) as u64 * 2); // Global coordinates
+                        let gy = yi - (dy > 1u32) as u64 + y as u64 * (dsy - (dy > 1u32) as u64 * 2);
+                        let gz = zi - (dz > 1u32) as u64 + z as u64 * (dsz - (dz > 1u32) as u64 * 2);
+                        let fx = gx as f32 + 0.5 - 0.5 * nx as f32;
+                        let fy = gy as f32 + 0.5 - 0.5 * ny as f32;
+                        let fz = gz as f32 + 0.5 - 0.5 * nz as f32;
+                        domain_vec_u[(dn) as usize] = A
+                            * (2.0 * pif * fx / a).cos()
+                            * (2.0 * pif * fy / b).sin()
+                            * (2.0 * pif * fz / c).sin(); // x
+                        domain_vec_u[(dn + dst) as usize] = -A
+                            * (2.0 * pif * fx / a).sin()
+                            * (2.0 * pif * fy / b).cos()
+                            * (2.0 * pif * fz / c).sin(); // y;
+                        domain_vec_u[(dn + dst * 2) as usize] = A
+                            * (2.0 * pif * fx / a).sin()
+                            * (2.0 * pif * fy / b).sin()
+                            * (2.0 * pif * fz / c).cos(); // z
+                        domain_vec_rho[(dn) as usize] = 1.0
+                            - (A * A) * 3.0 / 4.0 * (4.0 * pif * fx / a).cos()
+                            + (4.0 * pif * fy / b).cos();
+                    }
+                }
+            }
+        }
+        
+        // Write to domain buffers
+        bwrite!(self.u, domain_vec_u);
+        bwrite!(self.rho, domain_vec_rho);
+        self.queue.finish().unwrap();
     }
 }
 

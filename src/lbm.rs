@@ -1062,6 +1062,10 @@ impl LbmDomain {
         n_x as u64 * n_y as u64 * n_z as u64
     }
 
+    pub fn is_halo(&mut self, x: u32, y: u32, z: u32) -> bool {
+	    return ((self.cfg.d_x>1)&(x==0||x>=self.cfg.n_x-1))||((self.cfg.d_y>1)&(y==0||y>=self.cfg.n_y-1))||((self.cfg.d_z>1)&(z==0||z>=self.cfg.n_z-1));
+    }
+
     /// Get `x, y, z` coordinates from 1D index `n`.
     #[allow(unused)]
     pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
