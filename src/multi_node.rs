@@ -3,6 +3,7 @@
 //! ## MPI Error codes
 //! - **100**: Incompatible domain number and number of execution nodes
 
+use graphics::Keyframe;
 use image::{ImageBuffer, Rgb};
 use mpi::{point_to_point, traits::*};
 use ocl_macros::default_device;
@@ -28,6 +29,7 @@ pub fn run_node() {
         cfg.d_y = 2;
         cfg.nu = cfg.units.si_to_nu(0.1);
         cfg.velocity_set = VelocitySet::D3Q19;
+        cfg.run_steps = 1000;
         // Graphics
         cfg.graphics_config.graphics_active = true;
         cfg.graphics_config.streamline_every = 8;
@@ -36,6 +38,20 @@ pub fn run_node() {
         cfg.graphics_config.axes_mode = true;
         //cfg.graphics_config.q_mode = true;
         cfg.graphics_config.q_min = 0.00001;
+        // Animation
+        cfg.graphics_config.render_intervals = true;
+        let mut f: Vec<Keyframe> = vec![];
+        for i in 0..100 {
+            f.push(Keyframe {
+                time: i * 5,
+                repeat: false,
+                cam_rot_x: 50.0 + (i * 5) as f32,
+                cam_rot_y: -40.0,
+                cam_zoom: 2.0,
+                ..Keyframe::default()
+            })
+        }
+        cfg.graphics_config.keyframes = f;
 
         let ser_cfg = bincode::serialize(&cfg).unwrap(); 
         println!("Distributing LbmConfig...");
@@ -58,15 +74,7 @@ pub fn run_node() {
     println!("Build domain at Node {}", rank);
     world.barrier();
     rprintln!("Beginning execution", world);
-    //domain.node_taylor_green(1.0, &world);
-    //if rank == 0 {
-    //    let ds = ((domain.cfg.n_x * domain.cfg.n_y * domain.cfg.n_z) / domain_numbers) as usize;
-    //    let mut domain_vec_u: Vec<f32> = vec![0.0; (ds * 3) as usize];
-    //    for i in 0..ds {
-    //        domain_vec_u[i + ds] = 0.1;
-    //    }
-    //    bwrite!(domain.u, domain_vec_u);
-    //}
+    domain.node_taylor_green(1.0, &world);
     domain.node_initialize(&world);
 
     // Set correct camera parameters
@@ -77,11 +85,13 @@ pub fn run_node() {
     params[0] = 2.0;
     bwrite!(domain.graphics.as_ref().expect("graphics").camera_params, params);
 
-    // Run for 100 steps
-    for s in 0..1000 {
+    // Run for the configured step amount
+    for s in 0..cfg.run_steps {
+        // Run simulation time step
         domain.node_do_time_step(&world);
-        if s % 10 == 0 {
-            domain.node_draw_frame(s+1, &world);
+        // Render animation frames if needed
+        if cfg.graphics_config.graphics_active {
+            domain.node_render_keyframes(s, &world);
         }
     }
 }
@@ -210,7 +220,7 @@ impl LbmDomain {
     /// Draw one frame of the simulation.
     /// Each node/domain renders its own frame. Frames are transmitted to the root node, stitched together and saved.
     #[rustfmt::skip]
-    fn node_draw_frame(&mut self, step: u64, world: &mpi::topology::SimpleCommunicator) {
+    fn node_draw_frame(&self, name: String, step: u64, world: &mpi::topology::SimpleCommunicator) {
         let width = self.cfg.graphics_config.camera_width;
         let height = self.cfg.graphics_config.camera_height;
         let pixel_n = (width * height) as usize;
@@ -252,9 +262,25 @@ impl LbmDomain {
                     save_buffer.push((color & 0xFF) as u8);
                 }
                 let imgbuffer: ImageBuffer<Rgb<u8>, _> = ImageBuffer::from_raw(width, height, save_buffer).unwrap();
-                imgbuffer.save(format!(r"{}/../out/frame_{}.png", std::env::current_exe().unwrap().display(), step)).unwrap();
+                imgbuffer.save(format!(r"{}/../out/{}_{}.png", std::env::current_exe().unwrap().display(), name, step)).unwrap();
                 
             });
+        }
+    }
+
+    fn node_render_keyframes(&self, step: u64, world: &mpi::topology::SimpleCommunicator) {
+        if self.cfg.graphics_config.render_intervals {
+            for (c, frame) in self.cfg.graphics_config.keyframes.iter().enumerate() {
+                if (frame.time % (step+1) == 0 && frame.repeat) || (frame.time == step && !frame.repeat) {
+                    let mut params = graphics::camera_params_rot(
+                        frame.cam_rot_x * (PI / 180.0),
+                        frame.cam_rot_y * (PI / 180.0),
+                    );
+                    params[0] = frame.cam_zoom;
+                    bwrite!(self.graphics.as_ref().expect("graphics").camera_params, params);
+                    self.node_draw_frame(format!("frame_{}", c), step, world)
+                }
+            }
         }
     }
 

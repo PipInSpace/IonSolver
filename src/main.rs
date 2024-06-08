@@ -56,6 +56,7 @@ fn main() {
 }
 
 #[allow(dead_code)]
+#[allow(unused_variables)]
 #[cfg(not(feature = "multi-node"))]
 /// Run IonSolver on a single compute node with multi-gpu support.
 fn run_gpu() {
@@ -171,7 +172,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     && lbm.config.graphics_config.graphics_active
                 {
                     // Only draws frames, never saves them
-                    lbm.draw_frame(false, sim_tx_g.clone(), step_count);
+                    lbm.draw_frame(false, "frame".to_string(), sim_tx_g.clone(), step_count);
                 }
                 thread::sleep(Duration::from_millis(std::cmp::max(
                     0,
@@ -210,7 +211,11 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     && state.save_img
                     && lbm.config.graphics_config.graphics_active
                 {
-                    lbm.draw_frame(true, sim_tx.clone(), &step_c);
+                    lbm.draw_frame(true, "frame".to_string(), sim_tx.clone(), &step_c);
+                }
+                // Render predefined keyframes if needed
+                if lbm.config.graphics_config.graphics_active {
+                    lbm.render_keyframes(sim_tx.clone(), &step_c);
                 }
                 step_c += 1;
                 step_count_time += 1;

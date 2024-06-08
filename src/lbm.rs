@@ -12,8 +12,7 @@ use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 /// D3Q27: 3D highest precision
 /// ```
 #[allow(dead_code)]
-#[derive(Clone, Copy, Default)]
-#[cfg_attr(feature = "multi-node", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub enum VelocitySet {
     #[default]
     /// 2D
@@ -52,8 +51,7 @@ impl VelocitySet {
 /// Trt: Two-relaxation time type, more precise
 /// ```
 #[allow(dead_code)]
-#[derive(Clone, Copy, Default)]
-#[cfg_attr(feature = "multi-node", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub enum RelaxationTime {
     #[default]
     /// Single relaxation time, more efficient
@@ -73,8 +71,7 @@ pub enum RelaxationTime {
 ///
 /// [Learn more at this paper about custom float types.](https://www.researchgate.net/publication/362275548_Accuracy_and_performance_of_the_lattice_Boltzmann_method_with_64-bit_32-bit_and_customized_16-bit_number_formats)
 #[allow(dead_code)]
-#[derive(Clone, Copy, Default)]
-#[cfg_attr(feature = "multi-node", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub enum FloatType {
     #[default]
     /// Custom float type represented as a u16, recommended
@@ -137,8 +134,7 @@ pub enum TransferField {
 ///
 /// graphics_config: GraphicsConfig, // Grapics config struct
 /// ```
-#[derive(Clone)]
-#[cfg_attr(feature = "multi-node", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct LbmConfig {
     // Holds init information about the simulation
     pub velocity_set: VelocitySet,
@@ -169,6 +165,8 @@ pub struct LbmConfig {
     pub charge_per_dens: f32,
 
     pub graphics_config: GraphicsConfig,
+
+    pub run_steps: u64,
 }
 
 impl LbmConfig {
@@ -199,6 +197,7 @@ impl LbmConfig {
             charge_per_dens: 0.0,
 
             graphics_config: graphics::GraphicsConfig::new(),
+            run_steps: 0,
         }
     }
 }
@@ -537,7 +536,7 @@ impl LbmDomain {
         let t = 0;
 
         let ocl_code = Self::get_device_defines(n_x, n_y, n_z, d_x, d_y, d_z, o_x, o_y, o_z, dimensions, velocity_set, transfers, lbm_config.nu, lbm_config)
-            + &if lbm_config.graphics_config.graphics_active { graphics::get_graphics_defines(lbm_config.graphics_config) } else { "".to_string() }
+            + &if lbm_config.graphics_config.graphics_active { graphics::get_graphics_defines(&lbm_config.graphics_config) } else { "".to_string() }
             + &opencl::get_opencl_code(); // Only appends graphics defines if needed
 
         // OCL variables are directly exposed, due to no other device struct.
@@ -1062,6 +1061,7 @@ impl LbmDomain {
         n_x as u64 * n_y as u64 * n_z as u64
     }
 
+    #[allow(dead_code)]
     pub fn is_halo(&mut self, x: u32, y: u32, z: u32) -> bool {
 	    return ((self.cfg.d_x>1)&(x==0||x>=self.cfg.n_x-1))||((self.cfg.d_y>1)&(y==0||y>=self.cfg.n_y-1))||((self.cfg.d_z>1)&(z==0||z>=self.cfg.n_z-1));
     }

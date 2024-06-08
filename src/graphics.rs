@@ -7,8 +7,7 @@ use crate::*;
 
 /// The vector field used in visualizations like field and streamline
 #[allow(unused)]
-#[derive(Clone, Copy)]
-#[cfg_attr(feature = "multi-node", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum VecVisMode {
     U,
     E,
@@ -17,9 +16,24 @@ pub enum VecVisMode {
     BDyn,
 }
 
+/// Keyframe struct. Holds render interval keyframe
+#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+pub struct Keyframe {
+    pub time: u64,
+    pub repeat: bool,
+    pub cam_zoom: f32,
+    pub cam_rot_x: f32,
+    pub cam_rot_y: f32,
+    pub streamline_mode: bool, // Active graphics modes for keyframe
+    pub field_mode: bool,
+    pub q_mode: bool,
+    pub q_field_mode: bool,
+    pub flags_mode: bool,
+    pub flags_surface_mode: bool,
+}
+
 /// Bundles arguments for graphics initialization
-#[derive(Clone, Copy)]
-#[cfg_attr(feature = "multi-node", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct GraphicsConfig {
     /// Is the graphics engine active (default: false)
     pub graphics_active: bool,
@@ -55,6 +69,11 @@ pub struct GraphicsConfig {
     pub flags_surface_mode: bool,
     /// Visualize coordinate system axes
     pub axes_mode: bool,
+
+    // Configure rendering keyframed intervals with camera positions
+    /// Activate rendering intervals:
+    pub render_intervals: bool,
+    pub keyframes: Vec<Keyframe>,
 }
 
 impl GraphicsConfig {
@@ -78,6 +97,8 @@ impl GraphicsConfig {
             flags_mode: false,
             flags_surface_mode: false,
             axes_mode: false,
+            render_intervals: false,
+            keyframes: vec![],
         }
     }
 }
@@ -172,7 +193,8 @@ impl Graphics {
 
 // draw_frame function for Lbm
 impl Lbm {
-    pub fn draw_frame(&self, save: bool, sim_tx: Sender<SimState>, i: &u32) {
+    #[allow(unused_variables)]
+    pub fn draw_frame(&self, save: bool, name: String, sim_tx: Sender<SimState>, i: &u32) {
         let width = self.config.graphics_config.camera_width;
         let height = self.config.graphics_config.camera_height;
         let domain_numbers = self.get_d_n();
@@ -241,21 +263,42 @@ impl Lbm {
                 pixels,
             };
 
-            _ = sim_tx.send(SimState {
-                step: i,
-                #[cfg(feature = "gui")]
-                img: color_image,
-            }); // This may fail if the simulation is terminated, but a frame is still being generated. Error can be ignored.
+            #[cfg(feature = "gui")] {
+                _ = sim_tx.send(SimState {
+                    step: i,
+                    img: color_image,
+                }); // This may fail if the simulation is terminated, but a frame is still being generated. Error can be ignored.
+            }
+            
 
             if save {
                 thread::spawn(move || {
                     //Saving needs own thread for performance reasons
                     let imgbuffer: ImageBuffer<Rgb<u8>, _> =
                         ImageBuffer::from_raw(width, height, save_buffer).unwrap();
-                    imgbuffer.save(format!(r"out/frame_{}.png", i)).unwrap();
+                    imgbuffer.save(format!(r"out/{}_{}.png", name, i)).unwrap();
                 });
             }
         });
+    }
+
+    // Render keyframes
+    pub fn render_keyframes(&self, sim_tx: Sender<SimState>, i: &u32) {
+        if self.config.graphics_config.render_intervals {
+            for (c, frame) in self.config.graphics_config.keyframes.iter().enumerate() {
+                if (frame.time % (i+1) as u64 == 0 && frame.repeat) || (frame.time == *i as u64 && !frame.repeat) {
+                    let mut params = graphics::camera_params_rot(
+                        frame.cam_rot_x * (PI / 180.0),
+                        frame.cam_rot_y * (PI / 180.0),
+                    );
+                    params[0] = frame.cam_zoom;
+                    for d in &self.domains {
+                        bwrite!(d.graphics.as_ref().expect("graphics").camera_params, params);
+                    }
+                    self.draw_frame(true,  format!("frame_{}", c), sim_tx.clone(), i)
+                }
+            }
+        }
     }
 }
 
@@ -318,7 +361,7 @@ pub struct Camera {
 
 #[rustfmt::skip]
 /// Returns a string of OpenCL C `#define`s from the provided arguments that are appended to the base OpenCl code at runtime.
-pub fn get_graphics_defines(graphics_config: GraphicsConfig) -> String {
+pub fn get_graphics_defines(graphics_config: &GraphicsConfig) -> String {
     "\n	#define GRAPHICS".to_owned()
     +"\n	#define def_background_color "  + &graphics_config.background_color.to_string()
     +"\n	#define def_screen_width "      + &graphics_config.camera_width.to_string()+"u"

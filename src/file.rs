@@ -4,6 +4,7 @@ use ocl_macros::{bread, bwrite};
 
 use crate::{Lbm, LbmConfig, VelocitySet, RelaxationTime, FloatType};
 
+/// Read a saved simulation file and return a readied Lbm struct
 pub fn read<P: AsRef<std::path::Path> + std::fmt::Display>(path: P, config: &mut LbmConfig) -> Result<Lbm, String> {
     println!("\nReading simulation state from \"{}\"", path);
     let buffer: Vec<u8> = match std::fs::read(path) {
@@ -13,6 +14,7 @@ pub fn read<P: AsRef<std::path::Path> + std::fmt::Display>(path: P, config: &mut
     decode(&buffer, config)
 }
 
+/// Write the provided simulation as a file 
 pub fn write<P: AsRef<std::path::Path> + std::fmt::Display>(lbm: &Lbm, path: P) -> Result<(), String> {
     println!("\nWriting simulation state to \"{}\"", path);
     let buffer = encode(lbm);
@@ -32,6 +34,7 @@ impl Lbm {
     }
 }
 
+/// decode a saved simulation into a readied Lbm struct
 fn decode(buffer: &[u8], config: &mut LbmConfig) -> Result<Lbm, String> {
     let mut stream = ByteStream::from_buffer(buffer);
 
@@ -180,6 +183,7 @@ fn decode(buffer: &[u8], config: &mut LbmConfig) -> Result<Lbm, String> {
     Ok(lbm)
 }
 
+/// encode a simulation into a saveable file
 fn encode(lbm: &Lbm) -> Vec<u8> {
     // File structure details can be found at FILE_LAYOUT.txt
     let mut buffer: Vec<u8> = Vec::with_capacity(1);
@@ -295,6 +299,34 @@ fn encode(lbm: &Lbm) -> Vec<u8> {
     }
 
     buffer
+}
+
+
+#[allow(dead_code)]
+pub fn read_config<P: AsRef<std::path::Path> + std::fmt::Display>(path: P) -> Result<LbmConfig, String> {
+    println!("\nReading LbmConfig from \"{}\"", path);
+    let buffer: Vec<u8> = match std::fs::read(path) {
+        Ok(vec) => vec,
+        Err(_) => { return Err("Could not find file.".to_owned())},
+    };
+    let cfg: LbmConfig = match serde_json::from_slice(&buffer[..]) {
+        Ok(cfg) => cfg,
+        Err(s) => { return Err(format!("Could not parse file: {}", s));}
+    };
+    Ok(cfg)
+}
+
+#[allow(dead_code)]
+pub fn write_config<P: AsRef<std::path::Path> + std::fmt::Display>(path: P, cfg: &LbmConfig) -> Result<(), String> {
+    println!("\nWriting LbmConfig to \"{}\"", path);
+    let buffer: Vec<u8> = match serde_json::to_vec(cfg) {
+        Ok(cfg) => cfg,
+        Err(s) => { return Err(format!("Could not create file: {}", s));}
+    };
+    match std::fs::write(path, buffer) {
+        Ok(_) => { Ok(()) },
+        Err(s) => { Err(format!("Could not write file: {}", s)) }
+    }
 }
 
 /// Push different byte sizes to 8-Bit Buffer

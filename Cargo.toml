@@ -14,10 +14,10 @@ mpi = { version = "0.8.0", features = ["user-operations", "derive"], optional = 
 ocl = "0.19.7"
 ocl-macros = "0.0.4"
 rayon = "1.8.0"
-serde = { version = "1.0.203", features = ["derive"], optional = true } # used for multi-node synchronization
+serde = { version = "1.0.203", features = ["derive"] } # used for multi-node synchronization and config saving/reading
+serde_json = "1.0.117" # used for config saving/reading
 
 
 [features]
-default = ["multi-node"] # for debugging only
 gui = ["dep:eframe", "dep:egui"]
-multi-node = ["dep:bincode", "dep:mpi", "dep:serde"]
+multi-node = ["dep:bincode", "dep:mpi"]

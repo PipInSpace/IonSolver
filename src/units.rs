@@ -5,8 +5,7 @@
 /// Lattice unit * factor = SI unit eg. lengthLU * m = length in meters
 ///
 /// SI unit / factor = Lattice unit eg. 1 meter / m = x lenghtLU
-#[derive(Clone, Copy, Default)]
-#[cfg_attr(feature = "multi-node", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 #[allow(non_snake_case)]
 pub struct Units {
     /// meter
