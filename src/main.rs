@@ -8,6 +8,8 @@ mod file;
 mod graphics;
 mod info;
 mod lbm;
+#[cfg(feature = "multi-node")]
+mod multi_node;
 mod opencl;
 mod precompute;
 mod setup;
@@ -47,6 +49,17 @@ pub struct SimControlTx {
 }
 
 fn main() {
+    #[cfg(feature = "multi-node")]
+    multi_node::run_node();
+    #[cfg(not(feature = "multi-node"))]
+    run_gpu();
+}
+
+#[allow(dead_code)]
+#[allow(unused_variables)]
+#[cfg(not(feature = "multi-node"))]
+/// Run IonSolver on a single compute node with multi-gpu support.
+fn run_gpu() {
     //println!("{}", info::LOGO_COLOR);
     println!("IonSolver - © 2024\n");
 
@@ -80,7 +93,8 @@ fn main() {
     handle.join().unwrap();
 }
 
-/// Runs the simulation and it's control logic in a different thread
+/// Runs the simulation and it's control logic in a different thread, used in single-node multi-gpu mode
+#[allow(dead_code)]
 fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>) {
     //sim_tx.send(state) sends data to the main window loop
     let mut state = SimControlTx {
@@ -158,7 +172,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     && lbm.config.graphics_config.graphics_active
                 {
                     // Only draws frames, never saves them
-                    lbm.draw_frame(false, sim_tx_g.clone(), step_count);
+                    lbm.draw_frame(false, "frame".to_string(), sim_tx_g.clone(), step_count);
                 }
                 thread::sleep(Duration::from_millis(std::cmp::max(
                     0,
@@ -197,7 +211,11 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                     && state.save_img
                     && lbm.config.graphics_config.graphics_active
                 {
-                    lbm.draw_frame(true, sim_tx.clone(), &step_c);
+                    lbm.draw_frame(true, "frame".to_string(), sim_tx.clone(), &step_c);
+                }
+                // Render predefined keyframes if needed
+                if lbm.config.graphics_config.graphics_active {
+                    lbm.render_keyframes(sim_tx.clone(), &step_c);
                 }
                 step_c += 1;
                 step_count_time += 1;

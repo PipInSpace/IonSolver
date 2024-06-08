@@ -1,5 +1,6 @@
 use crate::*;
 
+#[allow(unused)]
 /// `setup()` is called at simulation start. Edit this function to change simulation parameters.
 ///
 /// Usage:

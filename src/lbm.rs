@@ -12,7 +12,7 @@ use ocl::{Buffer, Context, Device, Kernel, Platform, Program, Queue};
 /// D3Q27: 3D highest precision
 /// ```
 #[allow(dead_code)]
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub enum VelocitySet {
     #[default]
     /// 2D
@@ -26,7 +26,7 @@ pub enum VelocitySet {
 }
 
 impl VelocitySet {
-    fn get_transfers(&self) -> usize {
+    pub fn get_transfers(&self) -> usize {
         match self {
             VelocitySet::D2Q9 => 3_usize,
             VelocitySet::D3Q15 => 5_usize,
@@ -51,7 +51,7 @@ impl VelocitySet {
 /// Trt: Two-relaxation time type, more precise
 /// ```
 #[allow(dead_code)]
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub enum RelaxationTime {
     #[default]
     /// Single relaxation time, more efficient
@@ -71,7 +71,7 @@ pub enum RelaxationTime {
 ///
 /// [Learn more at this paper about custom float types.](https://www.researchgate.net/publication/362275548_Accuracy_and_performance_of_the_lattice_Boltzmann_method_with_64-bit_32-bit_and_customized_16-bit_number_formats)
 #[allow(dead_code)]
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub enum FloatType {
     #[default]
     /// Custom float type represented as a u16, recommended
@@ -83,7 +83,7 @@ pub enum FloatType {
 }
 
 impl FloatType {
-    fn size_of(&self) -> usize {
+    pub fn size_of(&self) -> usize {
         match self {
             FloatType::FP16S => 2_usize,
             FloatType::FP16C => 2_usize,
@@ -103,7 +103,7 @@ pub enum VariableFloatBuffer {
 
 /// Enum to identify a field transfered between domain boundaries
 #[derive(Clone, Copy)]
-enum TransferField {
+pub enum TransferField {
     Fi,
     RhoUFlags,
     Qi,
@@ -134,7 +134,7 @@ enum TransferField {
 ///
 /// graphics_config: GraphicsConfig, // Grapics config struct
 /// ```
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct LbmConfig {
     // Holds init information about the simulation
     pub velocity_set: VelocitySet,
@@ -165,6 +165,8 @@ pub struct LbmConfig {
     pub charge_per_dens: f32,
 
     pub graphics_config: GraphicsConfig,
+
+    pub run_steps: u64,
 }
 
 impl LbmConfig {
@@ -195,6 +197,7 @@ impl LbmConfig {
             charge_per_dens: 0.0,
 
             graphics_config: graphics::GraphicsConfig::new(),
+            run_steps: 0,
         }
     }
 }
@@ -471,7 +474,7 @@ pub struct LbmDomain {
     kernel_initialize: Kernel, // Basic Kernels
     kernel_stream_collide: Kernel,
     kernel_update_fields: Kernel,
-    transfer_kernels: [[Option<Kernel>; 2]; 3],
+    pub transfer_kernels: [[Option<Kernel>; 2]; 3],
 
     kernel_update_e_b_dyn: Option<Kernel>, // Optional Kernels
 
@@ -492,6 +495,8 @@ pub struct LbmDomain {
     pub transfer_m: Buffer<u8>, // Size is maximum of (17 bytes (rho, u and flags) or bytes needed for fi)
     pub transfer_p_host: Vec<u8>,
     pub transfer_m_host: Vec<u8>,
+    #[cfg(feature = "multi-node")]
+    pub transfer_t_host: Vec<u8>,
 
     pub e: Option<Buffer<f32>>, // Optional Buffers
     pub b: Option<Buffer<f32>>,
@@ -503,6 +508,7 @@ pub struct LbmDomain {
     pub t: u64, // Timestep
 
     pub graphics: Option<graphics::Graphics>, // Graphics struct, handles rendering
+    pub cfg: LbmConfig,
 }
 
 impl LbmDomain {
@@ -530,7 +536,7 @@ impl LbmDomain {
         let t = 0;
 
         let ocl_code = Self::get_device_defines(n_x, n_y, n_z, d_x, d_y, d_z, o_x, o_y, o_z, dimensions, velocity_set, transfers, lbm_config.nu, lbm_config)
-            + &if lbm_config.graphics_config.graphics_active { graphics::get_graphics_defines(lbm_config.graphics_config) } else { "".to_string() }
+            + &if lbm_config.graphics_config.graphics_active { graphics::get_graphics_defines(&lbm_config.graphics_config) } else { "".to_string() }
             + &opencl::get_opencl_code(); // Only appends graphics defines if needed
 
         // OCL variables are directly exposed, due to no other device struct.
@@ -628,6 +634,8 @@ impl LbmDomain {
         let transfer_m = buffer!(&queue, transfer_buffer_size, 0_u8); // Size is maxiumum 17 bytes or bytes needed for fi
         let transfer_p_host: Vec<u8> = vec![0_u8; transfer_buffer_size];
         let transfer_m_host: Vec<u8> = vec![0_u8; transfer_buffer_size];
+        #[cfg(feature = "multi-node")]
+        let transfer_t_host: Vec<u8> = vec![0_u8; transfer_buffer_size]; // Temporary buffer for node communication
 
         // Transfer kernels
         let transfer_kernels = [
@@ -681,8 +689,10 @@ impl LbmDomain {
 
             transfer_p, transfer_m,
             transfer_p_host, transfer_m_host,
+            #[cfg(feature = "multi-node")]
+            transfer_t_host,
 
-            e, b, e_dyn, b_dyn, qi, q, f, t, graphics,
+            e, b, e_dyn, b_dyn, qi, q, f, t, graphics, cfg: lbm_config.clone()
         } //Returns initialised domain
     }
 
@@ -808,14 +818,14 @@ impl LbmDomain {
     }
 
     /// Enqueues the `kernel_intialize` Kernel. Needs to be called after first setup to ready the simulation.
-    fn enqueue_initialize(&self) -> ocl::Result<()> {
+    pub fn enqueue_initialize(&self) -> ocl::Result<()> {
         //Enqueues Initialization kernel, arguments are already set
         unsafe { self.kernel_initialize.cmd().enq()? }
         self.queue.finish()
     }
 
     /// Enqueues the `kernel_stream_collide` Kernel. This is the main simulation kernel and is executed every time step.
-    fn enqueue_stream_collide(&self) -> ocl::Result<()> {
+    pub fn enqueue_stream_collide(&self) -> ocl::Result<()> {
         //Enqueues Initialization kernel, some arguments are already set
         unsafe {
             self.kernel_stream_collide.set_arg("t", self.t)?;
@@ -828,7 +838,7 @@ impl LbmDomain {
 
     /// Enqueues the `kernel_update_fields` Kernel. This functionality is automatically handled in the stream_collide Kernel if graphics are enabled.
     #[allow(unused)]
-    fn enqueue_update_fields(&self) -> ocl::Result<()> {
+    pub fn enqueue_update_fields(&self) -> ocl::Result<()> {
         //Enqueues Initialization kernel, arguments are already set
         unsafe {
             self.kernel_update_fields.set_arg("t", self.t)?;
@@ -839,7 +849,7 @@ impl LbmDomain {
         }
     }
 
-    fn enqueue_update_e_b_dyn(&self) -> ocl::Result<()> {
+    pub fn enqueue_update_e_b_dyn(&self) -> ocl::Result<()> {
         unsafe {
             self.kernel_update_e_b_dyn
                 .as_ref()
@@ -850,7 +860,7 @@ impl LbmDomain {
     }
 
     // Transfer fields
-    fn get_area(&self, direction: u32) -> usize {
+    pub fn get_area(&self, direction: u32) -> usize {
         let a = [
             self.n_y as usize * self.n_z as usize,
             self.n_x as usize * self.n_z as usize,
@@ -859,7 +869,7 @@ impl LbmDomain {
         a[direction as usize]
     }
     /// Extract field
-    fn enqueue_transfer_extract_field(
+    pub fn enqueue_transfer_extract_field(
         &mut self,
         field: TransferField,
         direction: u32,
@@ -891,7 +901,7 @@ impl LbmDomain {
     }
 
     /// Insert field
-    fn enqueue_transfer_insert_field(
+    pub fn enqueue_transfer_insert_field(
         &mut self,
         field: TransferField,
         direction: u32,
@@ -1049,6 +1059,11 @@ impl LbmDomain {
     /// Get total simulation size.
     fn get_n(n_x: u32, n_y: u32, n_z: u32) -> u64 {
         n_x as u64 * n_y as u64 * n_z as u64
+    }
+
+    #[allow(dead_code)]
+    pub fn is_halo(&mut self, x: u32, y: u32, z: u32) -> bool {
+	    return ((self.cfg.d_x>1)&(x==0||x>=self.cfg.n_x-1))||((self.cfg.d_y>1)&(y==0||y>=self.cfg.n_y-1))||((self.cfg.d_z>1)&(z==0||z>=self.cfg.n_z-1));
     }
 
     /// Get `x, y, z` coordinates from 1D index `n`.

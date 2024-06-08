@@ -7,11 +7,28 @@
   </picture>
 </p>
 
-This software will attempt to model magnetohydrodynamic processes with magnetic field-ionized gas interactions. It uses a lattice-boltzman-model for the fluid, initial kernel functions for the LBM where taken with permission from the software [FluidX3D](https://github.com/ProjectPhysX/FluidX3D) by Dr. Moritz Lehmann. IonSolver is still in development, with a GPU-accelerated fluid simulation implementation and the basics of magnetohydrodynamics + a basic GUI app functional. A more accurate coupled implementation of electrodynamic effects on the simulated fluids is in the works. 
+IonSolver is a magnetohydrodynamic simulation software using an extended Lattice Boltzmann method implemented in Rust and OpenCL. The software features a rudimentary GUI and both a single-node and multi-node execution model. IonSolver uses the Lattice Boltzman method for the simulated fluids, initial kernel functions for the LBM where taken with permission from the software [FluidX3D](https://github.com/ProjectPhysX/FluidX3D) by Dr. Moritz Lehmann. To allow for simulations of all detail levels, this software can be compiled in single-node or multi-node mode. In single-node mode the simulation may be distributed over multiple OpenCL-capable compute devices (ideally GPUs) on a single compute node and in multi-node mode the simulation is distributed over multiple compute nodes that communicate over MPI. This makes it possible to run IonSolver efficiently on devices ranging from laptops to supercomputers. 
+
+This software was created as part of the Jugend Forscht competition 2024 and reached 4th place in the Physics category on the state level. It will continue to receive updates past the competition. 
 
 ## Usage
 <img src="https://github.com/PipInSpace/IonSolver/blob/main/icons/Screenshot.png?raw=true">
-To run this software, clone this repository, install rust if not installed already, and run the command <code>cargo run --release</code>
+IonSolver is not provided as a single executable but needs to be compiled from source. It also features multiple optional features that need to be manually activated. To run this software, first clone this repository and install rust if not installed already.
+The software is compiled with the command:
+
+```sh
+cargo build --release --features "list of desired features"
+```
+Available features are:
+- `gui`: A simple gui displaying and providing control over the simulation. Only supported in single-node mode for now. 
+- `multi-node`: Distribute the simulation over multiple compute nodes. The compiled executable must be distributed to all nodes and started over MPI
+
+To run the software in single-node mode use
+
+```sh
+cargo run --release
+```
+multi-node mode requires an mpi executor. These vary by system, but the executables do not need special arguments so running the program should be simple. The program aborts if the configured number of domains does not match up with the number of compute nodes exactly.
 
 
 ## Licensing
@@ -22,9 +39,13 @@ IonSolver orients itself along the License of its base project FluidX3D. It is h
 
 - [OpenCL-Headers](https://github.com/KhronosGroup/OpenCL-Headers) for GPU parallelization ([Khronos Group](https://www.khronos.org/opencl/))
 - [marching-cubes tables](http://paulbourke.net/geometry/polygonise/) for isosurface generation on GPU ([Paul Bourke](http://paulbourke.net/geometry/))
-- [crate::ocl](https://github.com/cogciprocate/ocl) for high-level OpenCL bindings
-- [crate::egui](https://github.com/emilk/egui) for immediate mode ui rendering
-- [crate::image](https://github.com/image-rs/image) for image saving
+- [ocl](https://github.com/cogciprocate/ocl) for high-level OpenCL bindings
+- [ocl-macros](https://github.com/PipInSpace/ocl-macros) convenience macros for ocl (self-written)
+- [image](https://github.com/image-rs/image) for image saving
+- [egui](https://github.com/emilk/egui) for immediate mode ui rendering (only with `gui` feature)
+- [mpi](https://github.com/rsmpi/rsmpi) for distributed memory computing (only with `multi-node` feature)
+- [bincode](https://github.com/bincode-org/bincode) for mpi communication (only with `multi-node` feature)
+- [serde](https://github.com/serde-rs/serde) for mpi communication (only with `multi-node` feature)
 
 ## References
 
