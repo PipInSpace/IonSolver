@@ -1,4 +1,7 @@
-// OpenCL functions
+//! # opencl
+//! 
+//! OpenCL helper functions using the ocl wrapper
+
 use ocl::Device;
 use ocl_macros::device_vec;
 
@@ -61,10 +64,10 @@ pub fn device_selection(domains: u32) -> Vec<Device> {
 /// Combines the graphics and simulation source files and
 /// removes embedded default defines needed for syntax highlighting
 pub fn get_opencl_code() -> String {
-    let sim_source: Vec<&str> = include_str!("sim_kernels.cl")
+    let sim_source: Vec<&str> = include_str!("kernels/sim_kernels.cl")
         .split("EndTempDefines%")
         .collect();
-    let graphics_source: Vec<&str> = include_str!("graphics_kernels.cl")
+    let graphics_source: Vec<&str> = include_str!("kernels/graphics_kernels.cl")
         .split("EndTempDefines%")
         .collect();
     sim_source[1].to_string() + graphics_source[1]

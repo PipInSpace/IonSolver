@@ -1,3 +1,7 @@
+//! # ui
+//! 
+//! Simple gui interface for the simulation implemented with egui. Only supported in single-mode for now. 
+
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 use std::{fs, sync::mpsc, thread};

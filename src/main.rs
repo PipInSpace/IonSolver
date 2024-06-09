@@ -1,3 +1,7 @@
+//! # IonSolver
+//! 
+//! IonSolver is a magnetohydrodynamic simulation software utilizing an extended Lattice-Boltzmann-Model.
+
 #![allow(non_snake_case)]
 extern crate ocl;
 use ocl_macros::*;
@@ -5,17 +9,13 @@ use std::time::{Duration, Instant};
 use std::{f32::consts::PI, fs, sync::mpsc, thread};
 
 mod file;
-mod graphics;
 mod info;
 mod lbm;
-#[cfg(feature = "multi-node")]
-mod multi_node;
 mod opencl;
-mod precompute;
 mod setup;
 #[cfg(feature = "gui")]
 mod ui;
-mod units;
+
 use lbm::*;
 
 pub struct SimState {

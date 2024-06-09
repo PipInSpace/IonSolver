@@ -1,3 +1,9 @@
+//! # setup
+//! 
+//! Holds functions for various simulation setups. 
+//! 
+//! `setup()` is called in single-node mode to create a new Lbm struct. Modify this function to create your own setups or configure it to read a setup from file.
+
 use crate::*;
 
 #[allow(unused)]

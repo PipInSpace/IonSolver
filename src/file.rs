@@ -1,5 +1,8 @@
-use std::{fs::File, io::Write};
+//! # file
+//! 
+//! Different file operations used in IonSolver. Include simulation and config saving and loading.
 
+use std::{fs::File, io::Write};
 use ocl_macros::{bread, bwrite};
 
 use crate::{Lbm, LbmConfig, VelocitySet, RelaxationTime, FloatType};
