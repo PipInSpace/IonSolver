@@ -30,6 +30,9 @@ cargo run --release
 ```
 multi-node mode requires an mpi executor. These vary by system, but the executables do not need special arguments so running the program should be simple. The program aborts if the configured number of domains does not match up with the number of compute nodes exactly.
 
+## Saving/Loading
+
+IonSolver simulations can be saved to a file that allows complete recovery of a previous simulated state. The file format is documented in [`FILE_LAYOUT.txt`](FILE_LAYOUT.txt). Saving and loading simulations is fully implemented in single-node mode, but not yet for multi-node setups. The easiest way to use this feature is to enable the gui feature that provides a simple interface for saving/loading simulations.
 
 ## Licensing
 
