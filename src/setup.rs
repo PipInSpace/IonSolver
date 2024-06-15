@@ -20,6 +20,7 @@ use crate::*;
 ///
 /// Run `your_lbm.initialize()` and return it with the config.
 pub fn setup() -> Lbm {
+    /*
     let mut cfg = LbmConfig::new();
     cfg.n_x = 256;
     cfg.n_y = 256;
@@ -68,8 +69,9 @@ pub fn setup() -> Lbm {
     lbm.set_taylor_green(1);
 
     lbm
+    */
     //setup_domain_test()
-    //setup_bfield_spin()
+    setup_bfield_spin()
     //file::write(&setup_bfield_spin(), "./testfile.ion");
     //setup_from_file("./testfile.ion")
     //setup_taylor_green()
@@ -173,7 +175,8 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.graphics_config.camera_width = 1920;
     lbm_config.graphics_config.camera_height = 1080;
     lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::EDyn;
+    lbm_config.graphics_config.u_max = 500.0;
     lbm_config.graphics_config.streamline_mode = true;
     lbm_config.graphics_config.axes_mode = true;
     lbm_config.graphics_config.q_mode = false;

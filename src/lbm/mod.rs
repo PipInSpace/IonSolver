@@ -344,6 +344,9 @@ impl Lbm {
     /// Updates the dynamic E and B fields.
     pub fn do_time_step(&mut self) {
         // call kernel stream_collide to perform one LBM time step
+        if self.config.ext_magneto_hydro {
+            self.clear_qu_lod();
+        }
         self.stream_collide();
         if self.config.graphics_config.graphics_active {
             self.communicate_rho_u_flags();
@@ -391,6 +394,13 @@ impl Lbm {
     fn update_e_b_dynamic(&self) {
         for d in 0..self.get_d_n() {
             self.domains[d].enqueue_update_e_b_dyn().unwrap();
+        }
+    }
+
+    /// Reset charge and velocity LOD
+    fn clear_qu_lod(&self) {
+        for d in 0..self.get_d_n() {
+            self.domains[d].enqueue_clear_qu_lod().unwrap();
         }
     }
 
@@ -507,6 +517,7 @@ pub struct LbmDomain {
     pub transfer_kernels: [[Option<Kernel>; 2]; 3],
 
     kernel_update_e_b_dyn: Option<Kernel>, // Optional Kernels
+    kernel_clear_qu_lod: Option<Kernel>,
 
     pub n_x: u32, // Domain size
     pub n_y: u32,
@@ -534,6 +545,7 @@ pub struct LbmDomain {
     pub b_dyn: Option<Buffer<f32>>,
     pub qi: Option<VariableFloatBuffer>,
     pub q: Option<Buffer<f32>>,
+    pub qu_lod: Option<Buffer<f32>>,
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
 
@@ -604,12 +616,21 @@ impl LbmDomain {
             })
         } else { None };
         let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n], 0f32)) } else { None };
+        // Level of detail charge and velocity for field updates
+        let depth = 3;
+        let n_lod = {
+            let mut c = 1;
+            for i in 0..depth {c += ((1<<(i+1)) as usize).pow(dimensions as u32)}
+            c
+        };
+        let qu_lod: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n_lod * 4], 0f32)) } else { None };
 
         // Initialize Kernels
         let mut initialize_builder = kernel_builder!(program, queue, "initialize", [n]);
         let mut stream_collide_builder = kernel_builder!(program, queue, "stream_collide", [n]);
         let mut update_fields_builder = kernel_builder!(program, queue, "update_fields", [n]);
         let mut kernel_update_e_b_dyn: Option<Kernel> = None;
+        let mut kernel_clear_qu_lod: Option<Kernel> = None;
         match &fi {
             //Initialize kernels. Different Float types need different arguments (Fi-Buffer specifically)
             VariableFloatBuffer::F32(fif32) => { // Float Type F32
@@ -639,12 +660,16 @@ impl LbmDomain {
             };
 
             kernel_args!(initialize_builder,     ("Q", q.as_ref().expect("Q")));
-            kernel_args!(stream_collide_builder, ("Q", q.as_ref().expect("Q")));
+            kernel_args!(stream_collide_builder, ("Q", q.as_ref().expect("Q")), ("QU_lod", qu_lod.as_ref().expect("QU_lod")));
 
             // Dynamic E/B kernel
             kernel_update_e_b_dyn = Some(
-                kernel!(program, queue, "update_e_b_dynamic", [n], ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")), ("Q", q.as_ref().expect("q")), ("u", &u), ("flags", &flags))
-            )
+                kernel!(program, queue, "update_e_b_dynamic", [n], ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")), ("Q", q.as_ref().expect("q")), ("u", &u), ("QU_lod", qu_lod.as_ref().expect("QU_lod")), ("flags", &flags))
+            );
+            // Clear LOD
+            kernel_clear_qu_lod = Some(
+                kernel!(program, queue, "clear_qu_lod", [n_lod], ("QU_lod", qu_lod.as_ref().expect("QU_lod")))
+            );
         }
         
         let kernel_stream_collide: Kernel = stream_collide_builder.build().unwrap();
@@ -712,6 +737,7 @@ impl LbmDomain {
             transfer_kernels,
 
             kernel_update_e_b_dyn,
+            kernel_clear_qu_lod,
 
             n_x, n_y, n_z,
             fx: lbm_config.f_x, fy: lbm_config.f_y, fz: lbm_config.f_z,
@@ -722,7 +748,7 @@ impl LbmDomain {
             #[cfg(feature = "multi-node")]
             transfer_t_host,
 
-            e, b, e_dyn, b_dyn, qi, q, f, t, graphics, cfg: lbm_config.clone()
+            e, b, e_dyn, b_dyn, qi, q, qu_lod, f, t, graphics, cfg: lbm_config.clone()
         } //Returns initialised domain
     }
 
@@ -882,6 +908,16 @@ impl LbmDomain {
     pub fn enqueue_update_e_b_dyn(&self) -> ocl::Result<()> {
         unsafe {
             self.kernel_update_e_b_dyn
+                .as_ref()
+                .expect("kernel should be initialized")
+                .cmd()
+                .enq()
+        }
+    }
+
+    pub fn enqueue_clear_qu_lod(&self) -> ocl::Result<()> {
+        unsafe {
+            self.kernel_clear_qu_lod
                 .as_ref()
                 .expect("kernel should be initialized")
                 .cmd()

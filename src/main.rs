@@ -199,6 +199,8 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                 }
 
                 lbm.do_time_step();
+                //let v = bget!(lbm.domains[0].qu_lod.as_ref().expect("qu_lod"));
+                //println!("\nlod: {:?}", v);
 
                 t_p_s = (loop_time.elapsed().as_micros() / step_count_time) as u32;
                 //Calculate simulation speed

@@ -58,6 +58,11 @@
 //These defines are for code completion only and are removed from the code before compilation 
 #define EndTempDefines%
 
+//#define def_lod_d 2u
+//#define def_n_lod 73u585
+#define def_lod_d 3u
+#define def_n_lod 585u
+
 // Helper functions 
 float sq(const float x) {
 	return x*x;
@@ -100,6 +105,11 @@ int int_min(int x, int y) {
 	} else {
 		return y;
 	}
+}
+inline float atomicaddf(volatile __global float* address, const float value) {
+    float old = value, orig;
+    while ((old = atomic_xchg(address, (orig = atomic_xchg(address, 0.0f)) + old)) != 0.0f);
+    return orig;
 }
 
 
@@ -379,6 +389,31 @@ void store_q(const uint n, const float* qhn, global fpxx* qi, const uint* j7, co
 		store(qi, index_f(n    , t%2ul ? i    : i+1u), qhn[i+1u]);
 	}
 }
+// LOD handling
+// Get 1D LOD index from cell index n and depth d (No offset for previous lod depths)
+uint lod_index(const uint n, const uint d) {
+	const uint3 c = coordinates(n);
+	const uint nd = (1<<d); // Number of lods on each axis
+	// TODO: Arithmetic optimization
+	const uint x = c.x / (def_Nx / nd);
+	const uint y = c.y / (def_Ny / nd);
+	const uint z = c.z / (def_Nz / nd);
+	return x + (y + z * nd) * nd;
+}
+// Size of LODs at the specified depth d
+float lod_s(const uint d) {
+	const uint nd = (1<<d); // Number of lods on each axis
+	return (float)((def_Nx / nd) * (def_Ny / nd) * (def_Nz / nd));
+}
+// float coords of the center of an LOD from 1D LOD index n and specified depth d
+float3 lod_coordinates(const uint n, const uint d) { // 
+	const uint nd = (1<<d); // Number of lods on each axis
+	const float dsx = (float)(def_Nx / nd);
+	const float dsy = (float)(def_Ny / nd);
+	const float dsz = (float)(def_Nz / nd);
+	const uint t = n%(nd*nd);
+	return (float3)((float)(t%nd)*dsx+(0.5f*dsx), (float)(t/nd)*dsy+(0.5f*dsy), (float)(n/(nd*nd))*dsz+(0.5f*dsz)); // n = x+(y+z*Ny)*Nx
+}
 #endif
 
 // Simulation kernel functions
@@ -393,6 +428,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , global float* B_dyn	// dynamic magnetic flux density
 , global fpxx* qi		// charge ddfs
 , global float* Q		// charge
+, global float* QU_lod  // Level-of-detail for charge und velocity 
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -465,6 +501,24 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		E_dyn[nxi] = E[nxi];
 		E_dyn[nyi] = E[nyi];
 		E_dyn[nzi] = E[nzi];
+
+		// Update LOD buffer
+		uint off = 0;
+		// Iterate over depth levels d and add values to LOD buffer
+		for (uint d = 0; d<=def_lod_d; d++) {
+			const uint ind = (lod_index(n, d) + off) * 4;
+			const float ils = 1/lod_s(d);
+			atomicaddf(&QU_lod[ind+0], Qn);
+			atomicaddf(&QU_lod[ind+1], uxn * ils);
+			atomicaddf(&QU_lod[ind+2], uyn * ils);
+			atomicaddf(&QU_lod[ind+3], uzn * ils);
+			// offset to skip previous depths
+			#if defined(D2Q9)
+				off += (1<<d) * (1<<d); 
+			#else
+				off += (1<<d) * (1<<d) * (1<<d);
+			#endif
+		}
 	#endif// MAGNETO_HYDRO
 
 	#ifdef VOLUME_FORCE
@@ -641,7 +695,7 @@ __kernel void update_fields(const global fpxx* fi, global float* rho, global flo
 } // update_fields()
 
 #ifdef MAGNETO_HYDRO
-__kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* Q, const global float* u, const global uchar* flags) {
+__kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* Q, const global float* u, const global float* QU_lod, const global uchar* flags) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
     if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
     const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
@@ -679,6 +733,24 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 		}
 	}
 
+	const uint nd = lod_index(n, def_lod_d); // Own LOD index, needs to be skipped
+	#define depth_off def_n_lod - ((1<<def_lod_d) * (1<<def_lod_d) * (1<<def_lod_d))
+	// Loop over all lowest level LODs
+	for (uint d = depth_off; d < def_n_lod; d++) {
+		if (d == nd) continue;
+		const float3 dc = lod_coordinates(d, def_lod_d);
+		const float q_c = QU_lod[(d*4)+0]; // charge of nearby cell
+		if (q_c == 0.0f) { continue; } // cells without charge have no influence
+		const float3 v_c = {QU_lod[(d*4)+1], QU_lod[(d*4)+2], QU_lod[(d*4)+3]}; // velocity of nearby cell
+
+		// precalculation for both fields
+		const float3 vec_r = coord_nf - dc;
+		const float3 pre_field = vec_r / cbmagnitude(vec_r);
+
+		e += q_c * pre_field; // E imparted by nearby cell (Coulomb)
+		b += q_c * cross(v_c, pre_field); // B imparted by nearby cell (Biot-Savart)
+	} 
+
 	// update buffers
 	E_dyn[n					] += def_ke * e.x;
 	E_dyn[(ulong)n+def_N	] += def_ke * e.y;
@@ -688,6 +760,15 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	B_dyn[(ulong)n+def_N	] += def_kmu * b.y;
 	B_dyn[(ulong)n+def_N*2ul] += def_kmu * b.z;
 } // update_e_b_dynamic()
+
+__kernel void clear_qu_lod(global float* QU_lod) {
+	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
+    if(n>def_n_lod) return;
+	QU_lod[(n * 4)+0] = 0.0f;
+	QU_lod[(n * 4)+1] = 0.0f;
+	QU_lod[(n * 4)+2] = 0.0f;
+	QU_lod[(n * 4)+3] = 0.0f;
+} // clear_qu_lod()
 #endif
 
 // Inter-Domain Transfer kernels
