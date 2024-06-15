@@ -313,9 +313,11 @@ impl Lbm {
         self.kernel_initialize();
         self.communicate_rho_u_flags();
         self.communicate_fi();
-        if self.config.ext_magneto_hydro && self.config.induction_range != 0 {
+        if self.config.ext_magneto_hydro {
             self.communicate_qi();
-            self.update_e_b_dynamic();
+            if self.config.induction_range != 0 {
+                self.update_e_b_dynamic();
+            }
         }
 
         self.finish_queues();
@@ -348,9 +350,11 @@ impl Lbm {
         }
         self.communicate_fi();
 
-        if self.config.ext_magneto_hydro && self.config.induction_range != 0 {
+        if self.config.ext_magneto_hydro {
             self.communicate_qi();
-            self.update_e_b_dynamic();
+            if self.config.induction_range != 0 {
+                self.update_e_b_dynamic();
+            }
         }
 
         if self.get_d_n() == 1

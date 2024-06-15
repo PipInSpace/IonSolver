@@ -34,6 +34,9 @@ pub fn run_node() {
         cfg.nu = cfg.units.si_to_nu(0.1);
         cfg.velocity_set = VelocitySet::D3Q19;
         cfg.run_steps = 1000;
+        cfg.ext_volume_force = true;
+        cfg.ext_magneto_hydro = true;
+        cfg.induction_range = 10;
         // Graphics
         cfg.graphics_config.graphics_active = true;
         cfg.graphics_config.streamline_every = 8;
@@ -140,7 +143,7 @@ impl LbmDomain {
     }
 
     /// Executes one LBM time step.
-    /// Executes `kernel_stream_collide` Kernels for every `LbmDomain` and updates domain transfer buffers.
+    /// Executes `kernel_stream_collide` Kernels for the node `LbmDomain` and exchanges domain transfer buffers.
     /// Updates the dynamic E and B fields.
     fn node_do_time_step(&mut self, world: &mpi::topology::SimpleCommunicator) {
         // call kernel stream_collide to perform one LBM time step

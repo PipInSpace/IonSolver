@@ -20,58 +20,59 @@ use crate::*;
 ///
 /// Run `your_lbm.initialize()` and return it with the config.
 pub fn setup() -> Lbm {
-    /*
-    //let now = Instant::now();
-    let mut lbm_config = LbmConfig::new();
-    //lbm_config.units.print();
-    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 10.0, 1.2250, 1.0);
-    lbm_config.units.print();
-    lbm_config.n_x = 128;
-    lbm_config.n_y = 128;
-    lbm_config.n_z = 128;
-    lbm_config.d_z = 1;
-    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
-    println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
-    //lbm_config.charge_per_dens = 180000.0;
-    //println!("    cpd in LU is: {}", lbm_config.units.si_to_charge_per_dens(180000.0));
-    lbm_config.velocity_set = VelocitySet::D3Q19;
-    // Extensions
-    lbm_config.ext_volume_force = true;
-    lbm_config.ext_magneto_hydro = true;
-    lbm_config.induction_range = 20;
+    let mut cfg = LbmConfig::new();
+    cfg.n_x = 256;
+    cfg.n_y = 256;
+    cfg.n_z = 256;
+    cfg.d_y = 1;
+    cfg.nu = cfg.units.si_to_nu(0.05);
+    cfg.velocity_set = VelocitySet::D3Q19;
+    cfg.run_steps = 1000;
+    cfg.ext_volume_force = true;
+    cfg.ext_magneto_hydro = true;
+    cfg.induction_range = 0;
     // Graphics
-    lbm_config.graphics_config.graphics_active = true;
-    //lbm_config.graphics_config.background_color = 0x1c1b22;
-    lbm_config.graphics_config.camera_width = 1920;
-    lbm_config.graphics_config.camera_height = 1080;
-    lbm_config.graphics_config.streamline_every = 4;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::EDyn;
-    lbm_config.graphics_config.field_mode = false;
-    lbm_config.graphics_config.streamline_mode = true;
-    lbm_config.graphics_config.u_max = 0.000032;
-    lbm_config.graphics_config.q_min = 0.00001;
-    lbm_config.graphics_config.axes_mode = true;
+    cfg.graphics_config.graphics_active = true;
+    cfg.graphics_config.streamline_every = 8;
+    cfg.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+    cfg.graphics_config.streamline_mode = true;
+    cfg.graphics_config.axes_mode = true;
+    //cfg.graphics_config.q_mode = true;
+    cfg.graphics_config.q_min = 0.00001;
+    // Animation
+    //cfg.graphics_config.render_intervals = true;
+    //let mut f: Vec<graphics::Keyframe> = vec![];
+    //for i in 0..100 {
+    //    f.push(graphics::Keyframe {
+    //        time: i * 5,
+    //        repeat: false,
+    //        cam_rot_x: 50.0 + (i * 5) as f32,
+    //        cam_rot_y: -40.0,
+    //        cam_zoom: 2.0,
+    //        ..graphics::Keyframe::default()
+    //    })
+    //}
+    //cfg.graphics_config.keyframes = f;
 
-    let cpc = 0.09;
-    println!("Charge per cell: {}As", lbm_config.units.charge_to_si(cpc));
-    let mut charge: Vec<f32> = vec![0.0; (lbm_config.n_x * lbm_config.n_y * lbm_config.n_z) as usize];
-    for i in 0..lbm_config.n_x {
-        let n = i + (64 + 63 * lbm_config.n_y) * lbm_config.n_x;
-        charge[n as usize] = cpc;
-    }
+    //let cpc = 0.09;
+    //println!("Charge per cell: {}As", lbm_config.units.charge_to_si(cpc));
+    //let mut charge: Vec<f32> = vec![0.0; (lbm_config.n_x * lbm_config.n_y * lbm_config.n_z) as usize];
+    //for i in 0..lbm_config.n_x {
+    //    let n = i + (64 + 63 * lbm_config.n_y) * lbm_config.n_x;
+    //    charge[n as usize] = cpc;
+    //}
 
-    let mut lbm = Lbm::new(lbm_config);
-    lbm.domains[0].q.as_ref().expect("msg").write(&charge).enq().unwrap();
-
-    lbm.setup_velocity_field((0.01, 0.001, 0.0), 1.0);
+    let mut lbm = Lbm::new(cfg);
+    //lbm.domains[0].q.as_ref().expect("msg").write(&charge).enq().unwrap();
+    //lbm.setup_velocity_field((0.01, 0.001, 0.0), 1.0);
+    lbm.set_taylor_green(1);
 
     lbm
-    */
     //setup_domain_test()
     //setup_bfield_spin()
     //file::write(&setup_bfield_spin(), "./testfile.ion");
     //setup_from_file("./testfile.ion")
-    setup_taylor_green()
+    //setup_taylor_green()
     //setup_verification()
 }
 
