@@ -55,22 +55,19 @@
 #define EQUILIBRIUM_BOUNDARIES
 #define VOLUME_FORCE
 #define MAGNETO_HYDRO
+#define def_lod_d 2u
+#define def_n_lod 73u
 //These defines are for code completion only and are removed from the code before compilation 
 #define EndTempDefines%
 
-//#define def_lod_d 2u
-//#define def_n_lod 73u585
-#define def_lod_d 3u
-#define def_n_lod 585u
-
 // Helper functions 
-float sq(const float x) {
+inline float sq(const float x) {
 	return x*x;
 }
-uint uint_sq(const uint x) {
+inline uint uint_sq(const uint x) {
 	return x*x;
 }
-float cb(const float x) {
+inline float cb(const float x) {
 	return x*x*x;
 }
 ushort float_to_half_custom(const float x) { // custom 16-bit floating-point format, 1-4-11, exp-15, +-1.99951168, +-6.10351562E-5, +-2.98023224E-8, 3.612 digits
@@ -86,27 +83,24 @@ float half_to_float_custom(const ushort x) { // custom 16-bit floating-point for
 	return as_float((x&0x8000)<<16 | (e!=0)*((e+112)<<23|m) | ((e==0)&(m!=0))*((v-37)<<23|((m<<(150-v))&0x007FF000))); // sign : normalized : denormalized
 }
 // cube of magnitude of v
-float sqmagnitude(uint3 v){
-	return sq(v.x) + sq(v.y) + sq(v.z);
-}
 float cbmagnitude(float3 v){
 	return cb(sqrt(sq(v.x) + sq(v.y) + sq(v.z)));
 }
-int int_max(int x, int y) {
+inline int int_max(int x, int y) {
 	if (x > y) {
 		return x;
 	} else {
 		return y;
 	}
 }
-int int_min(int x, int y) {
+inline int int_min(int x, int y) {
 	if (x < y) {
 		return x;
 	} else {
 		return y;
 	}
 }
-inline float atomicaddf(volatile __global float* address, const float value) {
+inline float atomic_add_f(volatile __global float* address, const float value) {
     float old = value, orig;
     while ((old = atomic_xchg(address, (orig = atomic_xchg(address, 0.0f)) + old)) != 0.0f);
     return orig;
@@ -502,23 +496,28 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		E_dyn[nyi] = E[nyi];
 		E_dyn[nzi] = E[nzi];
 
-		// Update LOD buffer
-		uint off = 0;
-		// Iterate over depth levels d and add values to LOD buffer
-		for (uint d = 0; d<=def_lod_d; d++) {
-			const uint ind = (lod_index(n, d) + off) * 4;
-			const float ils = 1/lod_s(d);
-			atomicaddf(&QU_lod[ind+0], Qn);
-			atomicaddf(&QU_lod[ind+1], uxn * ils);
-			atomicaddf(&QU_lod[ind+2], uyn * ils);
-			atomicaddf(&QU_lod[ind+3], uzn * ils);
-			// offset to skip previous depths
-			#if defined(D2Q9)
-				off += (1<<d) * (1<<d); 
-			#else
-				off += (1<<d) * (1<<d) * (1<<d);
-			#endif
-		}
+		#if def_lod_d > 0 // Update LOD buffer
+			uint off = 0;
+			#if (def_Dx>1 || def_Dy>1 || def_Dz>1)  // Multiple Domains
+				for (uint d = 0; d<=def_lod_d; d++) // Iterate over depth levels d and add values to LOD buffer
+			#else // Single Domain
+				const uint d = def_lod_d;
+			#endif // Single Domain
+			{
+				const uint ind = (lod_index(n, d) + off) * 4;
+				const float ils = 1/lod_s(d);
+				atomic_add_f(&QU_lod[ind+0], Qn);
+				atomic_add_f(&QU_lod[ind+1], uxn * ils);
+				atomic_add_f(&QU_lod[ind+2], uyn * ils);
+				atomic_add_f(&QU_lod[ind+3], uzn * ils);
+				// offset to skip previous depths
+				#if defined(D2Q9)
+					off += (1<<d) * (1<<d); 
+				#else
+					off += (1<<d) * (1<<d) * (1<<d);
+				#endif
+			}
+		#endif
 	#endif// MAGNETO_HYDRO
 
 	#ifdef VOLUME_FORCE
@@ -705,16 +704,20 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	const uint3 coord_n = coordinates(n); // Cell coordinate
 	const float3 coord_nf = convert_float3(coord_n); // Cell coordinate as float vector
 
-	const uint x_upper = int_min(coord_n.x + def_ind_r + 1, def_Dx>1?def_Nx-1:def_Nx); // Do not read at halo offsets
-	const uint y_upper = int_min(coord_n.y + def_ind_r + 1, def_Dy>1?def_Ny-1:def_Ny);
-	const uint z_upper = int_min(coord_n.z + def_ind_r + 1, def_Dz>1?def_Nz-1:def_Nz);
+	const uint nd = (1<<def_lod_d); // Number of lods on each axis
+	const uint dsx = int_max(def_Nx / (1<<nd), 1);
+	const uint dsy = int_max(def_Ny / (1<<nd), 1);
+	const uint dsz = int_max(def_Nz / (1<<nd), 1);
+
+	const uint x_upper = int_min((coord_n.x / dsx) * dsx + dsx, def_Dx>1?def_Nx-1:def_Nx); // Do not read at halo offsets
+	const uint y_upper = int_min((coord_n.y / dsy) * dsy + dsy, def_Dy>1?def_Ny-1:def_Ny);
+	const uint z_upper = int_min((coord_n.z / dsz) * dsz + dsz, def_Dz>1?def_Nz-1:def_Nz);
 
 	float3 e = {0.0f, 0.0f, 0.0f}, b = {0.0f, 0.0f, 0.0f};
 	
-	for (uint x = (uint)int_max((int)coord_n.x - (int)def_ind_r, def_Dx>1?1:0); x < x_upper; x++) {
-		for (uint y = (uint)int_max((int)coord_n.y - (int)def_ind_r, def_Dy>1?1:0); y < y_upper; y++) {
-			for (uint z = (uint)int_max((int)coord_n.z - (int)def_ind_r, def_Dz>1?1:0); z < z_upper; z++) {
-
+	for(		uint x = int_max((coord_n.x / dsx) * dsx, def_Dx>1?1:0); x < x_upper; x++) {
+		for(	uint y = int_max((coord_n.y / dsy) * dsy, def_Dy>1?1:0); y < y_upper; y++) {
+			for(uint z = int_max((coord_n.z / dsz) * dsz, def_Dz>1?1:0); z < z_upper; z++) {
 				// _c vars describe surronding cells 
 				const uint n_c = x + (y + z * def_Ny) * def_Nx;
 				if (n == n_c) continue;
@@ -724,31 +727,30 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 				const float3 v_c = {u[n_c], u[(ulong)n_c+def_N], u[(ulong)n_c+def_N*2ul]}; // velocity of nearby cell
 
 				// precalculation for both fields
-				const float3 vec_r = coord_nf - convert_float3(coordinates(n_c));
+				const float3 vec_r     = coord_nf - convert_float3(coordinates(n_c));
 				const float3 pre_field = vec_r / cbmagnitude(vec_r);
 
-				e += q_c * pre_field; // E imparted by nearby cell (Coulomb)
+				e += q_c * pre_field;             // E imparted by nearby cell (Coulomb)
 				b += q_c * cross(v_c, pre_field); // B imparted by nearby cell (Biot-Savart)
 			}
 		}
 	}
 
-	const uint nd = lod_index(n, def_lod_d); // Own LOD index, needs to be skipped
-	#define depth_off def_n_lod - ((1<<def_lod_d) * (1<<def_lod_d) * (1<<def_lod_d))
+	const uint ndi = lod_index(n, def_lod_d); // Own LOD index, needs to be skipped
+	#define depth_off int_max(def_n_lod - ((1<<def_lod_d) * (1<<def_lod_d) * (1<<def_lod_d)), 0)
 	// Loop over all lowest level LODs
 	for (uint d = depth_off; d < def_n_lod; d++) {
-		if (d == nd) continue;
-		const float3 dc = lod_coordinates(d, def_lod_d);
-		const float q_c = QU_lod[(d*4)+0]; // charge of nearby cell
-		if (q_c == 0.0f) { continue; } // cells without charge have no influence
-		const float3 v_c = {QU_lod[(d*4)+1], QU_lod[(d*4)+2], QU_lod[(d*4)+3]}; // velocity of nearby cell
+		if (d == ndi) continue;
+		const float3 d_c = lod_coordinates(d, def_lod_d);
+		const float  q_c =  QU_lod[(d*4)+0]; // charge of LOD
+		const float3 v_c = {QU_lod[(d*4)+1], QU_lod[(d*4)+2], QU_lod[(d*4)+3]}; // velocity of LOD
 
 		// precalculation for both fields
-		const float3 vec_r = coord_nf - dc;
+		const float3 vec_r     = coord_nf - d_c;
 		const float3 pre_field = vec_r / cbmagnitude(vec_r);
 
-		e += q_c * pre_field; // E imparted by nearby cell (Coulomb)
-		b += q_c * cross(v_c, pre_field); // B imparted by nearby cell (Biot-Savart)
+		e += q_c * pre_field;             // E imparted by LOD (Coulomb)
+		b += q_c * cross(v_c, pre_field); // B imparted by LOD (Biot-Savart)
 	} 
 
 	// update buffers

@@ -185,10 +185,11 @@ pub struct LbmConfig {
     pub ext_force_field: bool,   // Needs volume_force to work
     pub ext_magneto_hydro: bool, // Needs volume_force to work
 
-    /// Cell range of each cells induction (Keep this small)
-    pub induction_range: u8,
-    /// Charge per density (unit: (A/s)/(kg/m^3))
-    pub charge_per_dens: f32,
+    /// LOD option for dynamic fields.
+    /// 
+    /// Dynamic field quality improves with higher values: 1 is very coarse, 4 is higher quality (Performance does not peek at lowest values).
+    /// Set this to 0 to disable LODs (VERY SLOW). 
+    pub mhd_lod_depth: u8,
 
     pub graphics_config: GraphicsConfig,
 
@@ -219,8 +220,7 @@ impl LbmConfig {
             ext_magneto_hydro: false,
             ext_force_field: false,
 
-            induction_range: 5, // Range of the cells induction (Keep this small)
-            charge_per_dens: 0.0,
+            mhd_lod_depth: 4, // Dynamic field LODs
 
             graphics_config: graphics::GraphicsConfig::new(),
             run_steps: 0,
@@ -315,9 +315,7 @@ impl Lbm {
         self.communicate_fi();
         if self.config.ext_magneto_hydro {
             self.communicate_qi();
-            if self.config.induction_range != 0 {
-                self.update_e_b_dynamic();
-            }
+            self.update_e_b_dynamic();
         }
 
         self.finish_queues();
@@ -352,17 +350,11 @@ impl Lbm {
             self.communicate_rho_u_flags();
         }
         self.communicate_fi();
-
         if self.config.ext_magneto_hydro {
             self.communicate_qi();
-            if self.config.induction_range != 0 {
-                self.update_e_b_dynamic();
-            }
+            self.update_e_b_dynamic();
         }
-
-        if self.get_d_n() == 1
-            || (self.config.ext_magneto_hydro && self.config.induction_range != 0)
-        {
+        if self.get_d_n() == 1 || self.config.ext_magneto_hydro {
             // Additional synchronization only needed in single-GPU or after E&B update
             self.finish_queues();
         }
@@ -577,7 +569,15 @@ impl LbmDomain {
 
         let t = 0;
 
-        let ocl_code = Self::get_device_defines(n_x, n_y, n_z, d_x, d_y, d_z, o_x, o_y, o_z, dimensions, velocity_set, transfers, lbm_config.nu, lbm_config)
+        // Magnetohydro LOD
+        let depth = 4;
+        let n_lod = {
+            let mut c = 1;
+            for i in 0..depth {c += ((1<<(i+1)) as usize).pow(dimensions as u32)}
+            c
+        };
+
+        let ocl_code = Self::get_device_defines(n_x, n_y, n_z, d_x, d_y, d_z, o_x, o_y, o_z, dimensions, velocity_set, transfers, lbm_config.nu, n_lod, lbm_config)
             + &if lbm_config.graphics_config.graphics_active { graphics::get_graphics_defines(&lbm_config.graphics_config) } else { "".to_string() }
             + &opencl::get_opencl_code(); // Only appends graphics defines if needed
 
@@ -617,12 +617,6 @@ impl LbmDomain {
         } else { None };
         let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n], 0f32)) } else { None };
         // Level of detail charge and velocity for field updates
-        let depth = 3;
-        let n_lod = {
-            let mut c = 1;
-            for i in 0..depth {c += ((1<<(i+1)) as usize).pow(dimensions as u32)}
-            c
-        };
         let qu_lod: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n_lod * 4], 0f32)) } else { None };
 
         // Initialize Kernels
@@ -768,6 +762,7 @@ impl LbmDomain {
         velocity_set: u8,
         transfers: u8,
         nu: f32,
+        n_lod: usize,
         lbm_config: &LbmConfig,
     ) -> String {
         //Conditional Defines:
@@ -825,8 +820,8 @@ impl LbmDomain {
 
         +"\n	#define D"+ &dimensions.to_string()+"Q"+ &velocity_set.to_string()+"" // D2Q9/D3Q15/D3Q19/D3Q27
         +"\n	#define def_velocity_set "+ &velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
-        +"\n	#define def_dimensions "+ &dimensions.to_string()+"u" // number spatial dimensions (2D or 3D)
-        +"\n	#define def_transfers "+ &transfers.to_string()+"u" // number of DDFs that are transferred between multiple domains
+        +"\n	#define def_dimensions "  + &dimensions.to_string()+"u"   // number spatial dimensions (2D or 3D)
+        +"\n	#define def_transfers "   + &transfers.to_string()+"u"    // number of DDFs that are transferred between multiple domains
 
         +"\n	#define def_c 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
         +"\n	#define def_w " + &format!("{:?}", 1.0f32/(3.0f32*nu+0.5f32))+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
@@ -861,14 +856,16 @@ impl LbmDomain {
             FloatType::FP32 => &fp32
         }
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
-        + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
-        + &if lbm_config.ext_magneto_hydro {"\n	        #define MAGNETO_HYDRO".to_owned()
-        +"\n	#define def_ke "+ &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
-        +"\n	#define def_kmu "+ &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
-        +"\n	#define def_ind_r "+ &lbm_config.induction_range.to_string()
-        +"\n	#define def_w_Q  "+  &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
+        + if lbm_config.ext_volume_force {         "\n	#define VOLUME_FORCE"} else {""}
+        + &if lbm_config.ext_magneto_hydro {
+         "\n	#define MAGNETO_HYDRO".to_owned()
+        +"\n	#define def_ke "    + &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
+        +"\n	#define def_kmu "   + &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
+        +"\n	#define def_lod_d " + &format!("{}u", lbm_config.mhd_lod_depth)
+        +"\n    #define def_n_lod " + &format!("{}u", n_lod)
+        +"\n	#define def_w_Q  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
         } else {"".to_string()}
-        + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
+        + if lbm_config.ext_force_field {                "\n	#define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}
         //Extensions
     }
