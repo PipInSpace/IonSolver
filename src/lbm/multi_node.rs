@@ -1,5 +1,5 @@
 //! # multi-node
-//! IonSolver supports execution on multiple compute nodes using the mpi protocol if compiled with the `multi-node` feature.
+//! IonSolver supports execution on multiple compute nodes using the MPI protocol if compiled with the `multi-node` feature.
 //! 
 //! If compiled with the multi-node feature, multiple programs may need to be started over MPI for IonSover to work properly (depending on the configuration used). 
 //! 
@@ -36,7 +36,7 @@ pub fn run_node() {
         cfg.run_steps = 1000;
         cfg.ext_volume_force = true;
         cfg.ext_magneto_hydro = true;
-        cfg.induction_range = 10;
+        cfg.mhd_lod_depth = 4;
         // Graphics
         cfg.graphics_config.graphics_active = true;
         cfg.graphics_config.streamline_every = 8;
@@ -134,7 +134,7 @@ impl LbmDomain {
         self.enqueue_initialize().unwrap();
         self.node_communicate_rho_u_flags(&world);
         self.node_communicate_fi(&world);
-        if self.cfg.ext_magneto_hydro && self.cfg.induction_range != 0 {
+        if self.cfg.ext_magneto_hydro {
             self.node_communicate_qi(&world);
             self.enqueue_update_e_b_dyn().unwrap();
         }
@@ -154,7 +154,7 @@ impl LbmDomain {
         }
         self.node_communicate_fi(world);
 
-        if self.cfg.ext_magneto_hydro && self.cfg.induction_range != 0 {
+        if self.cfg.ext_magneto_hydro {
             self.node_communicate_qi(world);
             self.enqueue_update_e_b_dyn().unwrap();
         }
