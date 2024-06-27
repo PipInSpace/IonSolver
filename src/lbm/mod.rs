@@ -39,59 +39,44 @@ pub fn get_coordinates_sl(n: u64, n_x: u32, n_y: u32) -> (u32, u32, u32) {
 
 /// Struct used to bundle arguments for LBM simulation setup.
 /// 
-/// Base Lbm configuration:
-/// - velocity_set: Velocity discretization mode
-/// - relaxation_time: Sim relaxation time type
-/// - float_type: Sim float type for memory compression of ddf's
-/// - units: Unit struct for unit conversion
-/// - n_x: Sim size on each axis
-/// - n_y
-/// - n_z
-///
-/// - d_x: Sim domains on each axis
-/// - d_y
-/// - d_z
-///
-/// - nu: Kinematic shear viscosity
-/// - fx: Volume force on each axis
-/// - fy
-/// - fz
-/// 
-/// Extensions, provide additional functionality:
-/// - ext_equilibrium_boudaries:
-/// - ext_volume_force: Volumetric force
-/// - ext_force_field: Force field (Needs volume_force to work)
-/// - ext_magneto_hydro: Magnetohydrodynamics
-///
-/// Misc.:
-/// - induction_range: limit cell induction for performnance reasons
-/// - graphics_config: Grapics config struct
-/// - run_steps: run simulation for x steps
-/// 
+/// Use this struct to configure a simulation and then instantiate the simulation with `Lbm::new(LbmConfig)`.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct LbmConfig {
     // Holds init information about the simulation
+    /// Velocity discretization mode
     pub velocity_set: VelocitySet,
+    /// Simulation relaxation time type
     pub relaxation_time: RelaxationTime,
+    /// Simulation float type for memory compression of simulation data (DDFs)
     pub float_type: FloatType,
+    /// Struct for unit conversion
     pub units: Units,
-    pub n_x: u32, //Size
+    /// Size of simulation on each axis
+    pub n_x: u32,
     pub n_y: u32,
     pub n_z: u32,
 
-    pub d_x: u32, //Domains
+    /// Number of domains on each axis
+    pub d_x: u32,
     pub d_y: u32,
     pub d_z: u32,
 
+    /// Kinematic viscosity
     pub nu: f32,
+    /// Force on each axis. Needs ext_volume_force to work
     pub f_x: f32,
     pub f_y: f32,
     pub f_z: f32,
 
-    pub ext_equilibrium_boudaries: bool, //Extensions
+    //Extensions
+    /// Enable equilibrium boudaries extension (for inlets/outlets)
+    pub ext_equilibrium_boudaries: bool,
+    /// Enable volume force extension (for handling of complex forces)
     pub ext_volume_force: bool,
-    pub ext_force_field: bool,   // Needs volume_force to work
-    pub ext_magneto_hydro: bool, // Needs volume_force to work
+    /// Enable force field extension (i. E. for gravity). Needs ext_volume_force to work
+    pub ext_force_field: bool,
+    /// Enable magnetohydrodynamics extension. Needs ext_volume_force to work 
+    pub ext_magneto_hydro: bool,
 
     /// LOD option for dynamic fields.
     /// 
@@ -99,8 +84,10 @@ pub struct LbmConfig {
     /// Set this to 0 to disable LODs (VERY SLOW). 
     pub mhd_lod_depth: u8,
 
+    /// Configuration struct for the built-in graphics engine
     pub graphics_config: GraphicsConfig,
 
+    /// Run the simulation for x steps
     pub run_steps: u64,
 }
 
