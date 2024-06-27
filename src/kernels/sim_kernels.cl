@@ -57,6 +57,7 @@
 #define MAGNETO_HYDRO
 #define def_lod_d 2u
 #define def_n_lod 73u
+#define def_n_lod_own 73u
 //These defines are for code completion only and are removed from the code before compilation 
 #define EndTempDefines%
 
@@ -100,6 +101,7 @@ inline int int_min(int x, int y) {
 		return y;
 	}
 }
+// Incredibly ugly and slow, Nvidia pls add support T.T
 inline float atomic_add_f(volatile __global float* address, const float value) {
     float old = value, orig;
     while ((old = atomic_xchg(address, (orig = atomic_xchg(address, 0.0f)) + old)) != 0.0f);
@@ -737,9 +739,9 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	}
 
 	const uint ndi = lod_index(n, def_lod_d); // Own LOD index, needs to be skipped
-	#define depth_off int_max(def_n_lod - ((1<<def_lod_d) * (1<<def_lod_d) * (1<<def_lod_d)), 0)
+	#define depth_off int_max(def_n_lod_own - ((1<<def_lod_d) * (1<<def_lod_d) * (1<<def_lod_d)), 0)
 	// Loop over all lowest level LODs
-	for (uint d = depth_off; d < def_n_lod; d++) {
+	for (uint d = depth_off; d < def_n_lod_own; d++) {
 		if (d == ndi) continue;
 		const float3 d_c = lod_coordinates(d, def_lod_d);
 		const float  q_c =  QU_lod[(d*4)+0]; // charge of LOD
@@ -764,8 +766,9 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 } // update_e_b_dynamic()
 
 __kernel void clear_qu_lod(global float* QU_lod) {
-	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>def_n_lod) return;
+	// Clears own domain LODs for recomputation
+	const uint n = get_global_id(0);
+    if(n>def_n_lod_own) return;
 	QU_lod[(n * 4)+0] = 0.0f;
 	QU_lod[(n * 4)+1] = 0.0f;
 	QU_lod[(n * 4)+2] = 0.0f;

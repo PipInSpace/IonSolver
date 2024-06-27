@@ -23,6 +23,17 @@ pub mod units;
 use crate::*;
 use crate::lbm::{graphics::GraphicsConfig, units::Units};
 
+// Helper Functions
+/// Get `x, y, z` coordinates from 1D index `n` and side lengths `n_x` and `n_y`.
+pub fn get_coordinates_sl(n: u64, n_x: u32, n_y: u32) -> (u32, u32, u32) {
+    let t: u64 = n % (n_x as u64 * n_y as u64);
+    //x, y, z
+    (
+        (t % n_x as u64) as u32,
+        (t / n_x as u64) as u32,
+        (n / (n_x as u64 * n_y as u64)) as u32,
+    )
+}
 
 /// Velocity discretizations in 2D and 3D.
 /// 
@@ -448,10 +459,32 @@ impl Lbm {
         self.communicate_field(TransferField::RhoUFlags, 17);
     }
 
+    /// Communicate Qi across domain boundaries
     fn communicate_qi(&mut self) {
         let bytes_per_cell = self.config.float_type.size_of() * 1; // FP type size * transfers. The fixed D3Q7 lattice has 1 transfer
         self.communicate_field(TransferField::Qi, bytes_per_cell);
     }
+
+    /// Communicate charge and velocity LODs across domains
+    #[allow(unused)]
+    fn communicate_qu_lods(&mut self) {
+        let d_x = self.config.d_x as usize;
+        let d_y = self.config.d_y as usize;
+        let d_z = self.config.d_z as usize;
+        let d_n = self.get_d_n();
+        if d_n > 1 {
+            let n_lod = {
+                let mut c = 1;
+                for i in 0..self.config.mhd_lod_depth {c += ((1<<(i+1)) as usize).pow(self.config.velocity_set.get_set_values().2 as u32)}
+                c
+            };
+            let mut t_buffer: Vec<f32> = vec![0.0; n_lod];
+            for d in 0..d_n { // Swap transfer buffers at domain boundaries
+                self.domains[0].qu_lod.as_ref().expect("msg").read(&mut t_buffer).len(n_lod).enq().unwrap();
+            }
+        }
+    }
+
 
     // Helper functions
     /// Increments time steps variable for every `LbmDomain`
@@ -476,19 +509,6 @@ impl Lbm {
     /// Returns the current simulation timestep
     pub fn get_time_step(&self) -> u64 {
         self.domains[0].t
-    }
-
-    /// Get `x, y, z` coordinates from 1D index `n`.
-    #[allow(unused)]
-    pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
-        // disassembles 1D index into 3D index
-        let t: u64 = n % (self.config.n_x as u64 * self.config.n_y as u64);
-        //x, y, z
-        (
-            (t % self.config.n_x as u64) as u32,
-            (t / self.config.n_x as u64) as u32,
-            (n / (self.config.n_x as u64 * self.config.n_y as u64)) as u32,
-        )
     }
 }
 
@@ -560,6 +580,7 @@ impl LbmDomain {
         let d_x = lbm_config.d_x;
         let d_y = lbm_config.d_y;
         let d_z = lbm_config.d_z;
+        let d_n = d_x * d_y * d_z;
 
         let o_x = (x * lbm_config.n_x / lbm_config.d_x) as i32 - (lbm_config.d_x > 1u32) as i32;
         let o_y = (y * lbm_config.n_y / lbm_config.d_y) as i32 - (lbm_config.d_y > 1u32) as i32;
@@ -569,15 +590,26 @@ impl LbmDomain {
 
         let t = 0;
 
-        // Magnetohydro LOD
-        let depth = 4;
-        let n_lod = {
+        // MAGNETO_HYDRO LOD buffer size
+        let n_lod_own; // Amount of lod blocks of this domain
+        let n_lod = {  // Amount of lod blocks of this domain + lod blocks from neighbouring domains
             let mut c = 1;
-            for i in 0..depth {c += ((1<<(i+1)) as usize).pow(dimensions as u32)}
+            // Own domain LODs
+            for i in 0..lbm_config.mhd_lod_depth {c += ((1<<(i+1)) as usize).pow(dimensions as u32)}
+            n_lod_own = c;
+            // Other domain LODs
+            for d in 0..d_n {
+                let (dx, dy, dz) = get_coordinates_sl(d as u64, d_x, d_y);
+                // single-axis manhattan distance to other domain, controls lod amount
+                let dist = cmp::max((z as i32 - dz as i32).abs(), cmp::max((y as i32 - dy as i32).abs(), (x as i32 - dx as i32).abs()));
+                if dist != 0 {
+                    c += ((1<<cmp::max(lbm_config.mhd_lod_depth as i32 - dist, 0)) as usize).pow(dimensions as u32)
+                }
+            }
             c
         };
 
-        let ocl_code = Self::get_device_defines(n_x, n_y, n_z, d_x, d_y, d_z, o_x, o_y, o_z, dimensions, velocity_set, transfers, lbm_config.nu, n_lod, lbm_config)
+        let ocl_code = Self::get_device_defines(n_x, n_y, n_z, d_x, d_y, d_z, o_x, o_y, o_z, dimensions, velocity_set, transfers, lbm_config.nu, n_lod, n_lod_own, lbm_config)
             + &if lbm_config.graphics_config.graphics_active { graphics::get_graphics_defines(&lbm_config.graphics_config) } else { "".to_string() }
             + &opencl::get_opencl_code(); // Only appends graphics defines if needed
 
@@ -763,6 +795,7 @@ impl LbmDomain {
         transfers: u8,
         nu: f32,
         n_lod: usize,
+        n_lod_own: usize,
         lbm_config: &LbmConfig,
     ) -> String {
         //Conditional Defines:
@@ -863,6 +896,7 @@ impl LbmDomain {
         +"\n	#define def_kmu "   + &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
         +"\n	#define def_lod_d " + &format!("{}u", lbm_config.mhd_lod_depth)
         +"\n    #define def_n_lod " + &format!("{}u", n_lod)
+        +"\n    #define def_n_lod_own " + &format!("{}u", n_lod_own)
         +"\n	#define def_w_Q  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
         } else {"".to_string()}
         + if lbm_config.ext_force_field {                "\n	#define FORCE_FIELD"} else {""}
@@ -1130,14 +1164,7 @@ impl LbmDomain {
     }
 
     /// Get `x, y, z` coordinates from 1D index `n`.
-    #[allow(unused)]
     pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
-        let t: u64 = n % (self.n_x as u64 * self.n_y as u64);
-        //x, y, z
-        (
-            (t % self.n_x as u64) as u32,
-            (t / self.n_x as u64) as u32,
-            (n / (self.n_x as u64 * self.n_y as u64)) as u32,
-        )
+        get_coordinates_sl(n, self.n_x, self.n_y)
     }
 }
