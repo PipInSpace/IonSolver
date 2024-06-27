@@ -166,7 +166,7 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
     lbm_config.velocity_set = VelocitySet::D3Q19;
-    lbm_config.mhd_lod_depth = 1;
+    lbm_config.mhd_lod_depth = 4;
     // Extensions
     lbm_config.ext_volume_force = true;
     lbm_config.ext_magneto_hydro = true;

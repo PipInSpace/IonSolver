@@ -13,6 +13,7 @@
 #define def_Dx 1u
 #define def_Dy 1u
 #define def_Dz 1u
+#define def_Di 0u
 
 #define def_Ax 1u
 #define def_Ay 1u
@@ -87,19 +88,27 @@ float half_to_float_custom(const ushort x) { // custom 16-bit floating-point for
 float cbmagnitude(float3 v){
 	return cb(sqrt(sq(v.x) + sq(v.y) + sq(v.z)));
 }
-inline int int_max(int x, int y) {
+inline int imax(int x, int y) {
 	if (x > y) {
 		return x;
 	} else {
 		return y;
 	}
 }
-inline int int_min(int x, int y) {
+inline int imin(int x, int y) {
 	if (x < y) {
 		return x;
 	} else {
 		return y;
 	}
+}
+// x to the power of def_dimensions
+inline int to_d(int x) {
+	#if defined(D2Q9)
+	return x * x;
+	#else
+	return x * x * x;
+	#endif
 }
 // Incredibly ugly and slow, Nvidia pls add support T.T
 inline float atomic_add_f(volatile __global float* address, const float value) {
@@ -115,6 +124,10 @@ float3 position(const uint3 xyz) { // 3D coordinates to 3D position
 uint3 coordinates(const uint n) { // disassemble 1D index to 3D coordinates (n -> x,y,z)
 	const uint t = n%(def_Nx*def_Ny);
 	return (uint3)(t%def_Nx, t/def_Nx, n/(def_Nx*def_Ny)); // n = x+(y+z*Ny)*Nx
+}
+uint3 coordinates_sl(const uint n, const uint nx, const uint ny) { // disassemble 1D index and side lenghts to 3D coordinates (n -> x,y,z)
+	const uint t = n%(nx*ny);
+	return (uint3)(t%nx, t/nx, n/(nx*ny)); // n = x+(y+z*Ny)*Nx
 }
 uint index(const uint3 xyz) { // assemble 1D index from 3D coordinates (x,y,z -> n)
 	return xyz.x+(xyz.y+xyz.z*def_Ny)*def_Nx; // n = x+(y+z*Ny)*Nx
@@ -707,19 +720,20 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	const float3 coord_nf = convert_float3(coord_n); // Cell coordinate as float vector
 
 	const uint nd = (1<<def_lod_d); // Number of lods on each axis
-	const uint dsx = int_max(def_Nx / (1<<nd), 1);
-	const uint dsy = int_max(def_Ny / (1<<nd), 1);
-	const uint dsz = int_max(def_Nz / (1<<nd), 1);
+	const uint dsx = imax(def_Nx / (1<<nd), 1);
+	const uint dsy = imax(def_Ny / (1<<nd), 1);
+	const uint dsz = imax(def_Nz / (1<<nd), 1);
 
-	const uint x_upper = int_min((coord_n.x / dsx) * dsx + dsx, def_Dx>1?def_Nx-1:def_Nx); // Do not read at halo offsets
-	const uint y_upper = int_min((coord_n.y / dsy) * dsy + dsy, def_Dy>1?def_Ny-1:def_Ny);
-	const uint z_upper = int_min((coord_n.z / dsz) * dsz + dsz, def_Dz>1?def_Nz-1:def_Nz);
+	const uint x_upper = imin((coord_n.x / dsx) * dsx + dsx, def_Dx>1?def_Nx-1:def_Nx); // Do not read at halo offsets
+	const uint y_upper = imin((coord_n.y / dsy) * dsy + dsy, def_Dy>1?def_Ny-1:def_Ny);
+	const uint z_upper = imin((coord_n.z / dsz) * dsz + dsz, def_Dz>1?def_Nz-1:def_Nz);
 
 	float3 e = {0.0f, 0.0f, 0.0f}, b = {0.0f, 0.0f, 0.0f};
 	
-	for(		uint x = int_max((coord_n.x / dsx) * dsx, def_Dx>1?1:0); x < x_upper; x++) {
-		for(	uint y = int_max((coord_n.y / dsy) * dsy, def_Dy>1?1:0); y < y_upper; y++) {
-			for(uint z = int_max((coord_n.z / dsz) * dsz, def_Dz>1?1:0); z < z_upper; z++) {
+	/// Close distance - consider individual cells
+	for(		uint x = imax((coord_n.x / dsx) * dsx, def_Dx>1?1:0); x < x_upper; x++) {
+		for(	uint y = imax((coord_n.y / dsy) * dsy, def_Dy>1?1:0); y < y_upper; y++) {
+			for(uint z = imax((coord_n.z / dsz) * dsz, def_Dz>1?1:0); z < z_upper; z++) {
 				// _c vars describe surronding cells 
 				const uint n_c = x + (y + z * def_Ny) * def_Nx;
 				if (n == n_c) continue;
@@ -738,10 +752,10 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 		}
 	}
 
+	/// Medium distance - consider LODs in own domain
 	const uint ndi = lod_index(n, def_lod_d); // Own LOD index, needs to be skipped
-	#define depth_off int_max(def_n_lod_own - ((1<<def_lod_d) * (1<<def_lod_d) * (1<<def_lod_d)), 0)
 	// Loop over all lowest level LODs
-	for (uint d = depth_off; d < def_n_lod_own; d++) {
+	for (uint d = imax(def_n_lod_own - to_d(1<<def_lod_d), 0); d < def_n_lod_own; d++) {
 		if (d == ndi) continue;
 		const float3 d_c = lod_coordinates(d, def_lod_d);
 		const float  q_c =  QU_lod[(d*4)+0]; // charge of LOD
@@ -753,7 +767,35 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 
 		e += q_c * pre_field;             // E imparted by LOD (Coulomb)
 		b += q_c * cross(v_c, pre_field); // B imparted by LOD (Biot-Savart)
-	} 
+	}
+
+	/// Large distance - consider LODs of varying detail in foreign domains (synchronized over communicate_qu_lods)
+	const uint3 coord_d = coordinates_sl(def_Di, def_Dx, def_Dy); // Own domain coordinate
+	uint offset = def_n_lod_own;
+	for (uint d = 0; d < def_Dx*def_Dy*def_Dz; d++) { // Loop over every other domain
+		if (d == def_Di) continue;
+		const uint3 coord_fd = coordinates_sl(d, def_Dx, def_Dy); // coordinate of foreign domain
+		const int3 domain_diff = {(int)coord_d.x - (int)coord_fd.x, (int)coord_d.y - (int)coord_fd.y, (int)coord_d.z - (int)coord_fd.z}; // Difference in domain coordinates
+		const uint dist = imax(abs(domain_diff.x), imax(abs(domain_diff.y), abs(domain_diff.z)));
+		const uint depth = imax(0, def_lod_d - dist); // Depth of foreign domain LOD
+		const uint n_lod_fd = to_d(1<<depth); // Number of lods in foreign domain
+
+		for (int l = 0; l<n_lod_fd; l++) { // Loop over every LOD in foreign domain
+			float3 lc = lod_coordinates(l, depth); // LOD coordinate
+			lc.x -= (float)(domain_diff.x * def_Nx);
+			lc.y -= (float)(domain_diff.y * def_Ny);
+			lc.z -= (float)(domain_diff.z * def_Nz);
+			const float  q_c =  QU_lod[(offset+l)*4+0]; // charge of LOD
+			const float3 v_c = {QU_lod[(offset+l)*4+1], QU_lod[(offset+l)*4+2], QU_lod[(offset+l)*4+3]}; // velocity of LOD
+
+			const float3 vec_r     = coord_nf - lc;
+			const float3 pre_field = vec_r / cbmagnitude(vec_r);
+
+			e += q_c * pre_field;             // E imparted by LOD (Coulomb)
+			b += q_c * cross(v_c, pre_field); // B imparted by LOD (Biot-Savart)
+		}
+		offset += n_lod_fd;
+	}
 
 	// update buffers
 	E_dyn[n					] += def_ke * e.x;
