@@ -138,9 +138,13 @@ impl LbmConfig {
 /// [`LbmConfig`]: crate::lbm::LbmConfig
 /// [`LbmDomain`]: crate::lbm::LbmDomain
 pub struct Lbm {
+    /// Vector of [`LbmDomain`]s that are part of this simulation.
     pub domains: Vec<LbmDomain>,
+    /// A copy of the [`LbmConfig`] used to initialize the simulation.
     pub config: LbmConfig,
+    /// A vector of Charges positioned in the simulation via a 1D index. Used in static field computation. 
     pub charges: Option<Vec<(u64, f32)>>,
+    /// A vector of Magnets positioned in the simulation via a 1D index. Used in static field computation. 
     pub magnets: Option<Vec<(u64, [f32; 3])>>,
     initialized: bool,
 }
@@ -397,12 +401,10 @@ impl Lbm {
 }
 
 /// The `LbmDomain` struct holds all information to run a LBM-Simulation on one OpenCL Device.
-/// It is initialized with:
-/// ```
-/// LbmDomain::new(lbm_config: LbmConfig, device: Device, x: u32, y: u32, z: u32)
-/// ```
-/// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function.
+/// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function when initializing a new [`Lbm`].
 /// This ensures all arguments are correctly set.
+/// 
+/// [`Lbm`]: crate::lbm::Lbm
 pub struct LbmDomain {
     // FluidX3D creates contexts/queues/programs for each device automatically through another class
     pub queue: Queue,
