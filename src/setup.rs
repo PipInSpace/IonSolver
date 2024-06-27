@@ -162,11 +162,11 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
     lbm_config.n_z = 256;
-    lbm_config.d_x = 1;
+    lbm_config.d_z = 2;
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
     lbm_config.velocity_set = VelocitySet::D3Q19;
-    lbm_config.mhd_lod_depth = 4;
+    lbm_config.mhd_lod_depth = 1;
     // Extensions
     lbm_config.ext_volume_force = true;
     lbm_config.ext_magneto_hydro = true;
@@ -186,17 +186,17 @@ fn setup_bfield_spin() -> Lbm {
 
     let mut lbm = Lbm::new(lbm_config);
 
-    let mut flags: Vec<u8> = vec![0; 128 * 128 * 256];
+    let mut flags: Vec<u8> = vec![0; 128 * 128 * 128];
     let len = flags.len() - 1;
     // Solid
     for i in 0..(128 * 128 * 8) {
         flags[i] = 0x01;
-        flags[len - i] = 0x01;
+        //flags[len - i] = 0x01;
     }
     bwrite!(lbm.domains[0].flags, flags);
 
     let cpc = 0.002;
-    let mut charge: Vec<f32> = vec![cpc; 128 * 128 * 256];
+    let mut charge: Vec<f32> = vec![cpc; 128 * 128 * 128];
     bwrite!(lbm.domains[0].q.as_ref().expect("q"), charge);
 
     // magnetic field

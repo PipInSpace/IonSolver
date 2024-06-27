@@ -251,6 +251,15 @@ impl Lbm {
         self.communicate_fi();
         if self.config.ext_magneto_hydro {
             self.communicate_qi();
+            //let lod = bget!(self.domains[0].qu_lod.as_ref().expect("msg"));
+            //println!("1b: {:?}", lod);
+            //let lod = bget!(self.domains[1].qu_lod.as_ref().expect("msg"));
+            //println!("2b: {:?}", lod);
+            self.communicate_qu_lods();
+            //let lod = bget!(self.domains[0].qu_lod.as_ref().expect("msg"));
+            //println!("1a: {:?}", lod);
+            //let lod = bget!(self.domains[1].qu_lod.as_ref().expect("msg"));
+            //println!("2a: {:?}", lod);
             self.update_e_b_dynamic();
         }
         if self.get_d_n() == 1 || self.config.ext_magneto_hydro {
@@ -354,21 +363,43 @@ impl Lbm {
     }
 
     /// Communicate charge and velocity LODs across domains
-    #[allow(unused)]
+    //#[allow(unused)]
+    #[rustfmt::skip]
     fn communicate_qu_lods(&mut self) {
-        let d_x = self.config.d_x as usize;
-        let d_y = self.config.d_y as usize;
-        let d_z = self.config.d_z as usize;
         let d_n = self.get_d_n();
+        let dim = self.config.velocity_set.get_set_values().0 as u32;
+
+        fn get_offset(depth: i32, dim: u32) -> usize {
+            let mut c = 0;
+            for i in 0..=depth {c += ((1<<i) as usize).pow(dim)};
+            c
+        }
+
         if d_n > 1 {
-            let n_lod = {
+            let n_lod_own = {
                 let mut c = 1;
-                for i in 0..self.config.mhd_lod_depth {c += ((1<<(i+1)) as usize).pow(self.config.velocity_set.get_set_values().2 as u32)}
+                for i in 0..self.config.mhd_lod_depth {c += ((1<<(i+1)) as usize).pow(self.config.velocity_set.get_set_values().0 as u32)}
                 c
             };
-            let mut t_buffer: Vec<f32> = vec![0.0; n_lod];
-            for d in 0..d_n { // Swap transfer buffers at domain boundaries
-                self.domains[0].qu_lod.as_ref().expect("msg").read(&mut t_buffer).len(n_lod).enq().unwrap();
+            for d in 0..d_n { self.domains[d].read_lods(n_lod_own); }
+            for d in 0..d_n { // Every domain...
+                let (x, y, z) = get_coordinates_sl(d as u64, self.config.d_x, self.config.d_y); // Own domain coordinate
+                let mut offset = n_lod_own; // buffer write offset
+                for dc in 0..d_n { // ...loops over every other domain and writes the extracted LOD to its own LOD buffer
+                    if d != dc {
+                        let (dx, dy, dz) = get_coordinates_sl(dc as u64, self.config.d_x, self.config.d_y);
+                        let dist: i32 = cmp::max((z as i32 - dz as i32).abs(), cmp::max((y as i32 - dy as i32).abs(), (x as i32 - dx as i32).abs()));
+                        let depth = cmp::max(0, self.config.mhd_lod_depth as i32 - dist);
+                        // This is the range of relevant LOD data for the current foreign domain
+                        let range_s = get_offset(depth - 1, dim); // Range start
+                        let range_e = get_offset(depth, dim); // Range end
+                        // Write to device
+                        self.domains[d].qu_lod.as_ref().expect("msg")
+                            .write(&self.domains[dc].transfer_lod_host.as_ref().expect("msg")[range_s*4..range_e*4])
+                            .offset(offset*4).enq().unwrap();
+                        offset += range_e - range_s;
+                    }
+                }
             }
         }
     }
@@ -436,6 +467,7 @@ pub struct LbmDomain {
     pub transfer_m_host: Vec<u8>,
     #[cfg(feature = "multi-node")]
     pub transfer_t_host: Vec<u8>,
+    pub transfer_lod_host: Option<Vec<f32>>,
 
     pub e: Option<Buffer<f32>>, // Optional Buffers
     pub b: Option<Buffer<f32>>,
@@ -536,6 +568,7 @@ impl LbmDomain {
         let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n], 0f32)) } else { None };
         // Level of detail charge and velocity for field updates
         let qu_lod: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n_lod * 4], 0f32)) } else { None };
+        let transfer_lod_host: Option<Vec<f32>> = if lbm_config.ext_magneto_hydro { Some(vec![0.0f32; n_lod_own * 4]) } else { None };
 
         // Initialize Kernels
         let mut initialize_builder = kernel_builder!(program, queue, "initialize", [n]);
@@ -659,6 +692,7 @@ impl LbmDomain {
             transfer_p_host, transfer_m_host,
             #[cfg(feature = "multi-node")]
             transfer_t_host,
+            transfer_lod_host,
 
             e, b, e_dyn, b_dyn, qi, q, qu_lod, f, t, graphics, cfg: lbm_config.clone()
         } //Returns initialised domain
@@ -911,6 +945,12 @@ impl LbmDomain {
                 .global_work_size(self.get_area(direction))
                 .enq()
         }
+    }
+
+    // Transfer LODs
+    /// Read own LODs into host buffer
+    pub fn read_lods(&mut self, n_lod_own: usize) {
+        self.qu_lod.as_ref().expect("msg").read(self.transfer_lod_host.as_mut().expect("msg")).len(n_lod_own).enq().unwrap();
     }
 
     #[allow(unused)]
