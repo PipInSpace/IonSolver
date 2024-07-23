@@ -719,7 +719,7 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	const uint3 coord_n = coordinates(n); // Cell coordinate
 	const float3 coord_nf = convert_float3(coord_n); // Cell coordinate as float vector
 
-	const uint nd = (1<<def_lod_d); // Number of lods on each axis
+	const uint nd = (1<<def_lod_d); // Number of lowest level lods on each axis
 	const uint dsx = imax(def_Nx / (1<<nd), 1);
 	const uint dsy = imax(def_Ny / (1<<nd), 1);
 	const uint dsz = imax(def_Nz / (1<<nd), 1);
@@ -752,7 +752,7 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 		}
 	}
 
-	/// Medium distance - consider LODs in own domain
+	/// Medium distance - consider lowest level LODs in own domain
 	const uint ndi = lod_index(n, def_lod_d); // Own LOD index, needs to be skipped
 	// Loop over all lowest level LODs
 	for (uint d = imax(def_n_lod_own - to_d(1<<def_lod_d), 0); d < def_n_lod_own; d++) {
