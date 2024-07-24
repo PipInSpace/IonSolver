@@ -212,7 +212,7 @@ fn simloop(sim_tx: mpsc::Sender<SimState>, ctrl_rx: mpsc::Receiver<SimControlTx>
                 if step_c % state.frame_spacing == 0
                     && state.save_img
                     && lbm.config.graphics_config.graphics_active
-                {
+                { 
                     lbm.draw_frame(true, "frame".to_string(), sim_tx.clone(), &step_c);
                 }
                 // Render predefined keyframes if needed

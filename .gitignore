@@ -10,11 +10,11 @@ Cargo.lock
 **/*.rs.bk
 
 # Output of simulation
-/out/**
-
-# Added by cargo
-
-/target
+/out/** 
+ 
+# Added by cargo 
+ 
+/target 
 
 /.vscode/**
 opencl-language-server.log

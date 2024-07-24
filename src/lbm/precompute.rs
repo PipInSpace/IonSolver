@@ -306,7 +306,7 @@ fn dotp_f32_i32(a: [f32; 3], b: [i32; 3]) -> f32 {
     a[0] * (b[0] as f32) + a[1] * (b[1] as f32) + a[2] * (b[2] as f32)
 }
 
-#[inline]
+#[inline] 
 /// Returns the lenght of a u32 vector with all components squared
 fn len_sq_i32(v: [i32; 3]) -> f32 {
     sq(v[0] as f32) + sq(v[1] as f32) + sq(v[2] as f32)
@@ -321,7 +321,7 @@ fn length(v: [i32; 3]) -> f32 {
 /// square
 fn sq(x: f32) -> f32 {
     x * x
-}
+} 
 
 #[inline]
 fn cb(x: f32) -> f32 {
