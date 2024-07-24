@@ -1,13 +1,15 @@
 //! # multi-node
-//! IonSolver supports execution on multiple compute nodes using the mpi protocol if compiled with the `multi-node` feature.
+//! IonSolver supports execution on multiple compute nodes using the MPI protocol if compiled with the `multi-node` feature.
 //! 
 //! If compiled with the multi-node feature, multiple programs may need to be started over MPI for IonSover to work properly (depending on the configuration used). 
 //! 
 //! ## MPI Error codes
 //! - **100**: Incompatible domain number and number of execution nodes
 
+use std::cmp::max;
+
 use image::{ImageBuffer, Rgb};
-use mpi::{point_to_point, traits::*};
+use mpi::{datatype::PartitionMut, point_to_point, traits::*, Count};
 use ocl_macros::default_device;
 
 use crate::*;
@@ -27,24 +29,28 @@ pub fn run_node() {
     let mut cfg: LbmConfig;
     if rank == 0 { // If root, read and send config to all nodes
         cfg = LbmConfig::new();
-        cfg.n_x = 256;
-        cfg.n_y = 256;
+        cfg.units.set(128.0, 1.0, 1.0, 1.0, 0.1, 1.0, 1.2250, 0.0000000001);
+        cfg.n_x = 128;
+        cfg.n_y = 128;
         cfg.n_z = 256;
-        cfg.d_y = 2;
-        cfg.nu = cfg.units.si_to_nu(0.1);
+        cfg.d_z = 2;
+        cfg.nu = cfg.units.si_to_nu(1.48E-5);
         cfg.velocity_set = VelocitySet::D3Q19;
+        cfg.mhd_lod_depth = 4;
         cfg.run_steps = 1000;
+        // Extensions
         cfg.ext_volume_force = true;
         cfg.ext_magneto_hydro = true;
-        cfg.induction_range = 10;
         // Graphics
         cfg.graphics_config.graphics_active = true;
+        cfg.graphics_config.background_color = 0x1c1b22;
+        cfg.graphics_config.camera_width = 1920;
+        cfg.graphics_config.camera_height = 1080;
         cfg.graphics_config.streamline_every = 8;
-        cfg.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+        cfg.graphics_config.vec_vis_mode = graphics::VecVisMode::EDyn;
+        cfg.graphics_config.u_max = 100.0;
         cfg.graphics_config.streamline_mode = true;
         cfg.graphics_config.axes_mode = true;
-        //cfg.graphics_config.q_mode = true;
-        cfg.graphics_config.q_min = 0.00001;
         // Animation
         cfg.graphics_config.render_intervals = true;
         let mut f: Vec<graphics::Keyframe> = vec![];
@@ -53,7 +59,7 @@ pub fn run_node() {
                 time: i * 5,
                 repeat: false,
                 cam_rot_x: 50.0 + (i * 5) as f32,
-                cam_rot_y: -40.0,
+                cam_rot_y: -20.0,
                 cam_zoom: 2.0,
                 ..graphics::Keyframe::default()
             })
@@ -79,9 +85,15 @@ pub fn run_node() {
 
     let mut domain = node_domain(&mut cfg, rank as u32); // Build domain for node
     println!("Build domain at Node {}", rank);
+    if rank == 0 {
+        let cpc = 0.002;
+        let charge: Vec<f32> = vec![cpc; 128 * 128 * 32];
+        bwrite!(domain.q.as_ref().expect("q"), charge);
+    }
     world.barrier();
-    rprintln!("Beginning execution", world);
-    domain.node_taylor_green(1.0, &world);
+    rprintln!("Beginning execution\n", world);
+    //domain.node_taylor_green(1.0, &world);
+    domain.node_setup_velocity_field((0.1, 0.01, 0.0), 1.0);
     domain.node_initialize(&world);
 
     // Set correct camera parameters
@@ -120,7 +132,7 @@ fn node_domain(cfg: &mut LbmConfig, rank: u32) -> LbmDomain {
     let y = (rank % (cfg.d_x * cfg.d_y)) / cfg.d_x;
     let z =  rank / (cfg.d_x * cfg.d_y);
 
-    LbmDomain::new( &cfg, default_device!(), x, y, z ) // Initialize and return domain
+    LbmDomain::new( &cfg, default_device!(), x, y, z, rank) // Initialize and return domain
 }
 
 // Additional functionality needed for multi-node exectution
@@ -130,12 +142,13 @@ impl LbmDomain {
     pub fn node_initialize(&mut self, world: &mpi::topology::SimpleCommunicator) {
         // the communicate calls at initialization need an odd time step
         self.t = 1;
-        self.node_communicate_rho_u_flags(&world);
+        self.node_communicate_rho_u_flags(world);
         self.enqueue_initialize().unwrap();
-        self.node_communicate_rho_u_flags(&world);
-        self.node_communicate_fi(&world);
-        if self.cfg.ext_magneto_hydro && self.cfg.induction_range != 0 {
-            self.node_communicate_qi(&world);
+        self.node_communicate_rho_u_flags(world);
+        self.node_communicate_fi(world);
+        if self.cfg.ext_magneto_hydro {
+            self.node_communicate_qi(world);
+            self.node_communicate_qu_lods(world);
             self.enqueue_update_e_b_dyn().unwrap();
         }
         self.queue.finish().unwrap();
@@ -146,6 +159,9 @@ impl LbmDomain {
     /// Executes `kernel_stream_collide` Kernels for the node `LbmDomain` and exchanges domain transfer buffers.
     /// Updates the dynamic E and B fields.
     fn node_do_time_step(&mut self, world: &mpi::topology::SimpleCommunicator) {
+        if self.cfg.ext_magneto_hydro {
+            self.enqueue_clear_qu_lod().unwrap(); // Ready LOD Buffer
+        }
         // call kernel stream_collide to perform one LBM time step
         self.enqueue_stream_collide().unwrap();
         self.queue.finish().unwrap();
@@ -154,8 +170,9 @@ impl LbmDomain {
         }
         self.node_communicate_fi(world);
 
-        if self.cfg.ext_magneto_hydro && self.cfg.induction_range != 0 {
+        if self.cfg.ext_magneto_hydro {
             self.node_communicate_qi(world);
+            self.node_communicate_qu_lods(world);
             self.enqueue_update_e_b_dyn().unwrap();
         }
 
@@ -195,7 +212,7 @@ impl LbmDomain {
         if d_z > 1 { // Communicate z-axis
             self.enqueue_transfer_extract_field(field, 2, bytes_per_cell).unwrap(); // Extract into transfer buffers
             let dzp = x + (y + ((z + 1) % d_z) * d_y) * d_x;       // domain index of domain at z+1
-            let dzm = x + (y + ((z + d_z - 1) % d_z) * d_y) * d_x; // domain index of domain at z-1
+            let dzm: usize = x + (y + ((z + d_z - 1) % d_z) * d_y) * d_x; // domain index of domain at z-1
             point_to_point::send_receive_into(&self.transfer_p_host[..], &world.process_at_rank(dzp as i32), &mut self.transfer_t_host, &world.process_at_rank(dzm as i32)); // Communicate in z-positive direction
             point_to_point::send_receive_into(&self.transfer_m_host[..], &world.process_at_rank(dzm as i32), &mut self.transfer_p_host, &world.process_at_rank(dzp as i32)); // Communicate in z-negative direction
             unsafe {std::ptr::swap(&mut self.transfer_m_host as *mut _, &mut self.transfer_t_host as *mut _);} // Swap transfer buffers without copying them
@@ -221,6 +238,56 @@ impl LbmDomain {
     fn node_communicate_qi(&mut self, world: &mpi::topology::SimpleCommunicator) {
         let bytes_per_cell = self.cfg.float_type.size_of() * 1; // FP type size * transfers. The fixed D3Q7 lattice has 1 transfer
         self.node_communicate_field(TransferField::Qi, bytes_per_cell, world);
+    }
+
+    fn node_communicate_qu_lods(&mut self, world: &mpi::topology::SimpleCommunicator) {
+        let d_n = world.size(); // Number of nodes/domains
+        let dim = self.cfg.velocity_set.get_set_values().0 as u32;
+        let d = world.rank();
+
+        fn get_offset(depth: i32, dim: u32) -> usize {
+            let mut c = 0;
+            for i in 0..=depth {c += ((1<<i) as usize).pow(dim)};
+            c
+        }
+
+        if d_n > 1 {
+            self.read_lods();
+            let (x, y, z) = get_coordinates_sl(d as u64, self.cfg.d_x, self.cfg.d_y); // Own domain coordinate
+
+            for dc in 0..d_n { //### Every node loops over every node...
+                let gather_node = world.process_at_rank(dc); // Node that gathers data in this cycle.
+
+                if dc == d { //### ...if it reaches itself it gathers data from all other nodes and writes to it's own LOD buffer... 
+                    // Construct data partition:
+                    let mut counts: Vec<Count> = vec![0; d_n as usize];
+                    let mut displs: Vec<Count> = vec![0; d_n as usize];
+                    let mut offset = 0;
+                    for di in 0..d_n {
+                        if di == d {continue;} // gather process sends no data to itself
+                        let (dx, dy, dz) = get_coordinates_sl(di as u64, self.cfg.d_x, self.cfg.d_y); // Foreign node coordinate
+                        let dist: i32 = max((z as i32 - dz as i32).abs(), max((y as i32 - dy as i32).abs(), (x as i32 - dx as i32).abs()));
+                        let depth = max(0, self.cfg.mhd_lod_depth as i32 - dist);
+                        let data_lenght = get_offset(depth, dim) as i32 - get_offset(depth - 1, dim) as i32;
+                        counts[di as usize] = data_lenght * 4;
+                        displs[di as usize] = offset;
+                        offset += data_lenght * 4;
+                    }
+                    // Gather partitioned data from all other nodes
+                    let mut partition = PartitionMut::new(&mut self.transfer_lod_host.as_mut().expect("msg")[self.n_lod_own*4..], counts, displs);
+                    gather_node.gather_varcount_into_root(&vec![0.0f32; 0], &mut partition);
+                } else { //### ...otherwise it simply sends it's own relevant LOD data to the current gathering node.
+                    let (dx, dy, dz) = get_coordinates_sl(dc as u64, self.cfg.d_x, self.cfg.d_y); // Gather node coordinate
+                    let dist: i32 = max((z as i32 - dz as i32).abs(), max((y as i32 - dy as i32).abs(), (x as i32 - dx as i32).abs()));
+                    let depth = max(0, self.cfg.mhd_lod_depth as i32 - dist);
+                    // This is the range of relevant LOD data for the current foreign domain
+                    let range_s = get_offset(depth - 1, dim); // Range start
+                    let range_e = get_offset(depth, dim); // Range end
+                    gather_node.gather_varcount_into(&self.transfer_lod_host.as_ref().expect("msg")[range_s*4..range_e*4])
+                }
+            }
+            self.qu_lod.as_ref().expect("msg").write(&self.transfer_lod_host.as_ref().expect("msg")[self.n_lod_own*4..]).offset(self.n_lod_own*4).enq().unwrap();
+        }
     }
 
     // Multi-node graphics
@@ -348,6 +415,46 @@ impl LbmDomain {
             }
         }
         
+        // Write to domain buffers
+        bwrite!(self.u, domain_vec_u);
+        bwrite!(self.rho, domain_vec_rho);
+        self.queue.finish().unwrap();
+    }
+
+    #[rustfmt::skip]
+    #[allow(dead_code)]
+    fn node_setup_velocity_field(&mut self, velocity: (f32, f32, f32), density: f32) {
+        println!("Setting up velocity field");
+        let nx = self.cfg.n_x;
+        let ny = self.cfg.n_y;
+        let nz = self.cfg.n_z;
+        let dx = self.cfg.d_x;
+        let dy = self.cfg.d_y;
+        let dz = self.cfg.d_z;
+        let dsx = nx as u64 / dx as u64 + (dx > 1u32) as u64 * 2; // Domain size on each axis
+        let dsy = ny as u64 / dy as u64 + (dy > 1u32) as u64 * 2; // Needs to account for halo offsets
+        let dsz = nz as u64 / dz as u64 + (dz > 1u32) as u64 * 2;
+        let dtotal = dsx * dsy * dsz;
+        let mut domain_vec_u: Vec<f32> = vec![0.0; (dsx * dsy * dsz * 3) as usize];
+        let mut domain_vec_rho: Vec<f32> = vec![0.0; (dsx * dsy * dsz) as usize];
+        for zi in 0..dsz {
+            for yi in 0..dsy {
+                for xi in 0..dsx {
+                    if !(((xi == 0 || xi == dsx - 1) && dx > 1)
+                        || ((yi == 0 || yi == dsy - 1) && dy > 1)
+                        || ((zi == 0 || zi == dsz - 1) && dz > 1))
+                    {
+                        //do not set at halo offsets
+                        let dn = (zi * dsx * dsy) + (yi * dsx) + xi; // Domain 1D index
+                        domain_vec_u[(dn) as usize] = velocity.0; // x
+                        domain_vec_u[(dn + dtotal) as usize] = velocity.1; // y;
+                        domain_vec_u[(dn + dtotal * 2) as usize] = velocity.2; // z
+                        domain_vec_rho[(dn) as usize] = density;
+                    }
+                }
+            }
+        }
+
         // Write to domain buffers
         bwrite!(self.u, domain_vec_u);
         bwrite!(self.rho, domain_vec_rho);

@@ -19,179 +19,75 @@ pub mod graphics;
 pub mod multi_node;
 pub mod precompute;
 pub mod units;
+mod types;
 
 use crate::*;
 use crate::lbm::{graphics::GraphicsConfig, units::Units};
+pub use crate::lbm::types::*;
 
-
-/// Velocity discretizations in 2D and 3D.
-/// 
-/// - `D2Q9`:  2D
-/// - `D3Q15`: 3D low precision
-/// - `D3Q19`: 3D recommended
-/// - `D3Q27`: 3D highest precision
-/// 
-#[allow(dead_code)]
-#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
-pub enum VelocitySet {
-    #[default]
-    /// 2D
-    D2Q9 = 0,
-    /// 3D low precision
-    D3Q15 = 1,
-    /// 3D recommended
-    D3Q19 = 2,
-    /// 3D highest precision
-    D3Q27 = 3,
-}
-
-impl VelocitySet {
-    pub fn get_transfers(&self) -> usize {
-        match self {
-            VelocitySet::D2Q9 => 3_usize,
-            VelocitySet::D3Q15 => 5_usize,
-            VelocitySet::D3Q19 => 5_usize,
-            VelocitySet::D3Q27 => 9_usize,
-        }
-    }
-    fn get_set_values(&self) -> (u8, u8, u8) {
-        match self {
-            //Set dimensions/velocitys/transfers from Enum
-            VelocitySet::D2Q9 => (2, 9, 3),
-            VelocitySet::D3Q15 => (3, 15, 5),
-            VelocitySet::D3Q19 => (3, 19, 5),
-            VelocitySet::D3Q27 => (3, 27, 9),
-        }
-    }
-}
-
-/// LBM relaxation time type.
-/// 
-/// - `Srt`: Single relaxation time type, more efficient
-/// - `Trt`: Two-relaxation time type, more precise
-/// 
-#[allow(dead_code)]
-#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
-pub enum RelaxationTime {
-    #[default]
-    /// Single relaxation time, more efficient
-    Srt = 0,
-    /// Two-relaxation time, more precise
-    Trt = 1,
-}
-
-/// Enum for different floating-point number types used in the simulation.
-///
-/// Types: `FP32`,`FP16S`,`FP16C`
-///
-/// `FP32` represents the normal floating-point number type `f32`. It takes the most memory.
-///
-/// `FP16S` and `FP16C` are custom floating-point number types, represented as `u16`. They take less memory.
-/// `FP16S` is recommended for best precision/memory footprint.
-///
-/// [Learn more at this paper about custom float types.](https://www.researchgate.net/publication/362275548_Accuracy_and_performance_of_the_lattice_Boltzmann_method_with_64-bit_32-bit_and_customized_16-bit_number_formats)
-#[allow(dead_code)]
-#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
-pub enum FloatType {
-    #[default]
-    /// Custom float type represented as a u16, recommended
-    FP16S = 0,
-    /// Custom float type represented as a u16
-    FP16C = 1,
-    /// Default float type
-    FP32 = 2,
-}
-
-impl FloatType {
-    pub fn size_of(&self) -> usize {
-        match self {
-            FloatType::FP16S => 2_usize,
-            FloatType::FP16C => 2_usize,
-            FloatType::FP32 => 4_usize,
-        }
-    }
-}
-
-/// Enum representing a buffer of variable [`FloatType`]
-///
-/// [`FloatType`]: crate::lbm::FloatType
-#[derive(Clone)]
-pub enum VariableFloatBuffer {
-    U16(Buffer<u16>), // Buffers for variable float types
-    F32(Buffer<f32>),
-}
-
-/// Enum to identify a field transfered between domain boundaries
-#[derive(Clone, Copy)]
-pub enum TransferField {
-    Fi,
-    RhoUFlags,
-    Qi,
+// Helper Functions
+/// Get `x, y, z` coordinates from 1D index `n` and side lengths `n_x` and `n_y`.
+pub fn get_coordinates_sl(n: u64, n_x: u32, n_y: u32) -> (u32, u32, u32) {
+    let t: u64 = n % (n_x as u64 * n_y as u64);
+    //x, y, z
+    (
+        (t % n_x as u64) as u32,
+        (t / n_x as u64) as u32,
+        (n / (n_x as u64 * n_y as u64)) as u32,
+    )
 }
 
 /// Struct used to bundle arguments for LBM simulation setup.
 /// 
-/// Base Lbm configuration:
-/// - velocity_set: Velocity discretization mode
-/// - relaxation_time: Sim relaxation time type
-/// - float_type: Sim float type for memory compression of ddf's
-/// - units: Unit struct for unit conversion
-/// - n_x: Sim size on each axis
-/// - n_y
-/// - n_z
-///
-/// - d_x: Sim domains on each axis
-/// - d_y
-/// - d_z
-///
-/// - nu: Kinematic shear viscosity
-/// - fx: Volume force on each axis
-/// - fy
-/// - fz
-/// 
-/// Extensions, provide additional functionality:
-/// - ext_equilibrium_boudaries:
-/// - ext_volume_force: Volumetric force
-/// - ext_force_field: Force field (Needs volume_force to work)
-/// - ext_magneto_hydro: Magnetohydrodynamics
-///
-/// Misc.:
-/// - induction_range: limit cell induction for performnance reasons
-/// - graphics_config: Grapics config struct
-/// - run_steps: run simulation for x steps
-/// 
+/// Use this struct to configure a simulation and then instantiate the simulation with `Lbm::new(LbmConfig)`.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct LbmConfig {
     // Holds init information about the simulation
+    /// Velocity discretization mode
     pub velocity_set: VelocitySet,
+    /// Simulation relaxation time type
     pub relaxation_time: RelaxationTime,
+    /// Simulation float type for memory compression of simulation data (DDFs)
     pub float_type: FloatType,
+    /// Struct for unit conversion
     pub units: Units,
-    pub n_x: u32, //Size
+    /// Size of simulation on each axis
+    pub n_x: u32,
     pub n_y: u32,
     pub n_z: u32,
 
-    pub d_x: u32, //Domains
+    /// Number of domains on each axis
+    pub d_x: u32,
     pub d_y: u32,
     pub d_z: u32,
 
+    /// Kinematic viscosity
     pub nu: f32,
+    /// Force on each axis. Needs ext_volume_force to work
     pub f_x: f32,
     pub f_y: f32,
     pub f_z: f32,
 
-    pub ext_equilibrium_boudaries: bool, //Extensions
+    //Extensions
+    /// Enable equilibrium boudaries extension (for inlets/outlets)
+    pub ext_equilibrium_boudaries: bool,
+    /// Enable volume force extension (for handling of complex forces)
     pub ext_volume_force: bool,
-    pub ext_force_field: bool,   // Needs volume_force to work
-    pub ext_magneto_hydro: bool, // Needs volume_force to work
+    /// Enable force field extension (i. E. for gravity). Needs ext_volume_force to work
+    pub ext_force_field: bool,
+    /// Enable magnetohydrodynamics extension. Needs ext_volume_force to work 
+    pub ext_magneto_hydro: bool,
 
-    /// Cell range of each cells induction (Keep this small)
-    pub induction_range: u8,
-    /// Charge per density (unit: (A/s)/(kg/m^3))
-    pub charge_per_dens: f32,
+    /// LOD option for dynamic fields.
+    /// 
+    /// Dynamic field quality improves with higher values: 1 is very coarse, 4 is higher quality (Performance does not peek at lowest values).
+    /// Set this to 0 to disable LODs (VERY SLOW). 
+    pub mhd_lod_depth: u8,
 
+    /// Configuration struct for the built-in graphics engine
     pub graphics_config: GraphicsConfig,
 
+    /// Run the simulation for x steps
     pub run_steps: u64,
 }
 
@@ -219,8 +115,7 @@ impl LbmConfig {
             ext_magneto_hydro: false,
             ext_force_field: false,
 
-            induction_range: 5, // Range of the cells induction (Keep this small)
-            charge_per_dens: 0.0,
+            mhd_lod_depth: 4, // Dynamic field LODs
 
             graphics_config: graphics::GraphicsConfig::new(),
             run_steps: 0,
@@ -243,9 +138,13 @@ impl LbmConfig {
 /// [`LbmConfig`]: crate::lbm::LbmConfig
 /// [`LbmDomain`]: crate::lbm::LbmDomain
 pub struct Lbm {
+    /// Vector of [`LbmDomain`]s that are part of this simulation.
     pub domains: Vec<LbmDomain>,
+    /// A copy of the [`LbmConfig`] used to initialize the simulation.
     pub config: LbmConfig,
+    /// A vector of Charges positioned in the simulation via a 1D index. Used in static field computation. 
     pub charges: Option<Vec<(u64, f32)>>,
+    /// A vector of Magnets positioned in the simulation via a 1D index. Used in static field computation. 
     pub magnets: Option<Vec<(u64, [f32; 3])>>,
     initialized: bool,
 }
@@ -291,6 +190,7 @@ impl Lbm {
                 x,
                 y,
                 z,
+                d,
             ))
         }
         println!("All domains initialized.\n");
@@ -315,9 +215,8 @@ impl Lbm {
         self.communicate_fi();
         if self.config.ext_magneto_hydro {
             self.communicate_qi();
-            if self.config.induction_range != 0 {
-                self.update_e_b_dynamic();
-            }
+            self.communicate_qu_lods();
+            self.update_e_b_dynamic();
         }
 
         self.finish_queues();
@@ -343,23 +242,29 @@ impl Lbm {
     /// Executes `kernel_stream_collide` Kernels for every `LbmDomain` and updates domain transfer buffers.
     /// Updates the dynamic E and B fields.
     pub fn do_time_step(&mut self) {
+        if self.config.ext_magneto_hydro {
+            self.clear_qu_lod(); // Ready LOD Buffer
+        }
         // call kernel stream_collide to perform one LBM time step
         self.stream_collide();
         if self.config.graphics_config.graphics_active {
             self.communicate_rho_u_flags();
         }
         self.communicate_fi();
-
         if self.config.ext_magneto_hydro {
             self.communicate_qi();
-            if self.config.induction_range != 0 {
-                self.update_e_b_dynamic();
-            }
+            //let lod = bget!(self.domains[0].qu_lod.as_ref().expect("msg"));
+            //println!("1b: {:?}", lod);
+            //let lod = bget!(self.domains[1].qu_lod.as_ref().expect("msg"));
+            //println!("2b: {:?}", lod);
+            self.communicate_qu_lods();
+            //let lod = bget!(self.domains[0].qu_lod.as_ref().expect("msg"));
+            //println!("1a: {:?}", lod);
+            //let lod = bget!(self.domains[1].qu_lod.as_ref().expect("msg"));
+            //println!("2a: {:?}", lod);
+            self.update_e_b_dynamic();
         }
-
-        if self.get_d_n() == 1
-            || (self.config.ext_magneto_hydro && self.config.induction_range != 0)
-        {
+        if self.get_d_n() == 1 || self.config.ext_magneto_hydro {
             // Additional synchronization only needed in single-GPU or after E&B update
             self.finish_queues();
         }
@@ -391,6 +296,13 @@ impl Lbm {
     fn update_e_b_dynamic(&self) {
         for d in 0..self.get_d_n() {
             self.domains[d].enqueue_update_e_b_dyn().unwrap();
+        }
+    }
+
+    /// Reset charge and velocity LOD
+    fn clear_qu_lod(&self) {
+        for d in 0..self.get_d_n() {
+            self.domains[d].enqueue_clear_qu_lod().unwrap();
         }
     }
 
@@ -446,10 +358,49 @@ impl Lbm {
         self.communicate_field(TransferField::RhoUFlags, 17);
     }
 
+    /// Communicate Qi across domain boundaries
     fn communicate_qi(&mut self) {
         let bytes_per_cell = self.config.float_type.size_of() * 1; // FP type size * transfers. The fixed D3Q7 lattice has 1 transfer
         self.communicate_field(TransferField::Qi, bytes_per_cell);
     }
+
+    /// Communicate charge and velocity LODs across domains
+    //#[allow(unused)]
+    #[rustfmt::skip]
+    fn communicate_qu_lods(&mut self) {
+        let d_n = self.get_d_n();
+        let dim = self.config.velocity_set.get_set_values().0 as u32;
+
+        fn get_offset(depth: i32, dim: u32) -> usize {
+            let mut c = 0;
+            for i in 0..=depth {c += ((1<<i) as usize).pow(dim)};
+            c
+        }
+
+        if d_n > 1 {
+            for d in 0..d_n { self.domains[d].read_lods(); }
+            for d in 0..d_n { // Every domain...
+                let (x, y, z) = get_coordinates_sl(d as u64, self.config.d_x, self.config.d_y); // Own domain coordinate
+                let mut offset = self.domains[d].n_lod_own; // buffer write offset
+                for dc in 0..d_n { // ...loops over every other domain and writes the extracted LOD to its own LOD buffer
+                    if d != dc {
+                        let (dx, dy, dz) = get_coordinates_sl(dc as u64, self.config.d_x, self.config.d_y);
+                        let dist: i32 = cmp::max((z as i32 - dz as i32).abs(), cmp::max((y as i32 - dy as i32).abs(), (x as i32 - dx as i32).abs()));
+                        let depth = cmp::max(0, self.config.mhd_lod_depth as i32 - dist);
+                        // This is the range of relevant LOD data for the current foreign domain
+                        let range_s = get_offset(depth - 1, dim); // Range start
+                        let range_e = get_offset(depth, dim); // Range end
+                        // Write to device
+                        self.domains[d].qu_lod.as_ref().expect("msg")
+                            .write(&self.domains[dc].transfer_lod_host.as_ref().expect("msg")[range_s*4..range_e*4])
+                            .offset(offset*4).enq().unwrap();
+                        offset += range_e - range_s;
+                    }
+                }
+            }
+        }
+    }
+
 
     // Helper functions
     /// Increments time steps variable for every `LbmDomain`
@@ -475,28 +426,13 @@ impl Lbm {
     pub fn get_time_step(&self) -> u64 {
         self.domains[0].t
     }
-
-    /// Get `x, y, z` coordinates from 1D index `n`.
-    #[allow(unused)]
-    pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
-        // disassembles 1D index into 3D index
-        let t: u64 = n % (self.config.n_x as u64 * self.config.n_y as u64);
-        //x, y, z
-        (
-            (t % self.config.n_x as u64) as u32,
-            (t / self.config.n_x as u64) as u32,
-            (n / (self.config.n_x as u64 * self.config.n_y as u64)) as u32,
-        )
-    }
 }
 
 /// The `LbmDomain` struct holds all information to run a LBM-Simulation on one OpenCL Device.
-/// It is initialized with:
-/// ```
-/// LbmDomain::new(lbm_config: LbmConfig, device: Device, x: u32, y: u32, z: u32)
-/// ```
-/// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function.
+/// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function when initializing a new [`Lbm`].
 /// This ensures all arguments are correctly set.
+/// 
+/// [`Lbm`]: crate::lbm::Lbm
 pub struct LbmDomain {
     // FluidX3D creates contexts/queues/programs for each device automatically through another class
     pub queue: Queue,
@@ -507,6 +443,7 @@ pub struct LbmDomain {
     pub transfer_kernels: [[Option<Kernel>; 2]; 3],
 
     kernel_update_e_b_dyn: Option<Kernel>, // Optional Kernels
+    kernel_clear_qu_lod: Option<Kernel>,
 
     pub n_x: u32, // Domain size
     pub n_y: u32,
@@ -527,6 +464,8 @@ pub struct LbmDomain {
     pub transfer_m_host: Vec<u8>,
     #[cfg(feature = "multi-node")]
     pub transfer_t_host: Vec<u8>,
+    pub transfer_lod_host: Option<Vec<f32>>,
+    pub n_lod_own: usize, // The number of LOD data chunks that belong to this domain
 
     pub e: Option<Buffer<f32>>, // Optional Buffers
     pub b: Option<Buffer<f32>>,
@@ -534,6 +473,7 @@ pub struct LbmDomain {
     pub b_dyn: Option<Buffer<f32>>,
     pub qi: Option<VariableFloatBuffer>,
     pub q: Option<Buffer<f32>>,
+    pub qu_lod: Option<Buffer<f32>>,
     pub f: Option<Buffer<f32>>,
     pub t: u64, // Timestep
 
@@ -547,7 +487,7 @@ impl LbmDomain {
     /// `LbmDomain` should not be initialized on it's own, but automatically through the `Lbm::new()` function.
     /// This ensures all arguments are correctly set.
     #[rustfmt::skip]
-    pub fn new(lbm_config: &LbmConfig, device: Device, x: u32, y: u32, z: u32) -> LbmDomain {
+    pub fn new(lbm_config: &LbmConfig, device: Device, x: u32, y: u32, z: u32, i: u32) -> LbmDomain {
         let n_x = lbm_config.n_x / lbm_config.d_x + 2u32 * (lbm_config.d_x > 1u32) as u32; // Size + Halo offsets
         let n_y = lbm_config.n_y / lbm_config.d_y + 2u32 * (lbm_config.d_y > 1u32) as u32; // When multiple domains on axis -> add 2 cells of padding
         let n_z = lbm_config.n_z / lbm_config.d_z + 2u32 * (lbm_config.d_z > 1u32) as u32;
@@ -556,6 +496,7 @@ impl LbmDomain {
         let d_x = lbm_config.d_x;
         let d_y = lbm_config.d_y;
         let d_z = lbm_config.d_z;
+        let d_n = d_x * d_y * d_z;
 
         let o_x = (x * lbm_config.n_x / lbm_config.d_x) as i32 - (lbm_config.d_x > 1u32) as i32;
         let o_y = (y * lbm_config.n_y / lbm_config.d_y) as i32 - (lbm_config.d_y > 1u32) as i32;
@@ -565,7 +506,26 @@ impl LbmDomain {
 
         let t = 0;
 
-        let ocl_code = Self::get_device_defines(n_x, n_y, n_z, d_x, d_y, d_z, o_x, o_y, o_z, dimensions, velocity_set, transfers, lbm_config.nu, lbm_config)
+        // MAGNETO_HYDRO LOD buffer size
+        let n_lod_own; // Amount of lod blocks of this domain
+        let n_lod = {  // Amount of lod blocks of this domain + lod blocks from neighbouring domains
+            let mut c = 1;
+            // Own domain LODs
+            for i in 0..lbm_config.mhd_lod_depth {c += ((1<<(i+1)) as usize).pow(dimensions as u32)}
+            n_lod_own = c;
+            // Other domain LODs
+            for d in 0..d_n {
+                let (dx, dy, dz) = get_coordinates_sl(d as u64, d_x, d_y);
+                // single-axis manhattan distance to other domain, controls lod amount
+                let dist = cmp::max((z as i32 - dz as i32).abs(), cmp::max((y as i32 - dy as i32).abs(), (x as i32 - dx as i32).abs()));
+                if dist != 0 {
+                    c += ((1<<cmp::max(lbm_config.mhd_lod_depth as i32 - dist, 0)) as usize).pow(dimensions as u32)
+                }
+            }
+            c
+        };
+
+        let ocl_code = Self::get_device_defines(n_x, n_y, n_z, d_x, d_y, d_z, i, o_x, o_y, o_z, dimensions, velocity_set, transfers, lbm_config.nu, n_lod, n_lod_own, lbm_config)
             + &if lbm_config.graphics_config.graphics_active { graphics::get_graphics_defines(&lbm_config.graphics_config) } else { "".to_string() }
             + &opencl::get_opencl_code(); // Only appends graphics defines if needed
 
@@ -604,12 +564,19 @@ impl LbmDomain {
             })
         } else { None };
         let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n], 0f32)) } else { None };
+        // Level of detail charge and velocity for field updates
+        let qu_lod: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n_lod * 4], 0f32)) } else { None };
+        #[cfg(feature = "multi-node")]
+        let transfer_lod_host: Option<Vec<f32>> = if lbm_config.ext_magneto_hydro { Some(vec![0.0f32; n_lod * 4]) } else { None }; // Transfer buffer needs to be bigger in multi-node mode
+        #[cfg(not(feature = "multi-node"))]
+        let transfer_lod_host: Option<Vec<f32>> = if lbm_config.ext_magneto_hydro { Some(vec![0.0f32; n_lod_own * 4]) } else { None };
 
         // Initialize Kernels
         let mut initialize_builder = kernel_builder!(program, queue, "initialize", [n]);
         let mut stream_collide_builder = kernel_builder!(program, queue, "stream_collide", [n]);
         let mut update_fields_builder = kernel_builder!(program, queue, "update_fields", [n]);
         let mut kernel_update_e_b_dyn: Option<Kernel> = None;
+        let mut kernel_clear_qu_lod: Option<Kernel> = None;
         match &fi {
             //Initialize kernels. Different Float types need different arguments (Fi-Buffer specifically)
             VariableFloatBuffer::F32(fif32) => { // Float Type F32
@@ -639,12 +606,16 @@ impl LbmDomain {
             };
 
             kernel_args!(initialize_builder,     ("Q", q.as_ref().expect("Q")));
-            kernel_args!(stream_collide_builder, ("Q", q.as_ref().expect("Q")));
+            kernel_args!(stream_collide_builder, ("Q", q.as_ref().expect("Q")), ("QU_lod", qu_lod.as_ref().expect("QU_lod")));
 
             // Dynamic E/B kernel
             kernel_update_e_b_dyn = Some(
-                kernel!(program, queue, "update_e_b_dynamic", [n], ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")), ("Q", q.as_ref().expect("q")), ("u", &u), ("flags", &flags))
-            )
+                kernel!(program, queue, "update_e_b_dynamic", [n], ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")), ("Q", q.as_ref().expect("q")), ("u", &u), ("QU_lod", qu_lod.as_ref().expect("QU_lod")), ("flags", &flags))
+            );
+            // Clear LOD
+            kernel_clear_qu_lod = Some(
+                kernel!(program, queue, "clear_qu_lod", [n_lod], ("QU_lod", qu_lod.as_ref().expect("QU_lod")))
+            );
         }
         
         let kernel_stream_collide: Kernel = stream_collide_builder.build().unwrap();
@@ -712,6 +683,7 @@ impl LbmDomain {
             transfer_kernels,
 
             kernel_update_e_b_dyn,
+            kernel_clear_qu_lod,
 
             n_x, n_y, n_z,
             fx: lbm_config.f_x, fy: lbm_config.f_y, fz: lbm_config.f_z,
@@ -721,8 +693,10 @@ impl LbmDomain {
             transfer_p_host, transfer_m_host,
             #[cfg(feature = "multi-node")]
             transfer_t_host,
+            transfer_lod_host,
+            n_lod_own,
 
-            e, b, e_dyn, b_dyn, qi, q, f, t, graphics, cfg: lbm_config.clone()
+            e, b, e_dyn, b_dyn, qi, q, qu_lod, f, t, graphics, cfg: lbm_config.clone()
         } //Returns initialised domain
     }
 
@@ -735,6 +709,7 @@ impl LbmDomain {
         d_x: u32,
         d_y: u32,
         d_z: u32,
+        d_i: u32,
         o_x: i32,
         o_y: i32,
         o_z: i32,
@@ -742,6 +717,8 @@ impl LbmDomain {
         velocity_set: u8,
         transfers: u8,
         nu: f32,
+        n_lod: usize,
+        n_lod_own: usize,
         lbm_config: &LbmConfig,
     ) -> String {
         //Conditional Defines:
@@ -784,6 +761,7 @@ impl LbmDomain {
         +"\n	#define def_Dx "+ &d_x.to_string()+"u"
         +"\n	#define def_Dy "+ &d_y.to_string()+"u"
         +"\n	#define def_Dz "+ &d_z.to_string()+"u"
+        +"\n	#define def_Di "+ &d_i.to_string()+"u"
 
         +"\n	#define def_Ox "+ &o_x.to_string()+"" // offsets are signed integer!
         +"\n	#define def_Oy "+ &o_y.to_string()+""
@@ -799,8 +777,8 @@ impl LbmDomain {
 
         +"\n	#define D"+ &dimensions.to_string()+"Q"+ &velocity_set.to_string()+"" // D2Q9/D3Q15/D3Q19/D3Q27
         +"\n	#define def_velocity_set "+ &velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
-        +"\n	#define def_dimensions "+ &dimensions.to_string()+"u" // number spatial dimensions (2D or 3D)
-        +"\n	#define def_transfers "+ &transfers.to_string()+"u" // number of DDFs that are transferred between multiple domains
+        +"\n	#define def_dimensions "  + &dimensions.to_string()+"u"   // number spatial dimensions (2D or 3D)
+        +"\n	#define def_transfers "   + &transfers.to_string()+"u"    // number of DDFs that are transferred between multiple domains
 
         +"\n	#define def_c 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
         +"\n	#define def_w " + &format!("{:?}", 1.0f32/(3.0f32*nu+0.5f32))+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
@@ -835,14 +813,17 @@ impl LbmDomain {
             FloatType::FP32 => &fp32
         }
         + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
-        + if lbm_config.ext_volume_force {"\n	        #define VOLUME_FORCE"} else {""}
-        + &if lbm_config.ext_magneto_hydro {"\n	        #define MAGNETO_HYDRO".to_owned()
-        +"\n	#define def_ke "+ &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
-        +"\n	#define def_kmu "+ &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
-        +"\n	#define def_ind_r "+ &lbm_config.induction_range.to_string()
-        +"\n	#define def_w_Q  "+  &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
+        + if lbm_config.ext_volume_force {         "\n	#define VOLUME_FORCE"} else {""}
+        + &if lbm_config.ext_magneto_hydro {
+         "\n	#define MAGNETO_HYDRO".to_owned()
+        +"\n	#define def_ke "    + &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
+        +"\n	#define def_kmu "   + &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
+        +"\n	#define def_lod_d " + &format!("{}u", lbm_config.mhd_lod_depth)
+        +"\n    #define def_n_lod " + &format!("{}u", n_lod)
+        +"\n    #define def_n_lod_own " + &format!("{}u", n_lod_own)
+        +"\n	#define def_w_Q  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
         } else {"".to_string()}
-        + if lbm_config.ext_force_field {"\n	        #define FORCE_FIELD"} else {""}
+        + if lbm_config.ext_force_field {                "\n	#define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}
         //Extensions
     }
@@ -882,6 +863,16 @@ impl LbmDomain {
     pub fn enqueue_update_e_b_dyn(&self) -> ocl::Result<()> {
         unsafe {
             self.kernel_update_e_b_dyn
+                .as_ref()
+                .expect("kernel should be initialized")
+                .cmd()
+                .enq()
+        }
+    }
+
+    pub fn enqueue_clear_qu_lod(&self) -> ocl::Result<()> {
+        unsafe {
+            self.kernel_clear_qu_lod
                 .as_ref()
                 .expect("kernel should be initialized")
                 .cmd()
@@ -958,6 +949,12 @@ impl LbmDomain {
                 .global_work_size(self.get_area(direction))
                 .enq()
         }
+    }
+
+    // Transfer LODs
+    /// Read own LODs into host buffer
+    pub fn read_lods(&mut self) {
+        self.qu_lod.as_ref().expect("msg").read(self.transfer_lod_host.as_mut().expect("msg")).len(self.n_lod_own*4).enq().unwrap();
     }
 
     #[allow(unused)]
@@ -1097,14 +1094,7 @@ impl LbmDomain {
     }
 
     /// Get `x, y, z` coordinates from 1D index `n`.
-    #[allow(unused)]
     pub fn get_coordinates(&self, n: u64) -> (u32, u32, u32) {
-        let t: u64 = n % (self.n_x as u64 * self.n_y as u64);
-        //x, y, z
-        (
-            (t % self.n_x as u64) as u32,
-            (t / self.n_x as u64) as u32,
-            (n / (self.n_x as u64 * self.n_y as u64)) as u32,
-        )
+        get_coordinates_sl(n, self.n_x, self.n_y)
     }
 }

@@ -20,6 +20,7 @@ use crate::*;
 ///
 /// Run `your_lbm.initialize()` and return it with the config.
 pub fn setup() -> Lbm {
+    /*
     let mut cfg = LbmConfig::new();
     cfg.n_x = 256;
     cfg.n_y = 256;
@@ -30,7 +31,7 @@ pub fn setup() -> Lbm {
     cfg.run_steps = 1000;
     cfg.ext_volume_force = true;
     cfg.ext_magneto_hydro = true;
-    cfg.induction_range = 0;
+    cfg.mhd_lod_depth = 4;
     // Graphics
     cfg.graphics_config.graphics_active = true;
     cfg.graphics_config.streamline_every = 8;
@@ -68,12 +69,14 @@ pub fn setup() -> Lbm {
     lbm.set_taylor_green(1);
 
     lbm
+    */
     //setup_domain_test()
-    //setup_bfield_spin()
+    setup_bfield_spin()
     //file::write(&setup_bfield_spin(), "./testfile.ion");
     //setup_from_file("./testfile.ion")
     //setup_taylor_green()
     //setup_verification()
+    //setup_field_vis()
 }
 
 #[allow(unused)]
@@ -159,11 +162,11 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
     lbm_config.n_z = 256;
-    lbm_config.d_x = 1;
+    lbm_config.d_z = 2;
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
     lbm_config.velocity_set = VelocitySet::D3Q19;
-    lbm_config.induction_range = 5;
+    lbm_config.mhd_lod_depth = 4;
     // Extensions
     lbm_config.ext_volume_force = true;
     lbm_config.ext_magneto_hydro = true;
@@ -173,7 +176,8 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.graphics_config.camera_width = 1920;
     lbm_config.graphics_config.camera_height = 1080;
     lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::EDyn;
+    lbm_config.graphics_config.u_max = 500.0;
     lbm_config.graphics_config.streamline_mode = true;
     lbm_config.graphics_config.axes_mode = true;
     lbm_config.graphics_config.q_mode = false;
@@ -182,17 +186,17 @@ fn setup_bfield_spin() -> Lbm {
 
     let mut lbm = Lbm::new(lbm_config);
 
-    let mut flags: Vec<u8> = vec![0; 128 * 128 * 256];
+    let mut flags: Vec<u8> = vec![0; 128 * 128 * 128];
     let len = flags.len() - 1;
     // Solid
     for i in 0..(128 * 128 * 8) {
         flags[i] = 0x01;
-        flags[len - i] = 0x01;
+        //flags[len - i] = 0x01;
     }
     bwrite!(lbm.domains[0].flags, flags);
 
     let cpc = 0.002;
-    let mut charge: Vec<f32> = vec![cpc; 128 * 128 * 256];
+    let mut charge: Vec<f32> = vec![cpc; 128 * 128 * 128];
     bwrite!(lbm.domains[0].q.as_ref().expect("q"), charge);
 
     // magnetic field
@@ -222,7 +226,7 @@ fn setup_verification() -> Lbm {
     lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
     println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
     lbm_config.velocity_set = VelocitySet::D3Q19;
-    lbm_config.induction_range = 10;
+    lbm_config.mhd_lod_depth = 4;
     // Extensions
     lbm_config.ext_volume_force = true;
     lbm_config.ext_magneto_hydro = true;
@@ -249,6 +253,42 @@ fn setup_verification() -> Lbm {
     bwrite!(lbm.domains[0].u, vel);
     let rho = vec![1.0; (lbm.config.n_x * lbm.config.n_y * lbm.config.n_z) as usize];
     bwrite!(lbm.domains[0].rho, rho);
+    lbm
+}
+
+#[allow(unused)]
+fn setup_field_vis() -> Lbm {
+    let mut lbm_config = LbmConfig::new();
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 0.1, 1.0, 1.2250, 0.0000000001);
+    lbm_config.n_x = 256;
+    lbm_config.n_y = 256;
+    lbm_config.n_z = 256;
+    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
+    lbm_config.velocity_set = VelocitySet::D3Q19;
+    lbm_config.mhd_lod_depth = 4;
+    // Extensions
+    lbm_config.ext_volume_force = true;
+    lbm_config.ext_magneto_hydro = true;
+    // Graphics
+    lbm_config.graphics_config.graphics_active = true;
+    lbm_config.graphics_config.background_color = 0x000000;
+    lbm_config.graphics_config.camera_width = 800;
+    lbm_config.graphics_config.camera_height = 540;
+    lbm_config.graphics_config.streamline_every = 16;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
+    lbm_config.graphics_config.u_max = 0.000000002;
+    lbm_config.graphics_config.streamline_mode = true;
+
+    let mut lbm = Lbm::new(lbm_config);
+
+    // magnetic field
+    let mut vec_m: Vec<(u64, [f32; 3])> = vec![];
+    for i in 0..40 {
+        vec_m.push((127 - 20 + i + 32768 + 8388608, [1000000000.0f32, 0.0f32, 0.0f32]));
+    }
+    lbm.magnets = Some(vec_m);
+    precompute::precompute_B(&lbm);
+
     lbm
 }
 

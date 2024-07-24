@@ -100,7 +100,7 @@ fn decode(buffer: &[u8], config: &mut LbmConfig) -> Result<Lbm, String> {
     config.ext_force_field = (ext & 0x4) != 0;
     config.ext_magneto_hydro = (ext & 0x8) != 0;
 
-    config.induction_range = stream.next_u8();
+    config.mhd_lod_depth = stream.next_u8();
 
     let mut lbm = Lbm::new(config.to_owned());
 
@@ -216,7 +216,7 @@ fn encode(lbm: &Lbm) -> Vec<u8> {
         + ((lbm.config.ext_force_field as u8) << 2)
         + ((lbm.config.ext_magneto_hydro as u8) << 3);
     buffer.push(ext);
-    buffer.push(lbm.config.induction_range);
+    buffer.push(lbm.config.mhd_lod_depth);
 
     // values relating to simulation volume
     // domains will be saved regardless of actual coordinates to simplify
