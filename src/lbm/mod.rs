@@ -242,10 +242,10 @@ impl Lbm {
     /// Executes `kernel_stream_collide` Kernels for every `LbmDomain` and updates domain transfer buffers.
     /// Updates the dynamic E and B fields.
     pub fn do_time_step(&mut self) {
-        // call kernel stream_collide to perform one LBM time step
         if self.config.ext_magneto_hydro {
-            self.clear_qu_lod();
+            self.clear_qu_lod(); // Ready LOD Buffer
         }
+        // call kernel stream_collide to perform one LBM time step
         self.stream_collide();
         if self.config.graphics_config.graphics_active {
             self.communicate_rho_u_flags();
@@ -378,15 +378,10 @@ impl Lbm {
         }
 
         if d_n > 1 {
-            let n_lod_own = {
-                let mut c = 1;
-                for i in 0..self.config.mhd_lod_depth {c += ((1<<(i+1)) as usize).pow(self.config.velocity_set.get_set_values().0 as u32)}
-                c
-            };
-            for d in 0..d_n { self.domains[d].read_lods(n_lod_own); }
+            for d in 0..d_n { self.domains[d].read_lods(); }
             for d in 0..d_n { // Every domain...
                 let (x, y, z) = get_coordinates_sl(d as u64, self.config.d_x, self.config.d_y); // Own domain coordinate
-                let mut offset = n_lod_own; // buffer write offset
+                let mut offset = self.domains[d].n_lod_own; // buffer write offset
                 for dc in 0..d_n { // ...loops over every other domain and writes the extracted LOD to its own LOD buffer
                     if d != dc {
                         let (dx, dy, dz) = get_coordinates_sl(dc as u64, self.config.d_x, self.config.d_y);
@@ -470,6 +465,7 @@ pub struct LbmDomain {
     #[cfg(feature = "multi-node")]
     pub transfer_t_host: Vec<u8>,
     pub transfer_lod_host: Option<Vec<f32>>,
+    pub n_lod_own: usize, // The number of LOD data chunks that belong to this domain
 
     pub e: Option<Buffer<f32>>, // Optional Buffers
     pub b: Option<Buffer<f32>>,
@@ -570,6 +566,9 @@ impl LbmDomain {
         let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n], 0f32)) } else { None };
         // Level of detail charge and velocity for field updates
         let qu_lod: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n_lod * 4], 0f32)) } else { None };
+        #[cfg(feature = "multi-node")]
+        let transfer_lod_host: Option<Vec<f32>> = if lbm_config.ext_magneto_hydro { Some(vec![0.0f32; n_lod * 4]) } else { None }; // Transfer buffer needs to be bigger in multi-node mode
+        #[cfg(not(feature = "multi-node"))]
         let transfer_lod_host: Option<Vec<f32>> = if lbm_config.ext_magneto_hydro { Some(vec![0.0f32; n_lod_own * 4]) } else { None };
 
         // Initialize Kernels
@@ -695,6 +694,7 @@ impl LbmDomain {
             #[cfg(feature = "multi-node")]
             transfer_t_host,
             transfer_lod_host,
+            n_lod_own,
 
             e, b, e_dyn, b_dyn, qi, q, qu_lod, f, t, graphics, cfg: lbm_config.clone()
         } //Returns initialised domain
@@ -953,8 +953,8 @@ impl LbmDomain {
 
     // Transfer LODs
     /// Read own LODs into host buffer
-    pub fn read_lods(&mut self, n_lod_own: usize) {
-        self.qu_lod.as_ref().expect("msg").read(self.transfer_lod_host.as_mut().expect("msg")).len(n_lod_own).enq().unwrap();
+    pub fn read_lods(&mut self) {
+        self.qu_lod.as_ref().expect("msg").read(self.transfer_lod_host.as_mut().expect("msg")).len(self.n_lod_own*4).enq().unwrap();
     }
 
     #[allow(unused)]
