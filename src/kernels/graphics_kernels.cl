@@ -1,16 +1,16 @@
 //THESE ARE TO BE REMOVED
-#define def_Nx 20u
-#define def_Ny 20u
-#define def_Nz 20u
-#define def_N 8000ul
+#define DEF_NX 20u
+#define DEF_NY 20u
+#define DEF_NZ 20u
+#define DEF_N 8000ul
 
-#define def_Dx 1u
-#define def_Dy 1u
-#define def_Dz 1u
+#define DEF_DX 1u
+#define DEF_DY 1u
+#define DEF_DZ 1u
 
-#define def_domain_offset_x 0.0f
-#define def_domain_offset_y 0.0f
-#define def_domain_offset_z 0.0f
+#define DEF_DOMAIN_OFFSET_X 0.0f
+#define DEF_DOMAIN_OFFSET_Y 0.0f
+#define DEF_DOMAIN_OFFSET_Z 0.0f
 
 #define D "D2Q9" // D2Q9/D3Q15/D3Q19/D3Q2
 
@@ -33,13 +33,13 @@
 #define store(p,o,x) p[o]=float_to_half_custom(x)
 
 #define GRAPHICS
-#define def_streamline_sparse 4u
-#define def_streamline_length 128u
-#define def_screen_width 1920u
-#define def_screen_height 1080u
-#define def_scale_u 1.0f
-#define def_scale_Q_min 0.0001f
-#define def_background_color 0x000000
+#define DEF_STREAMLINE_SPARSE 4u
+#define DEF_STREAMLINE_LENGTH 128u
+#define DEF_SCREEN_WIDTH 1920u
+#define DEF_SCREEN_HEIGHT 1080u
+#define DEF_SCALE_U 1.0f
+#define DEF_SCALE_Q_MIN 0.0001f
+#define DEF_BACKGROUND_COLOR 0x000000
 
 #define COLOR_S (127<<16|127<<8|127)
 #define COLOR_E (  0<<16|255<<8|  0)
@@ -93,7 +93,7 @@ int color_from_floats(const float red, const float green, const float blue) {
 int shading(const int c, const float3 p, const float3 normal, const float* camera_cache) {
     const float zoom = camera_cache[ 0]; // fetch camera parameters (rotation matrix, camera position, etc.)
 	const float  dis = camera_cache[ 1];
-	const float3 pos = (float3)(camera_cache[ 2], camera_cache[ 3], camera_cache[ 4])-(float3)(def_domain_offset_x, def_domain_offset_y, def_domain_offset_z);
+	const float3 pos = (float3)(camera_cache[ 2], camera_cache[ 3], camera_cache[ 4])-(float3)(DEF_DOMAIN_OFFSET_X, DEF_DOMAIN_OFFSET_Y, DEF_DOMAIN_OFFSET_Z);
 	const float3 Rz  = (float3)(camera_cache[11], camera_cache[12], camera_cache[13]);
 	const float3 d = p-Rz*(dis/zoom)-pos; // distance vector between p and camera position
     const float nl2 = sq(normal.x)+sq(normal.y)+sq(normal.z); // only one native_sqrt instead of two
@@ -102,19 +102,19 @@ int shading(const int c, const float3 p, const float3 normal, const float* camer
 }
 bool is_off_screen(const int x, const int y, const int stereo) {
 	switch(stereo) {
-		default: return x<                 0||x>=def_screen_width  ||y<0||y>=def_screen_height; // entire screen
-		case -1: return x<                 0||x>=def_screen_width/2||y<0||y>=def_screen_height; // left half
-		case +1: return x<def_screen_width/2||x>=def_screen_width  ||y<0||y>=def_screen_height; // right half
+		default: return x<                 0||x>=DEF_SCREEN_WIDTH  ||y<0||y>=DEF_SCREEN_HEIGHT; // entire screen
+		case -1: return x<                 0||x>=DEF_SCREEN_WIDTH/2||y<0||y>=DEF_SCREEN_HEIGHT; // left half
+		case +1: return x<DEF_SCREEN_WIDTH/2||x>=DEF_SCREEN_WIDTH  ||y<0||y>=DEF_SCREEN_HEIGHT; // right half
 	}
 }
 void draw(const int x, const int y, const float z, const int color, global int* bitmap, volatile global int* zbuffer, const int stereo) {
-	const int index=x+y*def_screen_width, iz=(int)(z*(2147483647.0f/10000.0f)); // use int z-buffer and atomic_max to minimize noise in image
+	const int index=x+y*DEF_SCREEN_WIDTH, iz=(int)(z*(2147483647.0f/10000.0f)); // use int z-buffer and atomic_max to minimize noise in image
 	#ifndef GRAPHICS_TRANSPARENCY
 		if(!is_off_screen(x, y, stereo)&&iz>atomic_max(&zbuffer[index], iz)) bitmap[index] = color; // only draw if point is on screen and first in zbuffer
 	#else
 		if(!is_off_screen(x, y, stereo)) { // transparent rendering (not quite order-independent transparency, but elegant solution for order-reversible transparency which is good enough here)
 			const float transparency = GRAPHICS_TRANSPARENCY;
-			const uchar4 cc4=as_uchar4(color), cb4=as_uchar4(def_background_color);
+			const uchar4 cc4=as_uchar4(color), cb4=as_uchar4(DEF_BACKGROUND_COLOR);
 			const float3 fc = (float3)((float)cc4.x, (float)cc4.y, (float)cc4.z); // new pixel color that is behind topmost drawn pixel color
 			const float3 fb = (float3)((float)cb4.x, (float)cb4.y, (float)cb4.z); // background color
 			const bool is_front = iz>atomic_max(&zbuffer[index], iz);
@@ -129,7 +129,7 @@ void draw(const int x, const int y, const float z, const int color, global int* 
 bool convert(int* rx, int* ry, float* rz, const float3 p, const float* camera_cache, const int stereo) { // 3D -> 2D
 	const float zoom = camera_cache[0]; // fetch camera parameters (rotation matrix, camera position, etc.)
 	const float  dis = camera_cache[1];
-	const float3 pos = (float3)(camera_cache[ 2], camera_cache[ 3], camera_cache[ 4])-(float3)(def_domain_offset_x, def_domain_offset_y, def_domain_offset_z);
+	const float3 pos = (float3)(camera_cache[ 2], camera_cache[ 3], camera_cache[ 4])-(float3)(DEF_DOMAIN_OFFSET_X, DEF_DOMAIN_OFFSET_Y, DEF_DOMAIN_OFFSET_Z);
 	const float3 Rx  = (float3)(camera_cache[ 5], camera_cache[ 6], camera_cache[ 7]);
 	const float3 Ry  = (float3)(camera_cache[ 8], camera_cache[ 9], camera_cache[10]);
 	const float3 Rz  = (float3)(camera_cache[11], camera_cache[12], camera_cache[13]);
@@ -140,8 +140,8 @@ bool convert(int* rx, int* ry, float* rz, const float3 p, const float* camera_ca
 	const float rs = zoom*dis/(dis-r.z*zoom); // perspective (reciprocal is more efficient)
 	if(rs<=0.0f) return false; // point is behins camera
 	const float tv = ((as_int(camera_cache[14])>>30)&0x1)&&stereo!=0 ? 0.5f : 1.0f;
-	r.x = (dot(Rx, t)*rs+(float)stereo*eye_distance)*tv+(0.5f+(float)stereo*0.25f)*(float)def_screen_width; // x position on screen
-	r.y =  dot(Ry, t)*rs+0.5f*(float)def_screen_height; // y position on screen
+	r.x = (dot(Rx, t)*rs+(float)stereo*eye_distance)*tv+(0.5f+(float)stereo*0.25f)*(float)DEF_SCREEN_WIDTH; // x position on screen
+	r.y =  dot(Ry, t)*rs+0.5f*(float)DEF_SCREEN_HEIGHT; // y position on screen
 	*rx = (int)(r.x+0.5f);
 	*ry = (int)(r.y+0.5f);
 	*rz = r.z;
@@ -254,7 +254,7 @@ void draw_triangle_interpolated(const float3 p0, const float3 p1, const float3 p
 }
 kernel void graphics_clear(global int* bitmap, global int* zbuffer) {
 	const uint n = get_global_id(0);
-	bitmap[n] = def_background_color; // black background = 0x000000, use 0xFFFFFF for white background
+	bitmap[n] = DEF_BACKGROUND_COLOR; // black background = 0x000000, use 0xFFFFFF for white background
 	zbuffer[n] = -2147483648;
 }
 constant ushort edge_table_data[128] = { // source: Paul Bourke, http://paulbourke.net/geometry/polygonise/, mirror symmetry applied, makes marching-cubes 31% faster
@@ -361,7 +361,7 @@ bool is_above_plane(const float3 point, const float3 plane_p, const float3 plane
 bool is_in_camera_frustrum(const float3 p, const float* camera_cache) { // returns true if point is located in camera frustrum
 	const float zoom = camera_cache[0]; // fetch camera parameters (rotation matrix, camera position, etc.)
 	const float  dis = camera_cache[1];
-	const float3 pos = (float3)(camera_cache[ 2], camera_cache[ 3], camera_cache[ 4])-(float3)(def_domain_offset_x, def_domain_offset_y, def_domain_offset_z);
+	const float3 pos = (float3)(camera_cache[ 2], camera_cache[ 3], camera_cache[ 4])-(float3)(DEF_DOMAIN_OFFSET_X, DEF_DOMAIN_OFFSET_Y, DEF_DOMAIN_OFFSET_Z);
 	const float3 Rx  = (float3)(camera_cache[ 5], camera_cache[ 6], camera_cache[ 7]);
 	const float3 Ry  = (float3)(camera_cache[ 8], camera_cache[ 9], camera_cache[10]);
 	const float3 Rz  = (float3)(camera_cache[11], camera_cache[12], camera_cache[13]);
@@ -369,10 +369,10 @@ bool is_in_camera_frustrum(const float3 p, const float* camera_cache) { // retur
 	const float  rtv = (as_int(camera_cache[14])>>30)&0x1 ? 2.0f : 1.0f;
 	const float3 p0 = (float3)(0.0f, 0.0f, dis/zoom);
 	const float3 camera_center = Rx*p0.x+Ry*p0.y+Rz*p0.z+pos; // reverse rotation and reverse transformation of p0
-	const float x_left   = !vr ? (float)(-(int)def_screen_width/2  ) : ((float)(-(int)def_screen_width/2  )+(float)(def_screen_width/4u))*rtv;
-	const float x_right  = !vr ? (float)( (int)def_screen_width/2-1) : ((float)( (int)def_screen_width/2-1)-(float)(def_screen_width/4u))*rtv;
-	const float y_top    = (float)(-(int)def_screen_height/2 );
-	const float y_bottom = (float)((int)def_screen_height/2-1);
+	const float x_left   = !vr ? (float)(-(int)DEF_SCREEN_WIDTH/2  ) : ((float)(-(int)DEF_SCREEN_WIDTH/2  )+(float)(DEF_SCREEN_WIDTH/4u))*rtv;
+	const float x_right  = !vr ? (float)( (int)DEF_SCREEN_WIDTH/2-1) : ((float)( (int)DEF_SCREEN_WIDTH/2-1)-(float)(DEF_SCREEN_WIDTH/4u))*rtv;
+	const float y_top    = (float)(-(int)DEF_SCREEN_HEIGHT/2 );
+	const float y_bottom = (float)((int)DEF_SCREEN_HEIGHT/2-1);
 	const float dis_clamped = fmin(dis, 1E4f); // avoid flickering at very small field of view
 	float3 r00 = p0+normalize((float3)(x_left , y_top   , -dis_clamped)); // get 4 edge vectors of frustrum, get_camray(...) inlined and redundant parts eliminated
 	float3 r01 = p0+normalize((float3)(x_right, y_top   , -dis_clamped));
@@ -482,7 +482,7 @@ kernel void graphics_flags(const global uchar* flags, const global float* camera
 #endif // FORCE_FIELD
 ) {
     const uint n = get_global_id(0);
-    if(n>=(uint)def_N||is_halo(n)) return; // don't execute graphics_flags() on halo
+    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute graphics_flags() on halo
     const uchar flagsn = flags[n]; // cache flags
     const uchar flagsn_bo = flagsn&TYPE_BO; // extract boundary flags
     if(flagsn==0u||flagsn==TYPE_G) return; // don't draw regular fluid cells
@@ -508,11 +508,11 @@ kernel void graphics_flags(const global uchar* flags, const global float* camera
     	COLOR_0; // regular or gas cell
     //draw_point(p, c, camera_cache, bitmap, zbuffer); // draw one pixel for every boundary cell
     uint t;
-    t = xp+y0+z0; const bool not_xp = xyz.x<def_Nx-1u && flagsn==flags[t] && !is_halo(t); // +00
+    t = xp+y0+z0; const bool not_xp = xyz.x<DEF_NX-1u && flagsn==flags[t] && !is_halo(t); // +00
     t = xm+y0+z0; const bool not_xm = xyz.x>       0u && flagsn==flags[t] && !is_halo(t); // -00
-    t = x0+yp+z0; const bool not_yp = xyz.y<def_Ny-1u && flagsn==flags[t] && !is_halo(t); // 0+0
+    t = x0+yp+z0; const bool not_yp = xyz.y<DEF_NY-1u && flagsn==flags[t] && !is_halo(t); // 0+0
     t = x0+ym+z0; const bool not_ym = xyz.y>       0u && flagsn==flags[t] && !is_halo(t); // 0-0
-    t = x0+y0+zp; const bool not_zp = xyz.z<def_Nz-1u && flagsn==flags[t] && !is_halo(t); // 00+
+    t = x0+y0+zp; const bool not_zp = xyz.z<DEF_NZ-1u && flagsn==flags[t] && !is_halo(t); // 00+
     t = x0+y0+zm; const bool not_zm = xyz.z>       0u && flagsn==flags[t] && !is_halo(t); // 00-
     const float3 p0 = (float3)(p.x-0.5f, p.y-0.5f, p.z-0.5f); // ---
     const float3 p1 = (float3)(p.x+0.5f, p.y+0.5f, p.z+0.5f); // +++
@@ -536,7 +536,7 @@ kernel void graphics_flags(const global uchar* flags, const global float* camera
     if(!(not_xp||not_ym)) draw_line(p5, p6, c, camera_cache, bitmap, zbuffer);
 	#ifdef FORCE_FIELD
 	if(flagsn_bo==TYPE_S) {
-		const float3 Fn = def_scale_F*(float3)(F[n], F[def_N+(ulong)n], F[2ul*def_N+(ulong)n]);
+		const float3 Fn = DEF_SCALE_F*(float3)(F[n], F[DEF_N+(ulong)n], F[2ul*DEF_N+(ulong)n]);
 		const float Fnl = length(Fn);
 		if(Fnl>0.0f) {
 			const int c = iron_colormap(Fnl); // color boundaries depending on the force on them
@@ -552,10 +552,10 @@ kernel void graphics_flags_mc(const global uchar* flags, const global float* cam
 #endif // FORCE_FIELD
 ) {
     const uint n = get_global_id(0);
-    if(n>=(uint)def_N||is_halo(n)) return; // don't execute graphics_flags() on halo
+    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute graphics_flags() on halo
     const uint3 xyz = coordinates(n);
-    if(xyz.x>=def_Nx-1u||xyz.y>=def_Ny-1u||xyz.z>=def_Nz-1u) return;
-    //if(xyz.x==0u||xyz.y==0u||xyz.z==0u||xyz.x>=def_Nx-2u||xyz.y>=def_Ny-2u||xyz.z>=def_Nz-2u) return;
+    if(xyz.x>=DEF_NX-1u||xyz.y>=DEF_NY-1u||xyz.z>=DEF_NZ-1u) return;
+    //if(xyz.x==0u||xyz.y==0u||xyz.z==0u||xyz.x>=DEF_NX-2u||xyz.y>=DEF_NY-2u||xyz.z>=DEF_NZ-2u) return;
 	float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
 	for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
 	const float3 p = position(xyz);
@@ -563,10 +563,10 @@ kernel void graphics_flags_mc(const global uchar* flags, const global float* cam
     uint j[8];
     const uint x0 =  xyz.x; // cube stencil
     const uint xp =  xyz.x+1u;
-    const uint y0 =  xyz.y    *def_Nx;
-    const uint yp = (xyz.y+1u)*def_Nx;
-    const uint z0 =  xyz.z    *def_Ny*def_Nx;
-    const uint zp = (xyz.z+1u)*def_Ny*def_Nx;
+    const uint y0 =  xyz.y    *DEF_NX;
+    const uint yp = (xyz.y+1u)*DEF_NX;
+    const uint z0 =  xyz.z    *DEF_NY*DEF_NX;
+    const uint zp = (xyz.z+1u)*DEF_NY*DEF_NX;
     j[0] = n       ; // 000
     j[1] = xp+y0+z0; // +00
     j[2] = xp+y0+zp; // +0+
@@ -583,7 +583,7 @@ kernel void graphics_flags_mc(const global uchar* flags, const global float* cam
 
 	#ifdef FORCE_FIELD
 		float3 Fj[8];
-		for(uint i=0u; i<8u; i++) Fj[i] = v[i]==1.0f ? (float3)(F[j[i]], F[def_N+(ulong)j[i]], F[2ul*def_N+(ulong)j[i]]) : (float3)(0.0f, 0.0f, 0.0f);
+		for(uint i=0u; i<8u; i++) Fj[i] = v[i]==1.0f ? (float3)(F[j[i]], F[DEF_N+(ulong)j[i]], F[2ul*DEF_N+(ulong)j[i]]) : (float3)(0.0f, 0.0f, 0.0f);
 	#endif // FORCE_FIELD
 
     for(uint i=0u; i<tn; i++) { // TODO: make compatible with FORCE_FIELD
@@ -596,15 +596,15 @@ kernel void graphics_flags_mc(const global uchar* flags, const global float* cam
 			int c0, c1, c2; {
 				const float x1=p0.x, y1=p0.y, z1=p0.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 				const float3 Fi = (x0*y0*z0)*Fj[0]+(x1*y0*z0)*Fj[1]+(x1*y0*z1)*Fj[2]+(x0*y0*z1)*Fj[3]+(x0*y1*z0)*Fj[4]+(x1*y1*z0)*Fj[5]+(x1*y1*z1)*Fj[6]+(x0*y1*z1)*Fj[7]; // perform trilinear interpolation
-				c0 = shading(fast_colormap(0.5f+def_scale_F*dot(Fi, normal)), p0+offset, normal, camera_cache); // fast_colormap(0.5f+def_scale_F*dot(Fi, normal));
+				c0 = shading(fast_colormap(0.5f+DEF_SCALE_F*dot(Fi, normal)), p0+offset, normal, camera_cache); // fast_colormap(0.5f+DEF_SCALE_F*dot(Fi, normal));
 			} {
 				const float x1=p1.x, y1=p1.y, z1=p1.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 				const float3 Fi = (x0*y0*z0)*Fj[0]+(x1*y0*z0)*Fj[1]+(x1*y0*z1)*Fj[2]+(x0*y0*z1)*Fj[3]+(x0*y1*z0)*Fj[4]+(x1*y1*z0)*Fj[5]+(x1*y1*z1)*Fj[6]+(x0*y1*z1)*Fj[7]; // perform trilinear interpolation
-				c1 = shading(fast_colormap(0.5f+def_scale_F*dot(Fi, normal)), p1+offset, normal, camera_cache); // fast_colormap(0.5f+def_scale_F*dot(Fi, normal));
+				c1 = shading(fast_colormap(0.5f+DEF_SCALE_F*dot(Fi, normal)), p1+offset, normal, camera_cache); // fast_colormap(0.5f+DEF_SCALE_F*dot(Fi, normal));
 			} {
 				const float x1=p2.x, y1=p2.y, z1=p2.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 				const float3 Fi = (x0*y0*z0)*Fj[0]+(x1*y0*z0)*Fj[1]+(x1*y0*z1)*Fj[2]+(x0*y0*z1)*Fj[3]+(x0*y1*z0)*Fj[4]+(x1*y1*z0)*Fj[5]+(x1*y1*z1)*Fj[6]+(x0*y1*z1)*Fj[7]; // perform trilinear interpolation
-				c2 = shading(fast_colormap(0.5f+def_scale_F*dot(Fi, normal)), p2+offset, normal, camera_cache); // fast_colormap(0.5f+def_scale_F*dot(Fi, normal));
+				c2 = shading(fast_colormap(0.5f+DEF_SCALE_F*dot(Fi, normal)), p2+offset, normal, camera_cache); // fast_colormap(0.5f+DEF_SCALE_F*dot(Fi, normal));
 			}
 			draw_triangle_interpolated(p0+offset, p1+offset, p2+offset, c0, c1, c2, camera_cache, bitmap, zbuffer); // draw triangle with interpolated colors
 		#else // FORCE_FIELD
@@ -616,7 +616,7 @@ kernel void graphics_flags_mc(const global uchar* flags, const global float* cam
 /// Vector field as individual lines
 kernel void graphics_field(const global uchar* flags, const global float* u, const global float* camera, global int* bitmap, global int* zbuffer, const int slice_mode, const int slice_x, const int slice_y, const int slice_z) {
 	const uint n = get_global_id(0);
-	if(n>=(uint)def_N||is_halo(n)) return; // don't execute graphics_field() on halo
+	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute graphics_field() on halo
 	const uint3 xyz = coordinates(n);
 	const bool rx=(int)xyz.x!=slice_x, ry=(int)xyz.y!=slice_y, rz=(int)xyz.z!=slice_z;
 	if((slice_mode==1&&rx)||(slice_mode==2&&ry)||(slice_mode==3&&rz)||(slice_mode==4&&rx&&rz)||(slice_mode==5&&rx&&ry&&rz)||(slice_mode==6&&ry&&rz)||(slice_mode==7&&rx&&ry)) return;
@@ -629,8 +629,8 @@ kernel void graphics_field(const global uchar* flags, const global float* u, con
 
     float3 un = load_u(n, u); // cache velocity
     const float ul = length(un);
-    if(def_scale_u*ul<0.1f) return; // don't draw lattice points where the velocity is lower than this threshold
-    const int c = iron_colormap(def_scale_u*ul); // coloring by velocity
+    if(DEF_SCALE_U*ul<0.1f) return; // don't draw lattice points where the velocity is lower than this threshold
+    const int c = iron_colormap(DEF_SCALE_U*ul); // coloring by velocity
     draw_line(p-(0.5f/ul)*un, p+(0.5f/ul)*un, c, camera_cache, bitmap, zbuffer);
 
 }
@@ -639,19 +639,19 @@ kernel void graphics_streamline(const global uchar* flags, const global float* u
     const uint n = get_global_id(0);
 	const float3 slice = position((uint3)(slice_x, slice_y, slice_z));
     #ifndef D2Q9
-        if(n>=(def_Nx/def_streamline_sparse)*(def_Ny/def_streamline_sparse)*(def_Nz/def_streamline_sparse)) return;
-        const uint z = n/((def_Nx/def_streamline_sparse)*(def_Ny/def_streamline_sparse)); // disassemble 1D index to 3D coordinates
-        const uint t = n%((def_Nx/def_streamline_sparse)*(def_Ny/def_streamline_sparse));
-        const uint y = t/(def_Nx/def_streamline_sparse);
-        const uint x = t%(def_Nx/def_streamline_sparse);
-        float3 p = (float)def_streamline_sparse*((float3)((float)x+0.5f, (float)y+0.5f, (float)z+0.5f))-0.5f*((float3)((float)def_Nx, (float)def_Ny, (float)def_Nz));
-        const bool rx=fabs(p.x-slice.x)>0.5f*(float)def_streamline_sparse, ry=fabs(p.y-slice.y)>0.5f*(float)def_streamline_sparse, rz=fabs(p.z-slice.z)>0.5f*(float)def_streamline_sparse;
+        if(n>=(DEF_NX/DEF_STREAMLINE_SPARSE)*(DEF_NY/DEF_STREAMLINE_SPARSE)*(DEF_NZ/DEF_STREAMLINE_SPARSE)) return;
+        const uint z = n/((DEF_NX/DEF_STREAMLINE_SPARSE)*(DEF_NY/DEF_STREAMLINE_SPARSE)); // disassemble 1D index to 3D coordinates
+        const uint t = n%((DEF_NX/DEF_STREAMLINE_SPARSE)*(DEF_NY/DEF_STREAMLINE_SPARSE));
+        const uint y = t/(DEF_NX/DEF_STREAMLINE_SPARSE);
+        const uint x = t%(DEF_NX/DEF_STREAMLINE_SPARSE);
+        float3 p = (float)DEF_STREAMLINE_SPARSE*((float3)((float)x+0.5f, (float)y+0.5f, (float)z+0.5f))-0.5f*((float3)((float)DEF_NX, (float)DEF_NY, (float)DEF_NZ));
+        const bool rx=fabs(p.x-slice.x)>0.5f*(float)DEF_STREAMLINE_SPARSE, ry=fabs(p.y-slice.y)>0.5f*(float)DEF_STREAMLINE_SPARSE, rz=fabs(p.z-slice.z)>0.5f*(float)DEF_STREAMLINE_SPARSE;
     #else // D2Q9
-        if(n>=(def_Nx/def_streamline_sparse)*(def_Ny/def_streamline_sparse)) return;
-        const uint y = n/(def_Nx/def_streamline_sparse); // disassemble 1D index to 3D coordinates
-        const uint x = n%(def_Nx/def_streamline_sparse);
-        float3 p = ((float3)((float)def_streamline_sparse*((float)x+0.5f), (float)def_streamline_sparse*((float)y+0.5f), 0.5f))-0.5f*((float3)((float)def_Nx, (float)def_Ny, (float)def_Nz));
-        const bool rx=fabs(p.x-slice.x)>0.5f*(float)def_streamline_sparse, ry=fabs(p.y-slice.y)>0.5f*(float)def_streamline_sparse, rz=true;
+        if(n>=(DEF_NX/DEF_STREAMLINE_SPARSE)*(DEF_NY/DEF_STREAMLINE_SPARSE)) return;
+        const uint y = n/(DEF_NX/DEF_STREAMLINE_SPARSE); // disassemble 1D index to 3D coordinates
+        const uint x = n%(DEF_NX/DEF_STREAMLINE_SPARSE);
+        float3 p = ((float3)((float)DEF_STREAMLINE_SPARSE*((float)x+0.5f), (float)DEF_STREAMLINE_SPARSE*((float)y+0.5f), 0.5f))-0.5f*((float3)((float)DEF_NX, (float)DEF_NY, (float)DEF_NZ));
+        const bool rx=fabs(p.x-slice.x)>0.5f*(float)DEF_STREAMLINE_SPARSE, ry=fabs(p.y-slice.y)>0.5f*(float)DEF_STREAMLINE_SPARSE, rz=true;
     #endif // D2Q9
     if((slice_mode==1&&rx)||(slice_mode==2&&ry)||(slice_mode==3&&rz)||(slice_mode==4&&rx&&rz)||(slice_mode==5&&rx&&ry&&rz)||(slice_mode==6&&ry&&rz)||(slice_mode==7&&rx&&ry)) return;
     if((slice_mode==1||slice_mode==5||slice_mode==4||slice_mode==7)&!rx) p.x = slice.x; // snap streamline position to slice position
@@ -660,22 +660,22 @@ kernel void graphics_streamline(const global uchar* flags, const global float* u
     float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
     for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
 	if(!is_in_camera_frustrum(p, camera_cache)) return; // skip loading LBM data if grid cell is not visible
-    const float hLx=0.5f*(float)(def_Nx-2u*(def_Dx>1u)), hLy=0.5f*(float)(def_Ny-2u*(def_Dy>1u)), hLz=0.5f*(float)(def_Nz-2u*(def_Dz>1u));
-    //draw_circle(p, 0.5f*def_streamline_sparse, 0xFFFFFF, camera_cache, bitmap, zbuffer);
+    const float hLx=0.5f*(float)(DEF_NX-2u*(DEF_DX>1u)), hLy=0.5f*(float)(DEF_NY-2u*(DEF_DY>1u)), hLz=0.5f*(float)(DEF_NZ-2u*(DEF_DZ>1u));
+    //draw_circle(p, 0.5f*DEF_STREAMLINE_SPARSE, 0xFFFFFF, camera_cache, bitmap, zbuffer);
     for(float dt=-1.0f; dt<=1.0f; dt+=2.0f) { // integrate forward and backward in time
     	float3 p0, p1=p;
-    	for(uint l=0u; l<def_streamline_length/2u; l++) {
-    		const uint x = (uint)(p1.x+1.5f*(float)def_Nx)%def_Nx;
-    		const uint y = (uint)(p1.y+1.5f*(float)def_Ny)%def_Ny;
-    		const uint z = (uint)(p1.z+1.5f*(float)def_Nz)%def_Nz;
-    		const uint n = x+(y+z*def_Ny)*def_Nx;
+    	for(uint l=0u; l<DEF_STREAMLINE_LENGTH/2u; l++) {
+    		const uint x = (uint)(p1.x+1.5f*(float)DEF_NX)%DEF_NX;
+    		const uint y = (uint)(p1.y+1.5f*(float)DEF_NY)%DEF_NY;
+    		const uint z = (uint)(p1.z+1.5f*(float)DEF_NZ)%DEF_NZ;
+    		const uint n = x+(y+z*DEF_NY)*DEF_NX;
     		if(flags[n]&(TYPE_S|TYPE_E|TYPE_I|TYPE_G)) return;
     		const float3 un = load_u(n, u); // interpolate_u(p1, u)
     		const float ul = length(un);
     		p0 = p1;
     		p1 += (dt/ul)*un; // integrate forward in time
-    		if(def_scale_u*ul<0.1f||p1.x<-hLx||p1.x>hLx||p1.y<-hLy||p1.y>hLy||p1.z<-hLz||p1.z>hLz) break;
-            const int c = iron_colormap(def_scale_u*ul);
+    		if(DEF_SCALE_U*ul<0.1f||p1.x<-hLx||p1.x>hLx||p1.y<-hLy||p1.y>hLy||p1.z<-hLz||p1.z>hLz) break;
+            const int c = iron_colormap(DEF_SCALE_U*ul);
             draw_line(p0, p1, c, camera_cache, bitmap, zbuffer);
         }
     }
@@ -683,7 +683,7 @@ kernel void graphics_streamline(const global uchar* flags, const global float* u
 
 kernel void graphics_q_field(const global uchar* flags, const global float* u, const global float* camera, global int* bitmap, global int* zbuffer) {
     const uint n = get_global_id(0);
-    if(n>=(uint)def_N||is_halo(n)) return; // don't execute graphics_q_field() on halo
+    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute graphics_q_field() on halo
     if(flags[n]&(TYPE_S|TYPE_E|TYPE_I|TYPE_G)) return;
 	const float3 p = position(coordinates(n));
 	float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
@@ -692,31 +692,31 @@ kernel void graphics_q_field(const global uchar* flags, const global float* u, c
     float3 un = load_u(n, u); // cache velocity
     const float ul = length(un);
     const float Q = calculate_Q(n, u);
-    if(Q<def_scale_Q_min||ul==0.0f) return; // don't draw lattice points where the velocity is very low
-    const int c = viridis_colormap(def_scale_u*ul); // coloring by velocity
+    if(Q<DEF_SCALE_Q_MIN||ul==0.0f) return; // don't draw lattice points where the velocity is very low
+    const int c = viridis_colormap(DEF_SCALE_U*ul); // coloring by velocity
     draw_line(p-(0.5f/ul)*un, p+(0.5f/ul)*un, c, camera_cache, bitmap, zbuffer);
 }
 
 kernel void graphics_q(const global uchar* flags, const global float* u, const global float* camera, global int* bitmap, global int* zbuffer) {
     const uint n = get_global_id(0);
 	const uint3 xyz = coordinates(n);
-	if(xyz.x>=def_Nx-1u||xyz.y>=def_Ny-1u||xyz.z>=def_Nz-1u||is_halo_q(xyz)) return; // don't execute graphics_q_field() on marching-cubes halo
+	if(xyz.x>=DEF_NX-1u||xyz.y>=DEF_NY-1u||xyz.z>=DEF_NZ-1u||is_halo_q(xyz)) return; // don't execute graphics_q_field() on marching-cubes halo
 	const float3 p = position(xyz);
 	float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
 	for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];
 	if(!is_in_camera_frustrum(p, camera_cache)) return; // skip loading LBM data if grid cell is not visible
 	const uint x0 =  xyz.x; // cube stencil
 	const uint xp =  xyz.x+1u;
-	const uint y0 =  xyz.y    *def_Nx;
-	const uint yp = (xyz.y+1u)*def_Nx;
-	const uint z0 =  xyz.z    *def_Ny*def_Nx;
-	const uint zp = (xyz.z+1u)*def_Ny*def_Nx;
-	const uint xq =  (xyz.x       +2u)%def_Nx; // central difference stencil on each cube corner point
-	const uint xm =  (xyz.x+def_Nx-1u)%def_Nx;
-	const uint yq = ((xyz.y       +2u)%def_Ny)*def_Nx;
-	const uint ym = ((xyz.y+def_Ny-1u)%def_Ny)*def_Nx;
-	const uint zq = ((xyz.z       +2u)%def_Nz)*def_Ny*def_Nx;
-	const uint zm = ((xyz.z+def_Nz-1u)%def_Nz)*def_Ny*def_Nx;
+	const uint y0 =  xyz.y    *DEF_NX;
+	const uint yp = (xyz.y+1u)*DEF_NX;
+	const uint z0 =  xyz.z    *DEF_NY*DEF_NX;
+	const uint zp = (xyz.z+1u)*DEF_NY*DEF_NX;
+	const uint xq =  (xyz.x       +2u)%DEF_NX; // central difference stencil on each cube corner point
+	const uint xm =  (xyz.x+DEF_NX-1u)%DEF_NX;
+	const uint yq = ((xyz.y       +2u)%DEF_NY)*DEF_NX;
+	const uint ym = ((xyz.y+DEF_NY-1u)%DEF_NY)*DEF_NX;
+	const uint zq = ((xyz.z       +2u)%DEF_NZ)*DEF_NY*DEF_NX;
+	const uint zm = ((xyz.z+DEF_NZ-1u)%DEF_NZ)*DEF_NY*DEF_NX;
 	uint j[32];
 	j[ 0] = n       ; // 000 // cube stencil
 	j[ 1] = xp+y0+z0; // +00
@@ -765,7 +765,7 @@ kernel void graphics_q(const global uchar* flags, const global float* u, const g
 	v[6] = calculate_Q_cached(load_u(j[26], u),       uj[ 7]    , load_u(j[27], u),       uj[ 2]    , load_u(j[28], u),       uj[ 5]    );
 	v[7] = calculate_Q_cached(      uj[ 6]    , load_u(j[29], u), load_u(j[30], u),       uj[ 3]    , load_u(j[31], u),       uj[ 4]    );
 	float3 triangles[15]; // maximum of 5 triangles with 3 vertices each
-	const uint tn = marching_cubes(v, def_scale_Q_min, triangles); // run marching cubes algorithm
+	const uint tn = marching_cubes(v, DEF_SCALE_Q_MIN, triangles); // run marching cubes algorithm
 	if(tn==0u) return;
 	for(uint i=0u; i<tn; i++) {
 		const float3 p0 = triangles[3u*i   ]; // triangle coordinates in [0,1] (local cell)
@@ -775,15 +775,15 @@ kernel void graphics_q(const global uchar* flags, const global float* u, const g
 		int c0, c1, c2; {
 			const float x1=p0.x, y1=p0.y, z1=p0.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c0 = shading(viridis_colormap(def_scale_u*length(ui)), p+p0, normal, camera_cache); // viridis_colormap(def_scale_u*length(ui));
+			c0 = shading(viridis_colormap(DEF_SCALE_U*length(ui)), p+p0, normal, camera_cache); // viridis_colormap(DEF_SCALE_U*length(ui));
 		} {
 			const float x1=p1.x, y1=p1.y, z1=p1.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c1 = shading(viridis_colormap(def_scale_u*length(ui)), p+p1, normal, camera_cache); // viridis_colormap(def_scale_u*length(ui));
+			c1 = shading(viridis_colormap(DEF_SCALE_U*length(ui)), p+p1, normal, camera_cache); // viridis_colormap(DEF_SCALE_U*length(ui));
 		} {
 			const float x1=p2.x, y1=p2.y, z1=p2.z, x0=1.0f-x1, y0=1.0f-y1, z0=1.0f-z1; // calculate interpolation factors
 			const float3 ui = (x0*y0*z0)*uj[0]+(x1*y0*z0)*uj[1]+(x1*y0*z1)*uj[2]+(x0*y0*z1)*uj[3]+(x0*y1*z0)*uj[4]+(x1*y1*z0)*uj[5]+(x1*y1*z1)*uj[6]+(x0*y1*z1)*uj[7]; // perform trilinear interpolation
-			c2 = shading(viridis_colormap(def_scale_u*length(ui)), p+p2, normal, camera_cache); // viridis_colormap(def_scale_u*length(ui));
+			c2 = shading(viridis_colormap(DEF_SCALE_U*length(ui)), p+p2, normal, camera_cache); // viridis_colormap(DEF_SCALE_U*length(ui));
 		}
 		draw_triangle_interpolated(p+p0, p+p1, p+p2, c0, c1, c2, camera_cache, bitmap, zbuffer); // draw triangle with interpolated colors
 	}
@@ -794,9 +794,9 @@ kernel void graphics_axes(const global float* camera, global int* bitmap, global
 	const int c_g = 0x00FF00;
 	const int c_b = 0x0000FF;
 	const float3 origin = position((uint3)(0, 0, 0));
-	const float3 x = position((uint3)(def_Nx, 0, 0));
-	const float3 y = position((uint3)(0, def_Ny, 0));
-	const float3 z = position((uint3)(0, 0, def_Nz));
+	const float3 x = position((uint3)(DEF_NX, 0, 0));
+	const float3 y = position((uint3)(0, DEF_NY, 0));
+	const float3 z = position((uint3)(0, 0, DEF_NZ));
 
 	float camera_cache[15]; // cache camera parameters in case the kernel draws more than one shape
 	for(uint i=0u; i<15u; i++) camera_cache[i] = camera[i];

@@ -723,18 +723,18 @@ impl LbmDomain {
     ) -> String {
         //Conditional Defines:
         //Velocity set types
-        let d2q9 = "\n	#define def_w0 (1.0f/2.25f)".to_owned() // center (0)
-        +"\n	#define def_ws (1.0f/9.0f)" // straight (1-4)
-        +"\n	#define def_we (1.0f/36.0f)";
-        let d3q15 = "\n	#define def_w0 (1.0f/4.5f)".to_owned() // center (0)
-        +"\n	#define def_ws (1.0f/9.0f)" // straight (1-6)
-        +"\n	#define def_wc (1.0f/72.0f)";
-        let d3q19 = "\n	#define def_w0 (1.0f/3.0f)".to_owned() // center (0)
-        +"\n	#define def_ws (1.0f/18.0f)" // straight (1-6)
-        +"\n	#define def_we (1.0f/36.0f)";
-        let d3q27 = "\n	#define def_w0 (1.0f/3.0f)".to_owned() // center (0)
-        +"\n	#define def_ws (1.0f/18.0f)" // straight (1-6)
-        +"\n	#define def_we (1.0f/36.0f)";
+        let d2q9 = "\n	#define DEF_W0 (1.0f/2.25f)".to_owned() // center (0)
+        +"\n	#define DEF_WS (1.0f/9.0f)" // straight (1-4)
+        +"\n	#define DEF_WE (1.0f/36.0f)";
+        let d3q15 = "\n	#define DEF_W0 (1.0f/4.5f)".to_owned() // center (0)
+        +"\n	#define DEF_WS (1.0f/9.0f)" // straight (1-6)
+        +"\n	#define DEF_WC (1.0f/72.0f)";
+        let d3q19 = "\n	#define DEF_W0 (1.0f/3.0f)".to_owned() // center (0)
+        +"\n	#define DEF_WS (1.0f/18.0f)" // straight (1-6)
+        +"\n	#define DEF_WE (1.0f/36.0f)";
+        let d3q27 = "\n	#define DEF_W0 (1.0f/3.0f)".to_owned() // center (0)
+        +"\n	#define DEF_WS (1.0f/18.0f)" // straight (1-6)
+        +"\n	#define DEF_WE (1.0f/36.0f)";
         //Relaxation time types
         let srt = "\n	#define SRT";
         let trt = "\n	#define TRT";
@@ -753,35 +753,35 @@ impl LbmDomain {
         +"\n	#define store(p,o,x) p[o]=x"; // regular float write
 
         // Return String
-        "\n    #define def_Nx ".to_owned() + &n_x.to_string()+"u"
-        +"\n	#define def_Ny "+ &n_y.to_string()+"u"
-        +"\n	#define def_Nz "+ &n_z.to_string()+"u"
-        +"\n	#define def_N  "+ &Self::get_n(n_x, n_y, n_z).to_string()+"ul"
+        "\n    #define DEF_NX ".to_owned() + &n_x.to_string()+"u"
+        +"\n	#define DEF_NY "+ &n_y.to_string()+"u"
+        +"\n	#define DEF_NZ "+ &n_z.to_string()+"u"
+        +"\n	#define DEF_N  "+ &Self::get_n(n_x, n_y, n_z).to_string()+"ul"
 
-        +"\n	#define def_Dx "+ &d_x.to_string()+"u"
-        +"\n	#define def_Dy "+ &d_y.to_string()+"u"
-        +"\n	#define def_Dz "+ &d_z.to_string()+"u"
-        +"\n	#define def_Di "+ &d_i.to_string()+"u"
+        +"\n	#define DEF_DX "+ &d_x.to_string()+"u"
+        +"\n	#define DEF_DY "+ &d_y.to_string()+"u"
+        +"\n	#define DEF_DZ "+ &d_z.to_string()+"u"
+        +"\n	#define DEF_DI "+ &d_i.to_string()+"u"
 
-        +"\n	#define def_Ox "+ &o_x.to_string()+"" // offsets are signed integer!
-        +"\n	#define def_Oy "+ &o_y.to_string()+""
-        +"\n	#define def_Oz "+ &o_z.to_string()+""
+        +"\n	#define DEF_OX "+ &o_x.to_string()+"" // offsets are signed integer!
+        +"\n	#define DEF_OY "+ &o_y.to_string()+""
+        +"\n	#define DEF_OZ "+ &o_z.to_string()+""
 
-        +"\n	#define def_Ax "+ &(n_y * n_z).to_string()+"u"
-        +"\n	#define def_Ay "+ &(n_z * n_x).to_string()+"u"
-        +"\n	#define def_Az "+ &(n_x * n_y).to_string()+"u"
+        +"\n	#define DEF_AX "+ &(n_y * n_z).to_string()+"u"
+        +"\n	#define DEF_AY "+ &(n_z * n_x).to_string()+"u"
+        +"\n	#define DEF_AZ "+ &(n_x * n_y).to_string()+"u"
 
-        +"\n	#define def_domain_offset_x "+ &format!("{:?}", (o_x as f32+((d_x>1) as i32 as f32) - 0.5*(d_x as f32 - 1.0) * (n_x - 2u32 * ((d_x>1u32) as i32 as u32)) as f32))+"f"
-        +"\n	#define def_domain_offset_y "+ &format!("{:?}", (o_y as f32+((d_y>1) as i32 as f32) - 0.5*(d_y as f32 - 1.0) * (n_y - 2u32 * ((d_y>1u32) as i32 as u32)) as f32))+"f"
-        +"\n	#define def_domain_offset_z "+ &format!("{:?}", (o_z as f32+((d_z>1) as i32 as f32) - 0.5*(d_z as f32 - 1.0) * (n_z - 2u32 * ((d_z>1u32) as i32 as u32)) as f32))+"f"
+        +"\n	#define DEF_DOMAIN_OFFSET_X "+ &format!("{:?}", (o_x as f32+((d_x>1) as i32 as f32) - 0.5*(d_x as f32 - 1.0) * (n_x - 2u32 * ((d_x>1u32) as i32 as u32)) as f32))+"f"
+        +"\n	#define DEF_DOMAIN_OFFSET_Y "+ &format!("{:?}", (o_y as f32+((d_y>1) as i32 as f32) - 0.5*(d_y as f32 - 1.0) * (n_y - 2u32 * ((d_y>1u32) as i32 as u32)) as f32))+"f"
+        +"\n	#define DEF_DOMAIN_OFFSET_Z "+ &format!("{:?}", (o_z as f32+((d_z>1) as i32 as f32) - 0.5*(d_z as f32 - 1.0) * (n_z - 2u32 * ((d_z>1u32) as i32 as u32)) as f32))+"f"
 
         +"\n	#define D"+ &dimensions.to_string()+"Q"+ &velocity_set.to_string()+"" // D2Q9/D3Q15/D3Q19/D3Q27
-        +"\n	#define def_velocity_set "+ &velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
-        +"\n	#define def_dimensions "  + &dimensions.to_string()+"u"   // number spatial dimensions (2D or 3D)
-        +"\n	#define def_transfers "   + &transfers.to_string()+"u"    // number of DDFs that are transferred between multiple domains
+        +"\n	#define DEF_VELOCITY_SET "+ &velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
+        +"\n	#define DEF_DIMENSIONS "  + &dimensions.to_string()+"u"   // number spatial dimensions (2D or 3D)
+        +"\n	#define DEF_TRANSFERS "   + &transfers.to_string()+"u"    // number of DDFs that are transferred between multiple domains
 
-        +"\n	#define def_c 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
-        +"\n	#define def_w " + &format!("{:?}", 1.0f32/(3.0f32*nu+0.5f32))+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+        +"\n	#define DEF_C 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
+        +"\n	#define DEF_W " + &format!("{:?}", 1.0f32/(3.0f32*nu+0.5f32))+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
         + match lbm_config.velocity_set {
             VelocitySet::D2Q9 => &d2q9,
             VelocitySet::D3Q15 => &d3q15,
@@ -816,12 +816,12 @@ impl LbmDomain {
         + if lbm_config.ext_volume_force {         "\n	#define VOLUME_FORCE"} else {""}
         + &if lbm_config.ext_magneto_hydro {
          "\n	#define MAGNETO_HYDRO".to_owned()
-        +"\n	#define def_ke "    + &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
-        +"\n	#define def_kmu "   + &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
-        +"\n	#define def_lod_d " + &format!("{}u", lbm_config.mhd_lod_depth)
-        +"\n    #define def_n_lod " + &format!("{}u", n_lod)
-        +"\n    #define def_n_lod_own " + &format!("{}u", n_lod_own)
-        +"\n	#define def_w_Q  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
+        +"\n	#define DEF_KE "    + &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
+        +"\n	#define DEF_KMU "   + &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * PI))
+        +"\n	#define DEF_LOD_DEPTH " + &format!("{}u", lbm_config.mhd_lod_depth)
+        +"\n    #define DEF_NUM_LOD " + &format!("{}u", n_lod)
+        +"\n    #define DEF_NUM_LOD_OWN " + &format!("{}u", n_lod_own)
+        +"\n	#define DEF_WQ  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
         } else {"".to_string()}
         + if lbm_config.ext_force_field {                "\n	#define FORCE_FIELD"} else {""}
         + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}

@@ -5,34 +5,34 @@
 #define fpxx float
 #endif // FP32
 
-#define def_Nx 20u
-#define def_Ny 20u
-#define def_Nz 20u
-#define def_N 8000ul
+#define DEF_NX 20u
+#define DEF_NY 20u
+#define DEF_NZ 20u
+#define DEF_N 8000ul
 
-#define def_Dx 1u
-#define def_Dy 1u
-#define def_Dz 1u
-#define def_Di 0u
+#define DEF_DX 1u
+#define DEF_DY 1u
+#define DEF_DZ 1u
+#define DEF_DI 0u
 
-#define def_Ax 1u
-#define def_Ay 1u
-#define def_Az 1u
+#define DEF_AX 1u
+#define DEF_AY 1u
+#define DEF_AZ 1u
 
 #define D "D2Q9" // D2Q9/D3Q15/D3Q19/D3Q27
-#define def_velocity_set 9u // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
-#define def_dimensions 2u // number spatial dimensions (2D or 3D)
-#define def_transfers 3u // number of DDFs that are transferred between multiple domains
+#define DEF_VELOCITY_SET 9u // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
+#define DEF_DIMENSIONS 2u // number spatial dimensions (2D or 3D)
+#define DEF_TRANSFERS 3u // number of DDFs that are transferred between multiple domains
 
-#define def_c 0.57735027f // lattice speed of sound c = 1/sqrt(3)*dt
-#define def_w 2.0f // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
-#define def_w0 (1.0f/2.25f)
-#define def_ws (1.0f/9.0f)
-#define def_we (1.0f/36.0f)
-#define def_ke 8.9875517923E9f
-#define def_kmu 0.0f
+#define DEF_C 0.57735027f // lattice speed of sound c = 1/sqrt(3)*dt
+#define DEF_W 2.0f // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+#define DEF_W0 (1.0f/2.25f)
+#define DEF_WS (1.0f/9.0f)
+#define DEF_WE (1.0f/36.0f)
+#define DEF_KE 8.9875517923E9f
+#define DEF_KMU 0.0f
 #define def_ind_r 5 // Range of induction fill around cell
-#define def_w_Q 0.1f
+#define DEF_WQ 0.1f
 
 #define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
 #define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
@@ -56,9 +56,9 @@
 #define EQUILIBRIUM_BOUNDARIES
 #define VOLUME_FORCE
 #define MAGNETO_HYDRO
-#define def_lod_d 2u
-#define def_n_lod 73u
-#define def_n_lod_own 73u
+#define DEF_LOD_DEPTH 2u
+#define DEF_NUM_LOD 73u
+#define DEF_NUM_LOD_OWN 73u
 //These defines are for code completion only and are removed from the code before compilation 
 #define EndTempDefines%
 
@@ -102,7 +102,7 @@ inline int imin(int x, int y) {
 		return y;
 	}
 }
-// x to the power of def_dimensions
+// x to the power of DEF_DIMENSIONS
 inline int to_d(int x) {
 	#if defined(D2Q9)
 	return x * x;
@@ -119,45 +119,45 @@ inline float atomic_add_f(volatile __global float* address, const float value) {
 
 
 float3 position(const uint3 xyz) { // 3D coordinates to 3D position
-	return (float3)((float)xyz.x+0.5f-0.5f*(float)def_Nx, (float)xyz.y+0.5f-0.5f*(float)def_Ny, (float)xyz.z+0.5f-0.5f*(float)def_Nz);
+	return (float3)((float)xyz.x+0.5f-0.5f*(float)DEF_NX, (float)xyz.y+0.5f-0.5f*(float)DEF_NY, (float)xyz.z+0.5f-0.5f*(float)DEF_NZ);
 }
 uint3 coordinates(const uint n) { // disassemble 1D index to 3D coordinates (n -> x,y,z)
-	const uint t = n%(def_Nx*def_Ny);
-	return (uint3)(t%def_Nx, t/def_Nx, n/(def_Nx*def_Ny)); // n = x+(y+z*Ny)*Nx
+	const uint t = n%(DEF_NX*DEF_NY);
+	return (uint3)(t%DEF_NX, t/DEF_NX, n/(DEF_NX*DEF_NY)); // n = x+(y+z*Ny)*Nx
 }
 uint3 coordinates_sl(const uint n, const uint nx, const uint ny) { // disassemble 1D index and side lenghts to 3D coordinates (n -> x,y,z)
 	const uint t = n%(nx*ny);
 	return (uint3)(t%nx, t/nx, n/(nx*ny)); // n = x+(y+z*Ny)*Nx
 }
 uint index(const uint3 xyz) { // assemble 1D index from 3D coordinates (x,y,z -> n)
-	return xyz.x+(xyz.y+xyz.z*def_Ny)*def_Nx; // n = x+(y+z*Ny)*Nx
+	return xyz.x+(xyz.y+xyz.z*DEF_NY)*DEF_NX; // n = x+(y+z*Ny)*Nx
 }
 bool is_halo(const uint n) {
 	const uint3 xyz = coordinates(n);
-	return ((def_Dx>1u)&(xyz.x==0u||xyz.x>=def_Nx-1u))||((def_Dy>1u)&(xyz.y==0u||xyz.y>=def_Ny-1u))||((def_Dz>1u)&(xyz.z==0u||xyz.z>=def_Nz-1u));
+	return ((DEF_DX>1u)&(xyz.x==0u||xyz.x>=DEF_NX-1u))||((DEF_DY>1u)&(xyz.y==0u||xyz.y>=DEF_NY-1u))||((DEF_DZ>1u)&(xyz.z==0u||xyz.z>=DEF_NZ-1u));
 }
 bool is_halo_q(const uint3 xyz) {
-	return ((def_Dx>1u)&(xyz.x==0u||xyz.x>=def_Nx-2u))||((def_Dy>1u)&(xyz.y==0u||xyz.y>=def_Ny-2u))||((def_Dz>1u)&(xyz.z==0u||xyz.z>=def_Nz-2u)); // halo data is kept up-to-date, so allow using halo data for rendering
+	return ((DEF_DX>1u)&(xyz.x==0u||xyz.x>=DEF_NX-2u))||((DEF_DY>1u)&(xyz.y==0u||xyz.y>=DEF_NY-2u))||((DEF_DZ>1u)&(xyz.z==0u||xyz.z>=DEF_NZ-2u)); // halo data is kept up-to-date, so allow using halo data for rendering
 }
 ulong index_f(const uint n, const uint i) { // 64-bit indexing (maximum 2^32 lattice points (1624^3 lattice resolution, 225GB)
-	return (ulong)i*def_N+(ulong)n; // SoA (229% faster on GPU)
+	return (ulong)i*DEF_N+(ulong)n; // SoA (229% faster on GPU)
 }
 void calculate_f_eq(const float rho, float ux, float uy, float uz, float* feq) {
     const float c3=-3.0f*(sq(ux)+sq(uy)+sq(uz)), rhom1=rho-1.0f; // c3 = -2*sq(u)/(2*sq(c)), rhom1 is arithmetic optimization to minimize digit extinction
     ux *= 3.0f;
     uy *= 3.0f;
     uz *= 3.0f;
-    feq[ 0] = def_w0*fma(rho, 0.5f*c3, rhom1); // 000 (identical for all velocity sets)
+    feq[ 0] = DEF_W0*fma(rho, 0.5f*c3, rhom1); // 000 (identical for all velocity sets)
     #if defined(D2Q9)
     const float u0=ux+uy, u1=ux-uy; // these pre-calculations make manual unrolling require less FLOPs
-    const float rhos=def_ws*rho, rhoe=def_we*rho, rhom1s=def_ws*rhom1, rhom1e=def_we*rhom1;
+    const float rhos=DEF_WS*rho, rhoe=DEF_WE*rho, rhom1s=DEF_WS*rhom1, rhom1e=DEF_WE*rhom1;
     feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
     feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
     feq[ 5] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), u0), rhom1e); feq[ 6] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), -u0), rhom1e); // ++0 --0
     feq[ 7] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), u1), rhom1e); feq[ 8] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), -u1), rhom1e); // +-0 -+0
     #elif defined(D3Q15)
     const float u0=ux+uy+uz, u1=ux+uy-uz, u2=ux-uy+uz, u3=-ux+uy+uz;
-    const float rhos=def_ws*rho, rhoc=def_wc*rho, rhom1s=def_ws*rhom1, rhom1c=def_wc*rhom1;
+    const float rhos=DEF_WS*rho, rhoc=DEF_WC*rho, rhom1s=DEF_WS*rhom1, rhom1c=DEF_WC*rhom1;
     feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
     feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
     feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
@@ -167,7 +167,7 @@ void calculate_f_eq(const float rho, float ux, float uy, float uz, float* feq) {
     feq[13] = fma(rhoc, fma(0.5f, fma(u3, u3, c3), u3), rhom1c); feq[14] = fma(rhoc, fma(0.5f, fma(u3, u3, c3), -u3), rhom1c); // -++ +--
     #elif defined(D3Q19)
     const float u0=ux+uy, u1=ux+uz, u2=uy+uz, u3=ux-uy, u4=ux-uz, u5=uy-uz;
-    const float rhos=def_ws*rho, rhoe=def_we*rho, rhom1s=def_ws*rhom1, rhom1e=def_we*rhom1;
+    const float rhos=DEF_WS*rho, rhoe=DEF_WE*rho, rhom1s=DEF_WS*rhom1, rhom1e=DEF_WE*rhom1;
     feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
     feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
     feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
@@ -179,7 +179,7 @@ void calculate_f_eq(const float rho, float ux, float uy, float uz, float* feq) {
     feq[17] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), u5), rhom1e); feq[18] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), -u5), rhom1e); // 0+- 0-+
     #elif defined(D3Q27)
     const float u0=ux+uy, u1=ux+uz, u2=uy+uz, u3=ux-uy, u4=ux-uz, u5=uy-uz, u6=ux+uy+uz, u7=ux+uy-uz, u8=ux-uy+uz, u9=-ux+uy+uz;
-    const float rhos=def_ws*rho, rhoe=def_we*rho, rhoc=def_wc*rho, rhom1s=def_ws*rhom1, rhom1e=def_we*rhom1, rhom1c=def_wc*rhom1;
+    const float rhos=DEF_WS*rho, rhoe=DEF_WE*rho, rhoc=DEF_WC*rho, rhom1s=DEF_WS*rhom1, rhom1e=DEF_WE*rhom1, rhom1c=DEF_WC*rhom1;
     feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
     feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
     feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
@@ -197,7 +197,7 @@ void calculate_f_eq(const float rho, float ux, float uy, float uz, float* feq) {
 }
 void calculate_rho_u(const float* f, float* rhon, float* uxn, float* uyn, float* uzn) {
     float rho=f[0], ux, uy, uz;
-    for(uint i=1u; i<def_velocity_set; i++) rho += f[i]; // calculate density from fi
+    for(uint i=1u; i<DEF_VELOCITY_SET; i++) rho += f[i]; // calculate density from fi
     rho += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fi (perturbation method / DDF-shifting)
     #if defined(D2Q9)
     ux = f[1]-f[2]+f[5]-f[6]+f[7]-f[8]; // calculate velocity from fi (alternating + and - for best accuracy)
@@ -223,14 +223,14 @@ void calculate_rho_u(const float* f, float* rhon, float* uxn, float* uyn, float*
 } // calculate_rho_u
 void load_f(const uint n, float* fhn, const global fpxx* fi, const uint* j, const ulong t) {
 	fhn[0] = load(fi, index_f(n, 0u)); // Esoteric-Pull
-	for(uint i=1u; i<def_velocity_set; i+=2u) {
+	for(uint i=1u; i<DEF_VELOCITY_SET; i+=2u) {
 		fhn[i   ] = load(fi, index_f(n   , t%2ul ? i    : i+1u));
 		fhn[i+1u] = load(fi, index_f(j[i], t%2ul ? i+1u : i   ));
 	}
 }
 void store_f(const uint n, const float* fhn, global fpxx* fi, const uint* j, const ulong t) {
 	store(fi, index_f(n, 0u), fhn[0]); // Esoteric-Pull
-	for(uint i=1u; i<def_velocity_set; i+=2u) {
+	for(uint i=1u; i<DEF_VELOCITY_SET; i+=2u) {
 		store(fi, index_f(j[i], t%2ul ? i+1u : i   ), fhn[i   ]);
 		store(fi, index_f(n   , t%2ul ? i    : i+1u), fhn[i+1u]);
     }
@@ -238,14 +238,14 @@ void store_f(const uint n, const float* fhn, global fpxx* fi, const uint* j, con
 void calculate_indices(const uint n, uint* x0, uint* xp, uint* xm, uint* y0, uint* yp, uint* ym, uint* z0, uint* zp, uint* zm) {
     const uint3 xyz = coordinates(n);
     *x0 =   xyz.x; // pre-calculate indices (periodic boundary conditions)
-    *xp =  (xyz.x       +1u)%def_Nx;
-    *xm =  (xyz.x+def_Nx-1u)%def_Nx;
-    *y0 =   xyz.y                   *def_Nx;
-    *yp = ((xyz.y       +1u)%def_Ny)*def_Nx;
-    *ym = ((xyz.y+def_Ny-1u)%def_Ny)*def_Nx;
-    *z0 =   xyz.z                   *def_Ny*def_Nx;
-    *zp = ((xyz.z       +1u)%def_Nz)*def_Ny*def_Nx;
-    *zm = ((xyz.z+def_Nz-1u)%def_Nz)*def_Ny*def_Nx;
+    *xp =  (xyz.x       +1u)%DEF_NX;
+    *xm =  (xyz.x+DEF_NX-1u)%DEF_NX;
+    *y0 =   xyz.y                   *DEF_NX;
+    *yp = ((xyz.y       +1u)%DEF_NY)*DEF_NX;
+    *ym = ((xyz.y+DEF_NY-1u)%DEF_NY)*DEF_NX;
+    *z0 =   xyz.z                   *DEF_NY*DEF_NX;
+    *zp = ((xyz.z       +1u)%DEF_NZ)*DEF_NY*DEF_NX;
+    *zm = ((xyz.z+DEF_NZ-1u)%DEF_NZ)*DEF_NY*DEF_NX;
 }
 void neighbors(const uint n, uint* j) {
     uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
@@ -291,7 +291,7 @@ void neighbors(const uint n, uint* j) {
     #endif
 } //neighbors
 float3 load_u(const uint n, const global float* u) {
-	return (float3)(u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n]);
+	return (float3)(u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n]);
 }
 float calculate_Q_cached(const float3 u0, const float3 u1, const float3 u2, const float3 u3, const float3 u4, const float3 u5) { // Q-criterion
 	const float duxdx=u0.x-u1.x, duydx=u0.y-u1.y, duzdx=u0.z-u1.z; // du/dx = (u2-u0)/2
@@ -314,7 +314,7 @@ float calculate_Q(const uint n, const global float* u) { // Q-criterion
 	return calculate_Q_cached(load_u(j[0], u), load_u(j[1], u), load_u(j[2], u), load_u(j[3], u), load_u(j[4], u), load_u(j[5], u));
 } // calculate_Q()
 float c(const uint i) { // avoid constant keyword by encapsulating data in function which gets inlined by compiler
-	const float c[3u*def_velocity_set] = {
+	const float c[3u*DEF_VELOCITY_SET] = {
 	#if defined(D2Q9)
 		0, 1,-1, 0, 0, 1,-1, 1,-1, // x
 		0, 0, 0, 1,-1, 1,-1,-1, 1, // y
@@ -336,19 +336,19 @@ float c(const uint i) { // avoid constant keyword by encapsulating data in funct
 	return c[i];
 }
 float w(const uint i) { // avoid constant keyword by encapsulating data in function which gets inlined by compiler
-	const float w[def_velocity_set] = { def_w0, // velocity set weights
+	const float w[DEF_VELOCITY_SET] = { DEF_W0, // velocity set weights
 	#if defined(D2Q9)
-		def_ws, def_ws, def_ws, def_ws, def_we, def_we, def_we, def_we
+		DEF_WS, DEF_WS, DEF_WS, DEF_WS, DEF_WE, DEF_WE, DEF_WE, DEF_WE
 	#elif defined(D3Q15)
-		def_ws, def_ws, def_ws, def_ws, def_ws, def_ws,
-		def_wc, def_wc, def_wc, def_wc, def_wc, def_wc, def_wc, def_wc
+		DEF_WS, DEF_WS, DEF_WS, DEF_WS, DEF_WS, DEF_WS,
+		DEF_WC, DEF_WC, DEF_WC, DEF_WC, DEF_WC, DEF_WC, DEF_WC, DEF_WC
 	#elif defined(D3Q19)
-		def_ws, def_ws, def_ws, def_ws, def_ws, def_ws,
-		def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we
+		DEF_WS, DEF_WS, DEF_WS, DEF_WS, DEF_WS, DEF_WS,
+		DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE
 	#elif defined(D3Q27)
-		def_ws, def_ws, def_ws, def_ws, def_ws, def_ws,
-		def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we, def_we,
-		def_wc, def_wc, def_wc, def_wc, def_wc, def_wc, def_wc, def_wc
+		DEF_WS, DEF_WS, DEF_WS, DEF_WS, DEF_WS, DEF_WS,
+		DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE, DEF_WE,
+		DEF_WC, DEF_WC, DEF_WC, DEF_WC, DEF_WC, DEF_WC, DEF_WC, DEF_WC
 	#endif
 	};
 	return w[i];
@@ -360,9 +360,9 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 	#else
 		const float uF = -0.33333334f*fma(ux, fx, fma(uy, fy, uz*fz)); // 3D
 	#endif
-	Fin[0] = 9.0f*def_w0*uF ; // 000 (identical for all velocity sets)
-	for(uint i=1u; i<def_velocity_set; i++) { // loop is entirely unrolled by compiler, no unnecessary FLOPs are happening
-		Fin[i] = 9.0f*w(i)*fma(c(i)*fx+c(def_velocity_set+i)*fy+c(2u*def_velocity_set+i)*fz, c(i)*ux+c(def_velocity_set+i)*uy+c(2u*def_velocity_set+i)*uz+0.33333334f, uF);
+	Fin[0] = 9.0f*DEF_W0*uF ; // 000 (identical for all velocity sets)
+	for(uint i=1u; i<DEF_VELOCITY_SET; i++) { // loop is entirely unrolled by compiler, no unnecessary FLOPs are happening
+		Fin[i] = 9.0f*w(i)*fma(c(i)*fx+c(DEF_VELOCITY_SET+i)*fy+c(2u*DEF_VELOCITY_SET+i)*fz, c(i)*ux+c(DEF_VELOCITY_SET+i)*uy+c(2u*DEF_VELOCITY_SET+i)*uz+0.33333334f, uF);
 	}
 }
 #endif // VOLUME_FORCE
@@ -404,22 +404,22 @@ uint lod_index(const uint n, const uint d) {
 	const uint3 c = coordinates(n);
 	const uint nd = (1<<d); // Number of lods on each axis
 	// TODO: Arithmetic optimization
-	const uint x = c.x / (def_Nx / nd);
-	const uint y = c.y / (def_Ny / nd);
-	const uint z = c.z / (def_Nz / nd);
+	const uint x = c.x / (DEF_NX / nd);
+	const uint y = c.y / (DEF_NY / nd);
+	const uint z = c.z / (DEF_NZ / nd);
 	return x + (y + z * nd) * nd;
 }
 // Size of LODs at the specified depth d
 float lod_s(const uint d) {
 	const uint nd = (1<<d); // Number of lods on each axis
-	return (float)((def_Nx / nd) * (def_Ny / nd) * (def_Nz / nd));
+	return (float)((DEF_NX / nd) * (DEF_NY / nd) * (DEF_NZ / nd));
 }
 // float coords of the center of an LOD from 1D LOD index n and specified depth d
 float3 lod_coordinates(const uint n, const uint d) { // 
 	const uint nd = (1<<d); // Number of lods on each axis
-	const float dsx = (float)(def_Nx / nd);
-	const float dsy = (float)(def_Ny / nd);
-	const float dsz = (float)(def_Nz / nd);
+	const float dsx = (float)(DEF_NX / nd);
+	const float dsy = (float)(DEF_NY / nd);
+	const float dsz = (float)(DEF_NZ / nd);
 	const uint t = n%(nd*nd);
 	return (float3)((float)(t%nd)*dsx+(0.5f*dsx), (float)(t/nd)*dsy+(0.5f*dsy), (float)(n/(nd*nd))*dsz+(0.5f*dsz)); // n = x+(y+z*Ny)*Nx
 }
@@ -441,18 +441,18 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)def_N||is_halo(n)) return; // don't execute stream_collide() on halo
+    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute stream_collide() on halo
     const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
     const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
     if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
 
-    uint j[def_velocity_set]; // neighbor indices
+    uint j[DEF_VELOCITY_SET]; // neighbor indices
     neighbors(n, j); // calculate neighbor indices
 
-    float fhn[def_velocity_set]; // local DDFs
+    float fhn[DEF_VELOCITY_SET]; // local DDFs
     load_f(n, fhn, fi, j, t); // perform streaming (part 2)
 
-	ulong nxi=(ulong)n, nyi=def_N+(ulong)n, nzi=2ul*def_N+(ulong)n; // n indecies for x, y and z components
+	ulong nxi=(ulong)n, nyi=DEF_N+(ulong)n, nzi=2ul*DEF_N+(ulong)n; // n indecies for x, y and z components
 
     float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
 
@@ -471,7 +471,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
 
-    float Fin[def_velocity_set]; // forcing terms
+    float Fin[DEF_VELOCITY_SET]; // forcing terms
 
 	#ifdef FORCE_FIELD
 	{ // separate block to avoid variable name conflicts
@@ -495,7 +495,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 		Q[n] = Qn; // update charge field
 
-		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-def_w_Q, qhn[i], def_w_Q*qeq[i]); // perform collision
+		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-DEF_WQ, qhn[i], DEF_WQ*qeq[i]); // perform collision
 		store_q(n, qhn, qi, j7, t); // perform streaming (part 1)
 
 		// F = charge * (E + (U cross B))
@@ -511,12 +511,12 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		E_dyn[nyi] = E[nyi];
 		E_dyn[nzi] = E[nzi];
 
-		#if def_lod_d > 0 // Update LOD buffer
+		#if DEF_LOD_DEPTH > 0 // Update LOD buffer
 			uint off = 0;
-			#if (def_Dx>1 || def_Dy>1 || def_Dz>1)  // Multiple Domains
-				for (uint d = 0; d<=def_lod_d; d++) // Iterate over depth levels d and add values to LOD buffer
+			#if (DEF_DX>1 || DEF_DY>1 || DEF_DZ>1)  // Multiple Domains
+				for (uint d = 0; d<=DEF_LOD_DEPTH; d++) // Iterate over depth levels d and add values to LOD buffer
 			#else // Single Domain
-				const uint d = def_lod_d;
+				const uint d = DEF_LOD_DEPTH;
 			#endif // Single Domain
 			{
 				const uint ind = (lod_index(n, d) + off) * 4;
@@ -537,15 +537,15 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 	#ifdef VOLUME_FORCE
 		const float rho2 = 0.5f/rhon; // apply external volume force (Guo forcing, Krueger p.233f)
-		uxn = clamp(fma(fxn, rho2, uxn), -def_c, def_c); // limit velocity (for stability purposes)
-		uyn = clamp(fma(fyn, rho2, uyn), -def_c, def_c); // force term: F*dt/(2*rho)
-		uzn = clamp(fma(fzn, rho2, uzn), -def_c, def_c);
+		uxn = clamp(fma(fxn, rho2, uxn), -DEF_C, DEF_C); // limit velocity (for stability purposes)
+		uyn = clamp(fma(fyn, rho2, uyn), -DEF_C, DEF_C); // force term: F*dt/(2*rho)
+		uzn = clamp(fma(fzn, rho2, uzn), -DEF_C, DEF_C);
 		calculate_forcing_terms(uxn, uyn, uzn, fxn, fyn, fzn, Fin); // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
 	#else // VOLUME_FORCE
-    	uxn = clamp(uxn, -def_c, def_c); // limit velocity (for stability purposes)
-    	uyn = clamp(uyn, -def_c, def_c); // force term: F*dt/(2*rho)
-    	uzn = clamp(uzn, -def_c, def_c);
-    	for(uint i=0u; i<def_velocity_set; i++) Fin[i] = 0.0f;
+    	uxn = clamp(uxn, -DEF_C, DEF_C); // limit velocity (for stability purposes)
+    	uyn = clamp(uyn, -DEF_C, DEF_C); // force term: F*dt/(2*rho)
+    	uzn = clamp(uzn, -DEF_C, DEF_C);
+    	for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] = 0.0f;
 	#endif // VOLUME_FORCE
 
 
@@ -567,20 +567,20 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 	#endif // UPDATE_FIELDS
 	#endif // EQUILIBRIUM_BOUNDARIES
 
-    float feq[def_velocity_set]; // equilibrium DDFs
+    float feq[DEF_VELOCITY_SET]; // equilibrium DDFs
     calculate_f_eq(rhon, uxn, uyn, uzn, feq); // calculate equilibrium DDFs
-    float w = def_w; // LBM relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+    float w = DEF_W; // LBM relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
 
     #if defined(SRT) // SRT
 		#ifdef VOLUME_FORCE
 			const float c_tau = fma(w, -0.5f, 1.0f);
-			for(uint i=0u; i<def_velocity_set; i++) Fin[i] *= c_tau;
+			for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] *= c_tau;
 		#endif // VOLUME_FORCE
 
         #ifndef EQUILIBRIUM_BOUNDARIES
-            for(uint i=0u; i<def_velocity_set; i++) fhn[i] = fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
+            for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
         #else
-            for(uint i=0u; i<def_velocity_set; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
+            for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
         #endif // EQUILIBRIUM_BOUNDARIES
 
     #elif defined(TRT) // TRT
@@ -589,29 +589,29 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 		#ifdef VOLUME_FORCE
 			const float c_taup=fma(wp, -0.25f, 0.5f), c_taum=fma(wm, -0.25f, 0.5f); // source: https://arxiv.org/pdf/1901.08766.pdf
-			float Fib[def_velocity_set]; // F_bar
+			float Fib[DEF_VELOCITY_SET]; // F_bar
 			Fib[0] = Fin[0];
-			for(uint i=1u; i<def_velocity_set; i+=2u) {
+			for(uint i=1u; i<DEF_VELOCITY_SET; i+=2u) {
 				Fib[i   ] = Fin[i+1u];
 				Fib[i+1u] = Fin[i   ];
 			}
-			for(uint i=0u; i<def_velocity_set; i++) Fin[i] = fma(c_taup, Fin[i]+Fib[i], c_taum*(Fin[i]-Fib[i]));
+			for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] = fma(c_taup, Fin[i]+Fib[i], c_taum*(Fin[i]-Fib[i]));
 		#endif // VOLUME_FORCE
 
-        float fhb[def_velocity_set]; // fhn in inverse directions
-        float feb[def_velocity_set]; // feq in inverse directions
+        float fhb[DEF_VELOCITY_SET]; // fhn in inverse directions
+        float feb[DEF_VELOCITY_SET]; // feq in inverse directions
         fhb[0] = fhn[0];
         feb[0] = feq[0];
-        for(uint i=1u; i<def_velocity_set; i+=2u) {
+        for(uint i=1u; i<DEF_VELOCITY_SET; i+=2u) {
         	fhb[i   ] = fhn[i+1u];
         	fhb[i+1u] = fhn[i   ];
         	feb[i   ] = feq[i+1u];
         	feb[i+1u] = feq[i   ];
         }
         #ifndef EQUILIBRIUM_BOUNDARIES
-            for(uint i=0u; i<def_velocity_set; i++) fhn[i] = fma(0.5f*wp, feq[i]-fhn[i]+feb[i]-fhb[i], fma(0.5f*wm, feq[i]-feb[i]-fhn[i]+fhb[i], fhn[i]+Fin[i])); // perform collision (TRT)
+            for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = fma(0.5f*wp, feq[i]-fhn[i]+feb[i]-fhb[i], fma(0.5f*wm, feq[i]-feb[i]-fhn[i]+fhb[i], fhn[i]+Fin[i])); // perform collision (TRT)
         #else // EQUILIBRIUM_BOUNDARIES
-            for(uint i=0u; i<def_velocity_set; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(0.5f*wp, feq[i]-fhn[i]+feb[i]-fhb[i], fma(0.5f*wm, feq[i]-feb[i]-fhn[i]+fhb[i], fhn[i]+Fin[i])); // perform collision (TRT)
+            for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(0.5f*wp, feq[i]-fhn[i]+feb[i]-fhb[i], fma(0.5f*wm, feq[i]-feb[i]-fhn[i]+fhb[i], fhn[i]+Fin[i])); // perform collision (TRT)
         #endif // EQUILIBRIUM_BOUNDARIES
     #endif // TRT
 
@@ -629,17 +629,17 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)def_N||is_halo(n)) return; // don't execute initialize() on halo
-	ulong nxi=(ulong)n, nyi=def_N+(ulong)n, nzi=2ul*def_N+(ulong)n; // n indecies for x, y and z components
+    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute initialize() on halo
+	ulong nxi=(ulong)n, nyi=DEF_N+(ulong)n, nzi=2ul*DEF_N+(ulong)n; // n indecies for x, y and z components
     uchar flagsn = flags[n];
     const uchar flagsn_bo = flagsn&TYPE_BO; // extract boundary flags
-    uint j[def_velocity_set]; // neighbor indices
+    uint j[DEF_VELOCITY_SET]; // neighbor indices
     neighbors(n, j); // calculate neighbor indices
-    uchar flagsj[def_velocity_set]; // cache neighbor flags for multiple readings
-    for(uint i=1u; i<def_velocity_set; i++) flagsj[i] = flags[j[i]];
+    uchar flagsj[DEF_VELOCITY_SET]; // cache neighbor flags for multiple readings
+    for(uint i=1u; i<DEF_VELOCITY_SET; i++) flagsj[i] = flags[j[i]];
     if(flagsn_bo==TYPE_S) { // cell is solid
 	    bool TYPE_ONLY_S = true; // has only solid neighbors
-	    for(uint i=1u; i<def_velocity_set; i++) TYPE_ONLY_S = TYPE_ONLY_S&&(flagsj[i]&TYPE_BO)==TYPE_S;
+	    for(uint i=1u; i<DEF_VELOCITY_SET; i++) TYPE_ONLY_S = TYPE_ONLY_S&&(flagsj[i]&TYPE_BO)==TYPE_S;
 	    if(TYPE_ONLY_S) {
 	    	u[nxi] = 0.0f; // reset velocity for solid lattice points with only boundary neighbors
 	    	u[nyi] = 0.0f;
@@ -657,14 +657,14 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 			#endif
         }
     }
-    float feq[def_velocity_set]; // f_equilibrium
-    calculate_f_eq(rho[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], feq);
+    float feq[DEF_VELOCITY_SET]; // f_equilibrium
+    calculate_f_eq(rho[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], feq);
     store_f(n, feq, fi, j, 1ul); // write to fi
 
 	#ifdef MAGNETO_HYDRO
 		// Initialize charge ddfs
 		float qeq[7]; // q_equilibrium
-		calculate_q_eq(Q[n], u[n], u[def_N+(ulong)n], u[2ul*def_N+(ulong)n], qeq);
+		calculate_q_eq(Q[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], qeq);
 		uint j7[7]; // neighbors of D3Q7 subset
 		neighbors_charge(n, j7);
 		store_q(n, qeq, qi, j7, 1ul); // write to qi. perform streaming (part 1)
@@ -680,38 +680,35 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 
 __kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_fields() on halo
+    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute update_fields() on halo
     const uchar flagsn = flags[n];
     const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
     if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // don't update fields for boundary or gas lattice points
 
-    uint j[def_velocity_set]; // neighbor indices
+    uint j[DEF_VELOCITY_SET]; // neighbor indices
     neighbors(n, j); // calculate neighbor indices
-    float fhn[def_velocity_set]; // local DDFs
+    float fhn[DEF_VELOCITY_SET]; // local DDFs
     load_f(n, fhn, fi, j, t); // perform streaming (part 2)
 
     float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
     calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
     {
-        uxn = clamp(uxn, -def_c, def_c); // limit velocity (for stability purposes)
-        uyn = clamp(uyn, -def_c, def_c); // force term: F*dt/(2*rho)
-        uzn = clamp(uzn, -def_c, def_c);
+        uxn = clamp(uxn, -DEF_C, DEF_C); // limit velocity (for stability purposes)
+        uyn = clamp(uyn, -DEF_C, DEF_C); // force term: F*dt/(2*rho)
+        uzn = clamp(uzn, -DEF_C, DEF_C);
     }
 
     rho[               n] = rhon; // update density field
     u[                 n] = uxn; // update velocity field
-    u[    def_N+(ulong)n] = uyn;
-    u[2ul*def_N+(ulong)n] = uzn;
-	// update charge field (later)
-
-
+    u[    DEF_N+(ulong)n] = uyn;
+    u[2ul*DEF_N+(ulong)n] = uzn;
 } // update_fields()
 
 #ifdef MAGNETO_HYDRO
 __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* Q, const global float* u, const global float* QU_lod, const global uchar* flags) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)def_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
+    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
     const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
     const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
     if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
@@ -719,28 +716,28 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	const uint3 coord_n = coordinates(n); // Cell coordinate
 	const float3 coord_nf = convert_float3(coord_n); // Cell coordinate as float vector
 
-	const uint nd = (1<<def_lod_d); // Number of lowest level lods on each axis
-	const uint dsx = imax(def_Nx / (1<<nd), 1);
-	const uint dsy = imax(def_Ny / (1<<nd), 1);
-	const uint dsz = imax(def_Nz / (1<<nd), 1);
+	const uint nd = (1<<DEF_LOD_DEPTH); // Number of lowest level lods on each axis
+	const uint dsx = imax(DEF_NX / (1<<nd), 1);
+	const uint dsy = imax(DEF_NY / (1<<nd), 1);
+	const uint dsz = imax(DEF_NZ / (1<<nd), 1);
 
-	const uint x_upper = imin((coord_n.x / dsx) * dsx + dsx, def_Dx>1?def_Nx-1:def_Nx); // Do not read at halo offsets
-	const uint y_upper = imin((coord_n.y / dsy) * dsy + dsy, def_Dy>1?def_Ny-1:def_Ny);
-	const uint z_upper = imin((coord_n.z / dsz) * dsz + dsz, def_Dz>1?def_Nz-1:def_Nz);
+	const uint x_upper = imin((coord_n.x / dsx) * dsx + dsx, DEF_DX>1?DEF_NX-1:DEF_NX); // Do not read at halo offsets
+	const uint y_upper = imin((coord_n.y / dsy) * dsy + dsy, DEF_DY>1?DEF_NY-1:DEF_NY);
+	const uint z_upper = imin((coord_n.z / dsz) * dsz + dsz, DEF_DZ>1?DEF_NZ-1:DEF_NZ);
 
 	float3 e = {0.0f, 0.0f, 0.0f}, b = {0.0f, 0.0f, 0.0f};
 	
 	/// Close distance - consider individual cells
-	for(		uint x = imax((coord_n.x / dsx) * dsx, def_Dx>1?1:0); x < x_upper; x++) {
-		for(	uint y = imax((coord_n.y / dsy) * dsy, def_Dy>1?1:0); y < y_upper; y++) {
-			for(uint z = imax((coord_n.z / dsz) * dsz, def_Dz>1?1:0); z < z_upper; z++) {
+	for(		uint x = imax((coord_n.x / dsx) * dsx, DEF_DX>1?1:0); x < x_upper; x++) {
+		for(	uint y = imax((coord_n.y / dsy) * dsy, DEF_DY>1?1:0); y < y_upper; y++) {
+			for(uint z = imax((coord_n.z / dsz) * dsz, DEF_DZ>1?1:0); z < z_upper; z++) {
 				// _c vars describe surronding cells 
-				const uint n_c = x + (y + z * def_Ny) * def_Nx;
+				const uint n_c = x + (y + z * DEF_NY) * DEF_NX;
 				if (n == n_c) continue;
 					
 				const float q_c = Q[n_c]; // charge of nearby cell
 				if (q_c == 0.0f) { continue; } // cells without charge have no influence
-				const float3 v_c = {u[n_c], u[(ulong)n_c+def_N], u[(ulong)n_c+def_N*2ul]}; // velocity of nearby cell
+				const float3 v_c = {u[n_c], u[(ulong)n_c+DEF_N], u[(ulong)n_c+DEF_N*2ul]}; // velocity of nearby cell
 
 				// precalculation for both fields
 				const float3 vec_r     = coord_nf - convert_float3(coordinates(n_c));
@@ -753,11 +750,11 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	}
 
 	/// Medium distance - consider lowest level LODs in own domain
-	const uint ndi = lod_index(n, def_lod_d); // Own LOD index, needs to be skipped
+	const uint ndi = lod_index(n, DEF_LOD_DEPTH); // Own LOD index, needs to be skipped
 	// Loop over all lowest level LODs
-	for (uint d = imax(def_n_lod_own - to_d(1<<def_lod_d), 0); d < def_n_lod_own; d++) {
+	for (uint d = imax(DEF_NUM_LOD_OWN - to_d(1<<DEF_LOD_DEPTH), 0); d < DEF_NUM_LOD_OWN; d++) {
 		if (d == ndi) continue;
-		const float3 d_c = lod_coordinates(d, def_lod_d);
+		const float3 d_c = lod_coordinates(d, DEF_LOD_DEPTH);
 		const float  q_c =  QU_lod[(d*4)+0]; // charge of LOD
 		const float3 v_c = {QU_lod[(d*4)+1], QU_lod[(d*4)+2], QU_lod[(d*4)+3]}; // velocity of LOD
 
@@ -770,21 +767,21 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	}
 
 	/// Large distance - consider LODs of varying detail in foreign domains (synchronized over communicate_qu_lods)
-	const uint3 coord_d = coordinates_sl(def_Di, def_Dx, def_Dy); // Own domain coordinate
-	uint offset = def_n_lod_own;
-	for (uint d = 0; d < def_Dx*def_Dy*def_Dz; d++) { // Loop over every other domain
-		if (d == def_Di) continue;
-		const uint3 coord_fd = coordinates_sl(d, def_Dx, def_Dy); // coordinate of foreign domain
+	const uint3 coord_d = coordinates_sl(DEF_DI, DEF_DX, DEF_DY); // Own domain coordinate
+	uint offset = DEF_NUM_LOD_OWN;
+	for (uint d = 0; d < DEF_DX*DEF_DY*DEF_DZ; d++) { // Loop over every other domain
+		if (d == DEF_DI) continue;
+		const uint3 coord_fd = coordinates_sl(d, DEF_DX, DEF_DY); // coordinate of foreign domain
 		const int3 domain_diff = {(int)coord_d.x - (int)coord_fd.x, (int)coord_d.y - (int)coord_fd.y, (int)coord_d.z - (int)coord_fd.z}; // Difference in domain coordinates
 		const uint dist = imax(abs(domain_diff.x), imax(abs(domain_diff.y), abs(domain_diff.z)));
-		const uint depth = imax(0, def_lod_d - dist); // Depth of foreign domain LOD
+		const uint depth = imax(0, DEF_LOD_DEPTH - dist); // Depth of foreign domain LOD
 		const uint n_lod_fd = to_d(1<<depth); // Number of lods in foreign domain
 
 		for (int l = 0; l<n_lod_fd; l++) { // Loop over every LOD in foreign domain
 			float3 lc = lod_coordinates(l, depth); // LOD coordinate
-			lc.x -= (float)(domain_diff.x * def_Nx);
-			lc.y -= (float)(domain_diff.y * def_Ny);
-			lc.z -= (float)(domain_diff.z * def_Nz);
+			lc.x -= (float)(domain_diff.x * DEF_NX);
+			lc.y -= (float)(domain_diff.y * DEF_NY);
+			lc.z -= (float)(domain_diff.z * DEF_NZ);
 			const float  q_c =  QU_lod[(offset+l)*4+0]; // charge of LOD
 			const float3 v_c = {QU_lod[(offset+l)*4+1], QU_lod[(offset+l)*4+2], QU_lod[(offset+l)*4+3]}; // velocity of LOD
 
@@ -798,19 +795,19 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	}
 
 	// update buffers
-	E_dyn[n					] += def_ke * e.x;
-	E_dyn[(ulong)n+def_N	] += def_ke * e.y;
-	E_dyn[(ulong)n+def_N*2ul] += def_ke * e.z;
+	E_dyn[n					] += DEF_KE * e.x;
+	E_dyn[(ulong)n+DEF_N	] += DEF_KE * e.y;
+	E_dyn[(ulong)n+DEF_N*2ul] += DEF_KE * e.z;
 
-	B_dyn[n					] += def_kmu * b.x;
-	B_dyn[(ulong)n+def_N	] += def_kmu * b.y;
-	B_dyn[(ulong)n+def_N*2ul] += def_kmu * b.z;
+	B_dyn[n					] += DEF_KMU * b.x;
+	B_dyn[(ulong)n+DEF_N	] += DEF_KMU * b.y;
+	B_dyn[(ulong)n+DEF_N*2ul] += DEF_KMU * b.z;
 } // update_e_b_dynamic()
 
 __kernel void clear_qu_lod(global float* QU_lod) {
 	// Clears own domain LODs for recomputation
 	const uint n = get_global_id(0);
-    if(n>def_n_lod_own) return;
+    if(n>DEF_NUM_LOD_OWN) return;
 	QU_lod[(n * 4)+0] = 0.0f;
 	QU_lod[(n * 4)+1] = 0.0f;
 	QU_lod[(n * 4)+2] = 0.0f;
@@ -820,29 +817,29 @@ __kernel void clear_qu_lod(global float* QU_lod) {
 
 // Inter-Domain Transfer kernels
 uint get_area(const uint direction) {
-	const uint A[3] = { def_Ax, def_Ay, def_Az };
+	const uint A[3] = { DEF_AX, DEF_AY, DEF_AZ };
 	return A[direction];
 }
 // Return 1D index of cell to be transferred from id a and xyz direction (0, 1, 2) for pos and neg directions
 uint index_extract_p(const uint a, const uint direction) {
-	const uint3 coordinates[3] = { (uint3)(def_Nx-2u, a%def_Ny, a/def_Ny), (uint3)(a/def_Nz, def_Ny-2u, a%def_Nz), (uint3)(a%def_Nx, a/def_Nx, def_Nz-2u) };
+	const uint3 coordinates[3] = { (uint3)(DEF_NX-2u, a%DEF_NY, a/DEF_NY), (uint3)(a/DEF_NZ, DEF_NY-2u, a%DEF_NZ), (uint3)(a%DEF_NX, a/DEF_NX, DEF_NZ-2u) };
 	return index(coordinates[direction]);
 }
 uint index_extract_m(const uint a, const uint direction) {
-	const uint3 coordinates[3] = { (uint3)(       1u, a%def_Ny, a/def_Ny), (uint3)(a/def_Nz,        1u, a%def_Nz), (uint3)(a%def_Nx, a/def_Nx,        1u) };
+	const uint3 coordinates[3] = { (uint3)(       1u, a%DEF_NY, a/DEF_NY), (uint3)(a/DEF_NZ,        1u, a%DEF_NZ), (uint3)(a%DEF_NX, a/DEF_NX,        1u) };
 	return index(coordinates[direction]);
 }
 uint index_insert_p(const uint a, const uint direction) {
-	const uint3 coordinates[3] = { (uint3)(def_Nx-1u, a%def_Ny, a/def_Ny), (uint3)(a/def_Nz, def_Ny-1u, a%def_Nz), (uint3)(a%def_Nx, a/def_Nx, def_Nz-1u) };
+	const uint3 coordinates[3] = { (uint3)(DEF_NX-1u, a%DEF_NY, a/DEF_NY), (uint3)(a/DEF_NZ, DEF_NY-1u, a%DEF_NZ), (uint3)(a%DEF_NX, a/DEF_NX, DEF_NZ-1u) };
 	return index(coordinates[direction]);
 }
 uint index_insert_m(const uint a, const uint direction) {
-	const uint3 coordinates[3] = { (uint3)(       0u, a%def_Ny, a/def_Ny), (uint3)(a/def_Nz,        0u, a%def_Nz), (uint3)(a%def_Nx, a/def_Nx,        0u) };
+	const uint3 coordinates[3] = { (uint3)(       0u, a%DEF_NY, a/DEF_NY), (uint3)(a/DEF_NZ,        0u, a%DEF_NZ), (uint3)(a%DEF_NX, a/DEF_NX,        0u) };
 	return index(coordinates[direction]);
 }
 // Returns an index for the transferred ddfs
 uint index_transfer(const uint side_i) {
-	const uchar index_transfer_data[2u*def_dimensions*def_transfers] = {
+	const uchar index_transfer_data[2u*DEF_DIMENSIONS*DEF_TRANSFERS] = {
 	#if defined(D2Q9)
 		1,  5,  7, // xp
 		2,  6,  8, // xm
@@ -876,19 +873,19 @@ uint index_transfer(const uint side_i) {
 
 // Fi
 void extract_fi(const uint a, const uint A, const uint n, const uint side, const ulong t, global fpxx_copy* transfer_buffer, const global fpxx_copy* fi) {
-	uint j[def_velocity_set]; // neighbor indices
+	uint j[DEF_VELOCITY_SET]; // neighbor indices
 	neighbors(n, j); // calculate neighbor indices
-	for(uint b=0u; b<def_transfers; b++) {
-		const uint i = index_transfer(side*def_transfers+b);
+	for(uint b=0u; b<DEF_TRANSFERS; b++) {
+		const uint i = index_transfer(side*DEF_TRANSFERS+b);
 		const ulong index = index_f(i%2u ? j[i] : n, t%2ul ? (i%2u ? i+1u : i-1u) : i); // Esoteric-Pull: standard store, or streaming part 1/2
 		transfer_buffer[b*A+a] = fi[index]; // fpxx_copy allows direct copying without decompression+compression
 	}
 }
 void insert_fi(const uint a, const uint A, const uint n, const uint side, const ulong t, const global fpxx_copy* transfer_buffer, global fpxx_copy* fi) {
-	uint j[def_velocity_set]; // neighbor indices
+	uint j[DEF_VELOCITY_SET]; // neighbor indices
 	neighbors(n, j); // calculate neighbor indices
-	for(uint b=0u; b<def_transfers; b++) {
-		const uint i = index_transfer(side*def_transfers+b);
+	for(uint b=0u; b<DEF_TRANSFERS; b++) {
+		const uint i = index_transfer(side*DEF_TRANSFERS+b);
 		const ulong index = index_f(i%2u ? n : j[i-1u], t%2ul ? i : (i%2u ? i+1u : i-1u)); // Esoteric-Pull: standard load, or streaming part 2/2
 		fi[index] = transfer_buffer[b*A+a]; // fpxx_copy allows direct copying without decompression+compression
 	}
@@ -909,15 +906,15 @@ kernel void transfer__insert_fi(const uint direction, const ulong t, const globa
 void extract_rho_u_flags(const uint a, const uint A, const uint n, global char* transfer_buffer, const global float* rho, const global float* u, const global uchar* flags) {
 	((global float*)transfer_buffer)[      a] = rho[               n];
 	((global float*)transfer_buffer)[    A+a] = u[                 n];
-	((global float*)transfer_buffer)[ 2u*A+a] = u[    def_N+(ulong)n];
-	((global float*)transfer_buffer)[ 3u*A+a] = u[2ul*def_N+(ulong)n];
+	((global float*)transfer_buffer)[ 2u*A+a] = u[    DEF_N+(ulong)n];
+	((global float*)transfer_buffer)[ 3u*A+a] = u[2ul*DEF_N+(ulong)n];
 	((global uchar*)transfer_buffer)[16u*A+a] = flags[             n];
 }
 void insert_rho_u_flags(const uint a, const uint A, const uint n, const global char* transfer_buffer, global float* rho, global float* u, global uchar* flags) {
 	rho[               n] = ((const global float*)transfer_buffer)[      a];
 	u[                 n] = ((const global float*)transfer_buffer)[    A+a];
-	u[    def_N+(ulong)n] = ((const global float*)transfer_buffer)[ 2u*A+a];
-	u[2ul*def_N+(ulong)n] = ((const global float*)transfer_buffer)[ 3u*A+a];
+	u[    DEF_N+(ulong)n] = ((const global float*)transfer_buffer)[ 2u*A+a];
+	u[2ul*DEF_N+(ulong)n] = ((const global float*)transfer_buffer)[ 3u*A+a];
 	flags[             n] = ((const global uchar*)transfer_buffer)[16u*A+a];
 }
 kernel void transfer_extract_rho_u_flags(const uint direction, const ulong t, global uchar* transfer_buffer_p, global uchar* transfer_buffer_m, const global float* rho, const global float* u, const global uchar* flags) {
