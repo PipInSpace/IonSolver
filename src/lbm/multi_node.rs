@@ -268,10 +268,10 @@ impl LbmDomain {
                         let (dx, dy, dz) = get_coordinates_sl(di as u64, self.cfg.d_x, self.cfg.d_y); // Foreign node coordinate
                         let dist: i32 = max((z as i32 - dz as i32).abs(), max((y as i32 - dy as i32).abs(), (x as i32 - dx as i32).abs()));
                         let depth = max(0, self.cfg.mhd_lod_depth as i32 - dist);
-                        let data_lenght = get_offset(depth, dim) as i32 - get_offset(depth - 1, dim) as i32;
-                        counts[di as usize] = data_lenght * 4;
+                        let data_length = get_offset(depth, dim) as i32 - get_offset(depth - 1, dim) as i32;
+                        counts[di as usize] = data_length * 4;
                         displs[di as usize] = offset;
-                        offset += data_lenght * 4;
+                        offset += data_length * 4;
                     }
                     // Gather partitioned data from all other nodes
                     let mut partition = PartitionMut::new(&mut self.transfer_lod_host.as_mut().expect("msg")[self.n_lod_own*4..], counts, displs);
