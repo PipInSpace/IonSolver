@@ -7,9 +7,8 @@
 use std::{f32::consts::PI, sync::mpsc::Sender, thread};
 use image::{ImageBuffer, Rgb};
 use ocl::{Buffer, Kernel, Program, Queue};
-
-use crate::*;
-use crate::lbm::graphics;
+use ocl_macros::*;
+use crate::{lbm::*, SimState};
 
 
 /// The vector field used in visualizations like field and streamline
@@ -199,7 +198,7 @@ impl Graphics {
 }
 
 // draw_frame function for Lbm
-impl Lbm {
+impl super::Lbm {
     #[allow(unused_variables)]
     pub fn draw_frame(&self, save: bool, name: String, sim_tx: Sender<SimState>, i: &u32) {
         let width = self.config.graphics_config.camera_width;
@@ -311,7 +310,7 @@ impl Lbm {
 
 // enqueue_draw_frame function for LbmDomain
 #[rustfmt::skip]
-impl LbmDomain {
+impl domain::LbmDomain {
     pub fn enqueue_draw_frame(&self) {
         let graphics = self
             .graphics

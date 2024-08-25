@@ -6,24 +6,24 @@
 //! ## MPI Error codes
 //! - **100**: Incompatible domain number and number of execution nodes
 
-use std::cmp::max;
+use std::{cmp::max, f32::consts::PI};
 
 use image::{ImageBuffer, Rgb};
-use mpi::{datatype::PartitionMut, point_to_point, traits::*, Count};
-use ocl_macros::default_device;
+use mpi::{datatype::PartitionMut, point_to_point, topology::SimpleCommunicator, traits::*, Count};
+use ocl_macros::*;
 
-use crate::*;
+use super::*;
 
 
 /// Run IonSolver on multiple compute nodes without multi-gpu support.
 /// This function starts a single node with control over one `LbmDomain`.
 pub fn run_node() {
     let universe = mpi::initialize().unwrap();
-    let world: mpi::topology::SimpleCommunicator = universe.world();
+    let world: SimpleCommunicator = universe.world();
     let size = world.size();
     let rank = world.rank();
-    rprintln!("IonSolver - © 2024\n", world);
-    rprintln!("IonSolver - © 2024\n", world);
+    rprintln("IonSolver - © 2024\n", &world);
+    rprintln("IonSolver - © 2024\n", &world);
     println!("Launched Node {} of {}", rank, size);
 
     let mut cfg: LbmConfig;
@@ -91,7 +91,7 @@ pub fn run_node() {
         bwrite!(domain.q.as_ref().expect("q"), charge);
     }
     world.barrier();
-    rprintln!("Beginning execution\n", world);
+    rprintln("Beginning execution\n", &world);
     //domain.node_taylor_green(1.0, &world);
     domain.node_setup_velocity_field((0.1, 0.01, 0.0), 1.0);
     domain.node_initialize(&world);
@@ -139,7 +139,7 @@ fn node_domain(cfg: &mut LbmConfig, rank: u32) -> LbmDomain {
 impl LbmDomain {
     /// Readies the LBM Simulation to be run.
     /// Executes `kernel_initialize` Kernels for the domain and communicates between nodes
-    pub fn node_initialize(&mut self, world: &mpi::topology::SimpleCommunicator) {
+    pub fn node_initialize(&mut self, world: &SimpleCommunicator) {
         // the communicate calls at initialization need an odd time step
         self.t = 1;
         self.node_communicate_rho_u_flags(world);
@@ -158,7 +158,7 @@ impl LbmDomain {
     /// Executes one LBM time step.
     /// Executes `kernel_stream_collide` Kernels for the node `LbmDomain` and exchanges domain transfer buffers.
     /// Updates the dynamic E and B fields.
-    fn node_do_time_step(&mut self, world: &mpi::topology::SimpleCommunicator) {
+    fn node_do_time_step(&mut self, world: &SimpleCommunicator) {
         if self.cfg.ext_magneto_hydro {
             self.enqueue_clear_qu_lod().unwrap(); // Ready LOD Buffer
         }
@@ -183,7 +183,7 @@ impl LbmDomain {
     // Domain communication
     /// Communicate a field across domain barriers
     #[rustfmt::skip]
-    pub fn node_communicate_field(&mut self, field: TransferField, bytes_per_cell: usize, world: &mpi::topology::SimpleCommunicator) {
+    pub fn node_communicate_field(&mut self, field: TransferField, bytes_per_cell: usize, world: &SimpleCommunicator) {
         world.barrier(); // Get all nodes ready for transfer
         let d_x = self.cfg.d_x as usize;
         let d_y = self.cfg.d_y as usize;
@@ -222,7 +222,7 @@ impl LbmDomain {
 
     /// Communicate Fi across domain boundaries
     #[rustfmt::skip]
-    fn node_communicate_fi(&mut self, world: &mpi::topology::SimpleCommunicator) {
+    fn node_communicate_fi(&mut self, world: &SimpleCommunicator) {
         let bytes_per_cell =
             self.cfg.float_type.size_of() * self.cfg.velocity_set.get_transfers(); // FP type size * transfers.
         self.node_communicate_field(TransferField::Fi, bytes_per_cell, world);
@@ -230,17 +230,17 @@ impl LbmDomain {
     
     /// Communicate rho, u and flags across domain boundaries (needed for graphics)
     #[rustfmt::skip]
-    fn node_communicate_rho_u_flags(&mut self, world: &mpi::topology::SimpleCommunicator) {
+    fn node_communicate_rho_u_flags(&mut self, world: &SimpleCommunicator) {
         self.node_communicate_field(TransferField::RhoUFlags, 17, world);
     }
 
     /// Communicate Qi across domain boundaries (needed for magnetohydrodynamics)
-    fn node_communicate_qi(&mut self, world: &mpi::topology::SimpleCommunicator) {
+    fn node_communicate_qi(&mut self, world: &SimpleCommunicator) {
         let bytes_per_cell = self.cfg.float_type.size_of() * 1; // FP type size * transfers. The fixed D3Q7 lattice has 1 transfer
         self.node_communicate_field(TransferField::Qi, bytes_per_cell, world);
     }
 
-    fn node_communicate_qu_lods(&mut self, world: &mpi::topology::SimpleCommunicator) {
+    fn node_communicate_qu_lods(&mut self, world: &SimpleCommunicator) {
         let d_n = world.size(); // Number of nodes/domains
         let dim = self.cfg.velocity_set.get_set_values().0 as u32;
         let d = world.rank();
@@ -294,7 +294,7 @@ impl LbmDomain {
     /// Draw one frame of the simulation.
     /// Each node/domain renders its own frame. Frames are transmitted to the root node, stitched together and saved.
     #[rustfmt::skip]
-    fn node_draw_frame(&self, name: String, step: u64, world: &mpi::topology::SimpleCommunicator) {
+    fn node_draw_frame(&self, name: String, step: u64, world: &SimpleCommunicator) {
         let width = self.cfg.graphics_config.camera_width;
         let height = self.cfg.graphics_config.camera_height;
         let pixel_n = (width * height) as usize;
@@ -316,7 +316,7 @@ impl LbmDomain {
             world.process_at_rank(0).gather_into_root(&bitmap, &mut bitmaps[..]); // Receive buffers
             world.process_at_rank(0).gather_into_root(&zbuffer, &mut zbuffers[..]);
 
-            thread::spawn(move || { // Generating images needs own thread for performance reasons
+            std::thread::spawn(move || { // Generating images needs own thread for performance reasons
                 for d in 1..d_n as usize { // Assemble image from domain pixels
                     let offset = pixel_n * d;
                     for i in 0..pixel_n {
@@ -342,7 +342,7 @@ impl LbmDomain {
         }
     }
 
-    fn node_render_keyframes(&self, step: u64, world: &mpi::topology::SimpleCommunicator) {
+    fn node_render_keyframes(&self, step: u64, world: &SimpleCommunicator) {
         if self.cfg.graphics_config.render_intervals {
             for (c, frame) in self.cfg.graphics_config.keyframes.iter().enumerate() {
                 if (frame.time % (step+1) == 0 && frame.repeat) || (frame.time == step && !frame.repeat) {
@@ -360,7 +360,7 @@ impl LbmDomain {
 
     #[rustfmt::skip]
     #[allow(dead_code)]
-    fn node_taylor_green(&mut self, periodicity: f32, world: &mpi::topology::SimpleCommunicator) {
+    fn node_taylor_green(&mut self, periodicity: f32, world: &SimpleCommunicator) {
         let nx = self.cfg.n_x;
         let ny = self.cfg.n_y;
         let nz = self.cfg.n_z;
@@ -463,11 +463,8 @@ impl LbmDomain {
 }
 
 /// Print only if root process. Needs access to comm-world 
-#[macro_export]
-macro_rules! rprintln {
-    ($str:expr, $world:expr) => {
-        if $world.rank() == 0 {
-            println!($str);
-        }
-    };
+fn rprintln(str: &str, world: &SimpleCommunicator) {
+    if world.rank() == 0 {
+        println!("{str}");
+    }
 }
