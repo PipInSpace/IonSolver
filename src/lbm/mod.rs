@@ -428,3 +428,123 @@ impl Lbm {
         self.domains[0].t
     }
 }
+
+/// Returns a string of OpenCL C `#define`s from the provided arguments that are appended to the base OpenCl code at runtime.
+/// These are unique for every domain.
+fn get_device_defines(
+    n_x: u32,
+    n_y: u32,
+    n_z: u32,
+    d_x: u32,
+    d_y: u32,
+    d_z: u32,
+    d_i: u32,
+    o_x: i32,
+    o_y: i32,
+    o_z: i32,
+    dimensions: u8,
+    velocity_set: u8,
+    transfers: u8,
+    nu: f32,
+    n_lod: usize,
+    n_lod_own: usize,
+    lbm_config: &LbmConfig,
+) -> String {
+    //Conditional Defines:
+    //Velocity set types
+    let d2q9 = "\n	#define DEF_W0 (1.0f/2.25f)".to_owned() // center (0)
+    +"\n	#define DEF_WS (1.0f/9.0f)" // straight (1-4)
+    +"\n	#define DEF_WE (1.0f/36.0f)";
+    let d3q15 = "\n	#define DEF_W0 (1.0f/4.5f)".to_owned() // center (0)
+    +"\n	#define DEF_WS (1.0f/9.0f)" // straight (1-6)
+    +"\n	#define DEF_WC (1.0f/72.0f)";
+    let d3q19 = "\n	#define DEF_W0 (1.0f/3.0f)".to_owned() // center (0)
+    +"\n	#define DEF_WS (1.0f/18.0f)" // straight (1-6)
+    +"\n	#define DEF_WE (1.0f/36.0f)";
+    let d3q27 = "\n	#define DEF_W0 (1.0f/3.0f)".to_owned() // center (0)
+    +"\n	#define DEF_WS (1.0f/18.0f)" // straight (1-6)
+    +"\n	#define DEF_WE (1.0f/36.0f)";
+    //Relaxation time types
+    let srt = "\n	#define SRT";
+    let trt = "\n	#define TRT";
+    //Float types
+    let fp16s = "\n	#define fpxx half".to_owned() // switchable data type (scaled IEEE-754 16-bit floating-point format: 1-5-10, exp-30, +-1.99902344, +-1.86446416E-9, +-1.81898936E-12, 3.311 digits)
+    +"\n	#define fpxx_copy ushort" // switchable data type for direct copying (scaled IEEE-754 16-bit floating-point format: 1-5-10, exp-30, +-1.99902344, +-1.86446416E-9, +-1.81898936E-12, 3.311 digits)
+    +"\n	#define load(p,o) vload_half(o,p)*3.0517578E-5f" // special function for loading half
+    +"\n	#define store(p,o,x) vstore_half_rte((x)*32768.0f,o,p)"; // special function for storing half
+    let fp16c = "\n	#define fpxx ushort".to_owned() // switchable data type (custom 16-bit floating-point format: 1-4-11, exp-15, +-1.99951168, +-6.10351562E-5, +-2.98023224E-8, 3.612 digits), 12.5% slower than IEEE-754 16-bit
+    +"\n	#define fpxx_copy ushort" // switchable data type for direct copying (custom 16-bit floating-point format: 1-4-11, exp-15, +-1.99951168, +-6.10351562E-5, +-2.98023224E-8, 3.612 digits), 12.5% slower than IEEE-754 16-bit
+    +"\n	#define load(p,o) half_to_float_custom(p[o])" // special function for loading half
+    +"\n	#define store(p,o,x) p[o]=float_to_half_custom(x)"; // special function for storing half
+    let fp32 = "\n	#define fpxx float".to_owned() // switchable data type (regular 32-bit float)
+    +"\n	#define fpxx_copy float" // switchable data type for direct copying (regular 32-bit float)
+    +"\n	#define load(p,o) p[o]" // regular float read
+    +"\n	#define store(p,o,x) p[o]=x"; // regular float write
+    // Return String
+    "\n    #define DEF_NX ".to_owned() + &n_x.to_string()+"u"
+    +"\n	#define DEF_NY "+ &n_y.to_string()+"u"
+    +"\n	#define DEF_NZ "+ &n_z.to_string()+"u"
+    +"\n	#define DEF_N  "+ &(n_x as u64 * n_y as u64 * n_z as u64).to_string()+"ul"
+    +"\n	#define DEF_DX "+ &d_x.to_string()+"u"
+    +"\n	#define DEF_DY "+ &d_y.to_string()+"u"
+    +"\n	#define DEF_DZ "+ &d_z.to_string()+"u"
+    +"\n	#define DEF_DI "+ &d_i.to_string()+"u"
+    +"\n	#define DEF_OX "+ &o_x.to_string()+"" // offsets are signed integer!
+    +"\n	#define DEF_OY "+ &o_y.to_string()+""
+    +"\n	#define DEF_OZ "+ &o_z.to_string()+""
+    +"\n	#define DEF_AX "+ &(n_y * n_z).to_string()+"u"
+    +"\n	#define DEF_AY "+ &(n_z * n_x).to_string()+"u"
+    +"\n	#define DEF_AZ "+ &(n_x * n_y).to_string()+"u"
+    +"\n	#define DEF_DOMAIN_OFFSET_X "+ &format!("{:?}", (o_x as f32+((d_x>1) as i32 as f32) - 0.5*(d_x as f32 - 1.0) * (n_x - 2u32 * ((d_x>1u32) as i32 as u32)) as f32))+"f"
+    +"\n	#define DEF_DOMAIN_OFFSET_Y "+ &format!("{:?}", (o_y as f32+((d_y>1) as i32 as f32) - 0.5*(d_y as f32 - 1.0) * (n_y - 2u32 * ((d_y>1u32) as i32 as u32)) as f32))+"f"
+    +"\n	#define DEF_DOMAIN_OFFSET_Z "+ &format!("{:?}", (o_z as f32+((d_z>1) as i32 as f32) - 0.5*(d_z as f32 - 1.0) * (n_z - 2u32 * ((d_z>1u32) as i32 as u32)) as f32))+"f"
+    +"\n	#define D"+ &dimensions.to_string()+"Q"+ &velocity_set.to_string()+"" // D2Q9/D3Q15/D3Q19/D3Q27
+    +"\n	#define DEF_VELOCITY_SET "+ &velocity_set.to_string()+"u" // LBM velocity set (D2Q9/D3Q15/D3Q19/D3Q27)
+    +"\n	#define DEF_DIMENSIONS "  + &dimensions.to_string()+"u"   // number spatial dimensions (2D or 3D)
+    +"\n	#define DEF_TRANSFERS "   + &transfers.to_string()+"u"    // number of DDFs that are transferred between multiple domains
+    +"\n	#define DEF_C 0.57735027f" // lattice speed of sound c = 1/sqrt(3)*dt
+    +"\n	#define DEF_W " + &format!("{:?}", 1.0f32/(3.0f32*nu+0.5f32))+"f" // relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+    + match lbm_config.velocity_set {
+        VelocitySet::D2Q9 => &d2q9,
+        VelocitySet::D3Q15 => &d3q15,
+        VelocitySet::D3Q19 => &d3q19,
+        VelocitySet::D3Q27 => &d3q27
+    }
+    + match lbm_config.relaxation_time {
+        RelaxationTime::Srt => srt,
+        RelaxationTime::Trt => trt
+    }
+    +"\n	#define TYPE_S 0x01" // 0b00000001 // (stationary or moving) solid boundary
+    +"\n	#define TYPE_E 0x02" // 0b00000010 // equilibrium boundary (inflow/outflow)
+    +"\n	#define TYPE_T 0x04" // 0b00000100 // temperature boundary
+    +"\n	#define TYPE_F 0x08" // 0b00001000 // fluid
+    +"\n	#define TYPE_I 0x10" // 0b00010000 // interface
+    +"\n	#define TYPE_G 0x20" // 0b00100000 // gas
+    +"\n	#define TYPE_X 0x40" // 0b01000000 // reserved type X
+    +"\n	#define TYPE_Y 0x80" // 0b10000000 // reserved type Y
+    +"\n	#define TYPE_MS 0x03" // 0b00000011 // cell next to moving solid boundary
+    +"\n	#define TYPE_BO 0x03" // 0b00000011 // any flag bit used for boundaries (temperature excluded)
+    +"\n	#define TYPE_IF 0x18" // 0b00011000 // change from interface to fluid
+    +"\n	#define TYPE_IG 0x30" // 0b00110000 // change from interface to gas
+    +"\n	#define TYPE_GI 0x38" // 0b00111000 // change from gas to interface
+    +"\n	#define TYPE_SU 0x38" // 0b00111000 // any flag bit used for SURFACE
+    + match lbm_config.float_type { //Floatingpoint types
+        FloatType::FP16S => &fp16s,
+        FloatType::FP16C => &fp16c,
+        FloatType::FP32 => &fp32
+    }
+    + if lbm_config.ext_equilibrium_boudaries {"\n	#define EQUILIBRIUM_BOUNDARIES"} else {""}
+    + if lbm_config.ext_volume_force {         "\n	#define VOLUME_FORCE"} else {""}
+    + &if lbm_config.ext_magneto_hydro {
+     "\n	#define MAGNETO_HYDRO".to_owned()
+    +"\n	#define DEF_KE "    + &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
+    +"\n	#define DEF_KMU "   + &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * std::f32::consts::PI))
+    +"\n	#define DEF_LOD_DEPTH " + &format!("{}u", lbm_config.mhd_lod_depth)
+    +"\n    #define DEF_NUM_LOD " + &format!("{}u", n_lod)
+    +"\n    #define DEF_NUM_LOD_OWN " + &format!("{}u", n_lod_own)
+    +"\n	#define DEF_WQ  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
+    } else {"".to_string()}
+    + if lbm_config.ext_force_field {                "\n	#define FORCE_FIELD"} else {""}
+    + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}
+    //Extensions
+}
