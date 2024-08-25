@@ -384,18 +384,18 @@ void calculate_q_eq(const float Q, const float ux, const float uy, const float u
 	qeq[3] = fma(wsT4, uy, wsTm1); qeq[4] = fma(wsT4, -uy, wsTm1); // 0+0 0-0
 	qeq[5] = fma(wsT4, uz, wsTm1); qeq[6] = fma(wsT4, -uz, wsTm1); // 00+ 00-
 }
-void load_q(const uint n, float* qhn, const global fpxx* qi, const uint* j7, const ulong t) {
-	qhn[0] = load(qi, index_f(n, 0u)); // Esoteric-Pull
+void load_q(const uint n, float* qhn, const global fpxx* fqi, const uint* j7, const ulong t) {
+	qhn[0] = load(fqi, index_f(n, 0u)); // Esoteric-Pull
 	for(uint i=1u; i<7u; i+=2u) {
-		qhn[i   ] = load(qi, index_f(n    , t%2ul ? i    : i+1u));
-		qhn[i+1u] = load(qi, index_f(j7[i], t%2ul ? i+1u : i   ));
+		qhn[i   ] = load(fqi, index_f(n    , t%2ul ? i    : i+1u));
+		qhn[i+1u] = load(fqi, index_f(j7[i], t%2ul ? i+1u : i   ));
 	}
 }
-void store_q(const uint n, const float* qhn, global fpxx* qi, const uint* j7, const ulong t) {
-	store(qi, index_f(n, 0u), qhn[0]); // Esoteric-Pull
+void store_q(const uint n, const float* qhn, global fpxx* fqi, const uint* j7, const ulong t) {
+	store(fqi, index_f(n, 0u), qhn[0]); // Esoteric-Pull
 	for(uint i=1u; i<7u; i+=2u) {
-		store(qi, index_f(j7[i], t%2ul ? i+1u : i   ), qhn[i   ]);
-		store(qi, index_f(n    , t%2ul ? i    : i+1u), qhn[i+1u]);
+		store(fqi, index_f(j7[i], t%2ul ? i+1u : i   ), qhn[i   ]);
+		store(fqi, index_f(n    , t%2ul ? i    : i+1u), qhn[i+1u]);
 	}
 }
 // LOD handling
@@ -435,9 +435,10 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , const global float* B	// static magnetic flux density
 , global float* E_dyn	// dynamic electric field
 , global float* B_dyn	// dynamic magnetic flux density
-, global fpxx* qi		// charge ddfs
-, global float* Q		// charge
-, global float* QU_lod  // Level-of-detail for charge und velocity 
+, global fpxx* fqi		// charge property of gas as ddfs
+, global fpxx* ei		// electron gas ddfs
+, global float* Q		// cell charge
+, global float* QU_lod	// Level-of-detail for charge und velocity 
 #endif // MAGNETO_HYDRO
 ) {
     const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -482,21 +483,21 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 	#endif
 
 	#ifdef MAGNETO_HYDRO
-		// Advection of charge. Cell charge is stored in charge ddfs 'qi' for advection with 'fi'.
+		// Advection of charge. Cell charge is stored in charge ddfs 'fqi' for advection with 'fi'.
 		uint j7[7]; // neighbors of D3Q7 subset
 		neighbors_charge(n, j7);
 		float qhn[7]; // read from qA and stream to gh (D3Q7 subset, periodic boundary conditions)
-		load_q(n, qhn, qi, j7, t); // perform streaming (part 2)
+		load_q(n, qhn, fqi, j7, t); // perform streaming (part 2)
 		float Qn = 0.0f;
 		for(uint i=0u; i<7u; i++) Qn += qhn[i]; // calculate charge from q
-		Qn += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up qi (perturbation method / DDF-shifting)
+		Qn += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fqi (perturbation method / DDF-shifting)
 		float qeq[7]; // cache f_equilibrium[n]
 		calculate_q_eq(Qn, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
 
 		Q[n] = Qn; // update charge field
 
 		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-DEF_WQ, qhn[i], DEF_WQ*qeq[i]); // perform collision
-		store_q(n, qhn, qi, j7, t); // perform streaming (part 1)
+		store_q(n, qhn, fqi, j7, t); // perform streaming (part 1)
 
 		// F = charge * (E + (U cross B))
 		fxn += Qn * (E_dyn[nxi] + uyn*B_dyn[nzi] - uzn*B_dyn[nyi]); // force = charge * (electric field + magnetic field x U)
@@ -624,7 +625,8 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 , const global float* B
 , global float* E_dyn
 , global float* B_dyn
-, global fpxx* qi
+, global fpxx* fqi
+, global fpxx* ei		// electron gas ddfs
 , global float* Q
 #endif // MAGNETO_HYDRO
 ) {
@@ -667,7 +669,7 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 		calculate_q_eq(Q[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], qeq);
 		uint j7[7]; // neighbors of D3Q7 subset
 		neighbors_charge(n, j7);
-		store_q(n, qeq, qi, j7, 1ul); // write to qi. perform streaming (part 1)
+		store_q(n, qeq, fqi, j7, 1ul); // write to fqi. perform streaming (part 1)
 		// Clear dyn with static field for recomputation
 		B_dyn[nxi] = B[nxi];
 		B_dyn[nyi] = B[nyi];
@@ -931,30 +933,30 @@ kernel void transfer__insert_rho_u_flags(const uint direction, const ulong t, co
 }
 // Qi (Charge ddfs) 
 #ifdef MAGNETO_HYDRO
-void extract_qi(const uint a, const uint n, const uint side, const ulong t, global fpxx_copy* transfer_buffer, const global fpxx_copy* qi) {
+void extract_fqi(const uint a, const uint n, const uint side, const ulong t, global fpxx_copy* transfer_buffer, const global fpxx_copy* fqi) {
 	uint j7[7u]; // neighbor indices
 	neighbors_charge(n, j7); // calculate neighbor indices
 	const uint i = side+1u;
 	const ulong index = index_f(i%2u ? j7[i] : n, t%2ul ? (i%2u ? i+1u : i-1u) : i); // Esoteric-Pull: standard store, or streaming part 1/2
-	transfer_buffer[a] = qi[index]; // fpxx_copy allows direct copying without decompression+compression
+	transfer_buffer[a] = fqi[index]; // fpxx_copy allows direct copying without decompression+compression
 }
-void insert_qi(const uint a, const uint n, const uint side, const ulong t, const global fpxx_copy* transfer_buffer, global fpxx_copy* qi) {
+void insert_fqi(const uint a, const uint n, const uint side, const ulong t, const global fpxx_copy* transfer_buffer, global fpxx_copy* fqi) {
 	uint j7[7u]; // neighbor indices
 	neighbors_charge(n, j7); // calculate neighbor indices
 	const uint i = side+1u;
 	const ulong index = index_f(i%2u ? n : j7[i-1u], t%2ul ? i : (i%2u ? i+1u : i-1u)); // Esoteric-Pull: standard load, or streaming part 2/2
-	qi[index] = transfer_buffer[a]; // fpxx_copy allows direct copying without decompression+compression
+	fqi[index] = transfer_buffer[a]; // fpxx_copy allows direct copying without decompression+compression
 }
-kernel void transfer_extract_qi(const uint direction, const ulong t, global uchar* transfer_buffer_p, global uchar* transfer_buffer_m, const global fpxx_copy* qi) {
+kernel void transfer_extract_fqi(const uint direction, const ulong t, global uchar* transfer_buffer_p, global uchar* transfer_buffer_m, const global fpxx_copy* fqi) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	extract_qi(a, index_extract_p(a, direction), 2u*direction+0u, t, (global fpxx_copy*)transfer_buffer_p, qi);
-	extract_qi(a, index_extract_m(a, direction), 2u*direction+1u, t, (global fpxx_copy*)transfer_buffer_m, qi);
+	extract_fqi(a, index_extract_p(a, direction), 2u*direction+0u, t, (global fpxx_copy*)transfer_buffer_p, fqi);
+	extract_fqi(a, index_extract_m(a, direction), 2u*direction+1u, t, (global fpxx_copy*)transfer_buffer_m, fqi);
 }
-kernel void transfer__insert_qi(const uint direction, const ulong t, const global uchar* transfer_buffer_p, const global uchar* transfer_buffer_m, global fpxx_copy* qi) {
+kernel void transfer__insert_fqi(const uint direction, const ulong t, const global uchar* transfer_buffer_p, const global uchar* transfer_buffer_m, global fpxx_copy* fqi) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
 	if(a>=A) return; // area might not be a multiple of def_workgroup_size, so return here to avoid writing in unallocated memory space
-	insert_qi(a, index_insert_p(a, direction), 2u*direction+0u, t, (const global fpxx_copy*)transfer_buffer_p, qi);
-	insert_qi(a, index_insert_m(a, direction), 2u*direction+1u, t, (const global fpxx_copy*)transfer_buffer_m, qi);
+	insert_fqi(a, index_insert_p(a, direction), 2u*direction+0u, t, (const global fpxx_copy*)transfer_buffer_p, fqi);
+	insert_fqi(a, index_insert_m(a, direction), 2u*direction+1u, t, (const global fpxx_copy*)transfer_buffer_m, fqi);
 }
 #endif // MAGNETO_HYDRO

@@ -214,7 +214,7 @@ impl Lbm {
         self.communicate_rho_u_flags();
         self.communicate_fi();
         if self.config.ext_magneto_hydro {
-            self.communicate_qi();
+            self.communicate_fqi();
             self.communicate_qu_lods();
             self.update_e_b_dynamic();
         }
@@ -252,7 +252,7 @@ impl Lbm {
         }
         self.communicate_fi();
         if self.config.ext_magneto_hydro {
-            self.communicate_qi();
+            self.communicate_fqi();
             //let lod = bget!(self.domains[0].qu_lod.as_ref().expect("msg"));
             //println!("1b: {:?}", lod);
             //let lod = bget!(self.domains[1].qu_lod.as_ref().expect("msg"));
@@ -359,7 +359,7 @@ impl Lbm {
     }
 
     /// Communicate Qi across domain boundaries
-    fn communicate_qi(&mut self) {
+    fn communicate_fqi(&mut self) {
         let bytes_per_cell = self.config.float_type.size_of() * 1; // FP type size * transfers. The fixed D3Q7 lattice has 1 transfer
         self.communicate_field(TransferField::Qi, bytes_per_cell);
     }
@@ -471,7 +471,7 @@ pub struct LbmDomain {
     pub b: Option<Buffer<f32>>,
     pub e_dyn: Option<Buffer<f32>>,
     pub b_dyn: Option<Buffer<f32>>,
-    pub qi: Option<VariableFloatBuffer>,
+    pub fqi: Option<VariableFloatBuffer>,
     pub q: Option<Buffer<f32>>,
     pub qu_lod: Option<Buffer<f32>>,
     pub f: Option<Buffer<f32>>,
@@ -557,15 +557,23 @@ impl LbmDomain {
         let b: Option<Buffer<f32>> =     if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
         let b_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
         // Charge ddfs and charge field buffers
-        let qi: Option<VariableFloatBuffer> = if lbm_config.ext_magneto_hydro {
+        let fqi: Option<VariableFloatBuffer> = if lbm_config.ext_magneto_hydro {
             Some(match lbm_config.float_type {
                 FloatType::FP32 => { VariableFloatBuffer::F32(buffer!(&queue, [n * 7], 0.0f32)) } // Float Type F32
                 _               => { VariableFloatBuffer::U16(buffer!(&queue, [n * 7], 0u16)) }   // Float Type F16S/F16C
             })
         } else { None };
+        // Electron gas ddfs
+        let ei: Option<VariableFloatBuffer> = if lbm_config.ext_magneto_hydro {
+            Some(match lbm_config.float_type {
+                FloatType::FP32 => { VariableFloatBuffer::F32(buffer!(&queue, [n * velocity_set as u64], 0.0f32)) } // Float Type F32
+                _               => { VariableFloatBuffer::U16(buffer!(&queue, [n * velocity_set as u64], 0u16)) }   // Float Type F16S/F16C
+            })
+        } else { None };
         let q: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n], 0f32)) } else { None };
         // Level of detail charge and velocity for field updates
         let qu_lod: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n_lod * 4], 0f32)) } else { None };
+        // Transfer buffer for LODs
         #[cfg(feature = "multi-node")]
         let transfer_lod_host: Option<Vec<f32>> = if lbm_config.ext_magneto_hydro { Some(vec![0.0f32; n_lod * 4]) } else { None }; // Transfer buffer needs to be bigger in multi-node mode
         #[cfg(not(feature = "multi-node"))]
@@ -600,9 +608,13 @@ impl LbmDomain {
             kernel_args!(stream_collide_builder, ("E", e.as_ref().expect("e")), ("B", b.as_ref().expect("b")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
             kernel_args!(initialize_builder,     ("E", e.as_ref().expect("e")), ("B", b.as_ref().expect("b")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
             
-            match qi.as_ref().expect("qi should be initialized") {
-                VariableFloatBuffer::U16(qi_u16) => {kernel_args!(stream_collide_builder, ("qi", qi_u16)); kernel_args!(initialize_builder, ("qi", qi_u16));},
-                VariableFloatBuffer::F32(qi_f32) => {kernel_args!(stream_collide_builder, ("qi", qi_f32)); kernel_args!(initialize_builder, ("qi", qi_f32));},
+            match fqi.as_ref().expect("fqi should be initialized") {
+                VariableFloatBuffer::U16(fqi_u16) => {kernel_args!(stream_collide_builder, ("fqi", fqi_u16)); kernel_args!(initialize_builder, ("fqi", fqi_u16));},
+                VariableFloatBuffer::F32(fqi_f32) => {kernel_args!(stream_collide_builder, ("fqi", fqi_f32)); kernel_args!(initialize_builder, ("fqi", fqi_f32));},
+            };
+            match ei.as_ref().expect("ei should be initialized") {
+                VariableFloatBuffer::U16(ei_u16) => {kernel_args!(stream_collide_builder, ("ei", ei_u16)); kernel_args!(initialize_builder, ("ei", ei_u16));},
+                VariableFloatBuffer::F32(ei_f32) => {kernel_args!(stream_collide_builder, ("ei", ei_f32)); kernel_args!(initialize_builder, ("ei", ei_f32));},
             };
 
             kernel_args!(initialize_builder,     ("Q", q.as_ref().expect("Q")));
@@ -656,15 +668,15 @@ impl LbmDomain {
             ], // Rho, u and flags (needed for graphics)
             [
                 if lbm_config.ext_magneto_hydro {
-                    Some(match &qi.as_ref().expect("qi should be defined") {
-                        VariableFloatBuffer::U16(qi_u16) => kernel!(program, queue, "transfer_extract_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_u16)),
-                        VariableFloatBuffer::F32(qi_f32) => kernel!(program, queue, "transfer_extract_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_f32)),
+                    Some(match &fqi.as_ref().expect("fqi should be defined") {
+                        VariableFloatBuffer::U16(fqi_u16) => kernel!(program, queue, "transfer_extract_fqi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fqi", fqi_u16)),
+                        VariableFloatBuffer::F32(fqi_f32) => kernel!(program, queue, "transfer_extract_fqi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fqi", fqi_f32)),
                     })
                 } else { None } , // Extract Qi
                 if lbm_config.ext_magneto_hydro {
-                    Some(match &qi.as_ref().expect("qi should be defined") {
-                        VariableFloatBuffer::U16(qi_u16) => kernel!(program, queue, "transfer__insert_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_u16)),
-                        VariableFloatBuffer::F32(qi_f32) => kernel!(program, queue, "transfer__insert_qi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("qi", qi_f32)),
+                    Some(match &fqi.as_ref().expect("fqi should be defined") {
+                        VariableFloatBuffer::U16(fqi_u16) => kernel!(program, queue, "transfer__insert_fqi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fqi", fqi_u16)),
+                        VariableFloatBuffer::F32(fqi_f32) => kernel!(program, queue, "transfer__insert_fqi", 1, ("direction", 0_u32), ("time_step", 0_u64), ("transfer_buffer_p", &transfer_p), ("transfer_buffer_m", &transfer_m), ("fqi", fqi_f32)),
                     })
                 } else { None }, // Insert Qi
             ], // Qi charge ddfs
@@ -696,7 +708,7 @@ impl LbmDomain {
             transfer_lod_host,
             n_lod_own,
 
-            e, b, e_dyn, b_dyn, qi, q, qu_lod, f, t, graphics, cfg: lbm_config.clone()
+            e, b, e_dyn, b_dyn, fqi, q, qu_lod, f, t, graphics, cfg: lbm_config.clone()
         } //Returns initialised domain
     }
 
