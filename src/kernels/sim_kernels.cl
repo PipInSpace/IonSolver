@@ -111,10 +111,9 @@ inline int to_d(int x) {
 	#endif
 }
 // Incredibly ugly and slow, Nvidia pls add support T.T
-inline float atomic_add_f(volatile __global float* address, const float value) {
-    float old = value, orig;
-    while ((old = atomic_xchg(address, (orig = atomic_xchg(address, 0.0f)) + old)) != 0.0f);
-    return orig;
+inline void atomic_add_f(volatile __global float* address, const float value) {
+    float old = value;
+    while ((old = atomic_xchg(address, atomic_xchg(address, 0.0f) + old)) != 0.0f);
 }
 
 
@@ -505,12 +504,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		fzn += Qn * (E_dyn[nzi] + uxn*B_dyn[nyi] - uyn*B_dyn[nxi]);
 
 		// Clear dynamic buffers with static buffers for recomputation
-		B_dyn[nxi] = B[nxi];
-		B_dyn[nyi] = B[nyi];
-		B_dyn[nzi] = B[nzi];
-		E_dyn[nxi] = E[nxi];
-		E_dyn[nyi] = E[nyi];
-		E_dyn[nzi] = E[nzi];
+		B_dyn[nxi] = B[nxi]; E_dyn[nxi] = E[nxi];
+		B_dyn[nyi] = B[nyi]; E_dyn[nyi] = E[nyi];
+		B_dyn[nzi] = B[nzi]; E_dyn[nzi] = E[nzi];
 
 		#if DEF_LOD_DEPTH > 0 // Update LOD buffer
 			uint off = 0;
