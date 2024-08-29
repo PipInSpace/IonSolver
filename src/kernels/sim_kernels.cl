@@ -482,6 +482,41 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 	#endif
 
 	#ifdef MAGNETO_HYDRO
+		/* -------- Cache fields -------- */
+		float Bnx = B_dyn[nxi];
+		float Bny = B_dyn[nyi];
+		float Bnz = B_dyn[nzi];
+		float Enx = E_dyn[nxi];
+		float Eny = E_dyn[nyi];
+		float Enz = E_dyn[nzi];
+
+		/* -------- Electron gas -------- */
+		float ehn[DEF_VELOCITY_SET]; // local DDFs
+		load_f(n, ehn, ei, j, t); // perform streaming (part 2)
+		float e_rhon, e_uxn, e_uyn, e_uzn; // calculate local density and velocity for collision
+		//#ifndef EQUILIBRIUM_BOUNDARIES // EQUILIBRIUM_BOUNDARIES
+		calculate_rho_u(ehn, &e_rhon, &e_uxn, &e_uyn, &e_uzn); // calculate density and velocity fields from fi
+		//#else
+		//	if(flagsn_bo==TYPE_E) {
+		//		rhon = rho[n]; // apply preset velocity/density
+		//		uxn  = u[nxi];
+		//		uyn  = u[nyi];
+		//		uzn  = u[nzi];
+		//	} else {
+		//		calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
+		//	}
+		//#endif // EQUILIBRIUM_BOUNDARIES
+		float e_fxn = e_rhon * (Enx + uyn*Bnz - uzn*Bny); // F = charge * (E + (U cross B))
+		float e_fyn = e_rhon * (Eny + uzn*Bnx - uxn*Bnz); // charge is the content of the ddf
+		float e_fzn = e_rhon * (Enz + uxn*Bny - uyn*Bnx);
+		const float e_rho2 = 0.5f/e_rhon; // apply external volume force (Guo forcing, Krueger p.233f)
+		e_uxn = clamp(fma(fxn, e_rho2, e_uxn), -DEF_C, DEF_C); // limit velocity (for stability purposes)
+		e_uyn = clamp(fma(fyn, e_rho2, e_uyn), -DEF_C, DEF_C); // force term: F*dt/(2*rho)
+		e_uzn = clamp(fma(fzn, e_rho2, e_uzn), -DEF_C, DEF_C);
+		calculate_forcing_terms(e_uxn, e_uyn, e_uzn, fxn, fyn, fzn, Fin); // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
+
+
+		/* ---- Gas charge advection ---- */
 		// Advection of charge. Cell charge is stored in charge ddfs 'fqi' for advection with 'fi'.
 		uint j7[7]; // neighbors of D3Q7 subset
 		neighbors_charge(n, j7);
@@ -492,22 +527,23 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		Qn += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fqi (perturbation method / DDF-shifting)
 		float qeq[7]; // cache f_equilibrium[n]
 		calculate_q_eq(Qn, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
-
 		Q[n] = Qn; // update charge field
-
 		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-DEF_WQ, qhn[i], DEF_WQ*qeq[i]); // perform collision
 		store_q(n, qhn, fqi, j7, t); // perform streaming (part 1)
 
+		/* ------ EM force on gas ------- */
 		// F = charge * (E + (U cross B))
-		fxn += Qn * (E_dyn[nxi] + uyn*B_dyn[nzi] - uzn*B_dyn[nyi]); // force = charge * (electric field + magnetic field x U)
-		fyn += Qn * (E_dyn[nyi] + uzn*B_dyn[nxi] - uxn*B_dyn[nzi]);
-		fzn += Qn * (E_dyn[nzi] + uxn*B_dyn[nyi] - uyn*B_dyn[nxi]);
+		fxn += Qn * (Enx + uyn*Bnz - uzn*Bny);
+		fyn += Qn * (Eny + uzn*Bnx - uxn*Bnz);
+		fzn += Qn * (Enz + uxn*Bny - uyn*Bnx);
 
+		/* ---- Clear dynamic field ----- */
 		// Clear dynamic buffers with static buffers for recomputation
 		B_dyn[nxi] = B[nxi]; E_dyn[nxi] = E[nxi];
 		B_dyn[nyi] = B[nyi]; E_dyn[nyi] = E[nyi];
 		B_dyn[nzi] = B[nzi]; E_dyn[nzi] = E[nzi];
 
+		/* ------ LOD construction ------ */
 		#if DEF_LOD_DEPTH > 0 // Update LOD buffer
 			uint off = 0;
 			#if (DEF_DX>1 || DEF_DY>1 || DEF_DZ>1)  // Multiple Domains
