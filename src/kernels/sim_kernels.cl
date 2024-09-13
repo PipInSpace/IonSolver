@@ -698,9 +698,9 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 			#endif
         }
     }
-    float feq[DEF_VELOCITY_SET]; // f_equilibrium
-    calculate_f_eq(rho[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], feq);
-    store_f(n, feq, fi, j, 1ul); // write to fi
+    float fe_eq[DEF_VELOCITY_SET]; // f_equilibrium, reused for e_equilibrium
+    calculate_f_eq(rho[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], fe_eq);
+    store_f(n, fe_eq, fi, j, 1ul); // write to fi
 
 	#ifdef MAGNETO_HYDRO
 		// Initialize charge ddfs
@@ -716,6 +716,9 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 		E_dyn[nxi] = E[nxi];
 		E_dyn[nyi] = E[nyi];
 		E_dyn[nzi] = E[nzi];
+		// Initialize electron gas ddfs
+		calculate_f_eq(Q[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], fe_eq);
+    	store_f(n, fe_eq, ei, j, 1ul); // write to fi
 	#endif // MAGNETO_HYDRO
 } // initialize()
 
