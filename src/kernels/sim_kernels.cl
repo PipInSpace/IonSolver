@@ -110,10 +110,17 @@ inline int to_d(int x) {
 	return x * x * x;
 	#endif
 }
-// Incredibly ugly and slow, Nvidia pls add support T.T
-inline void atomic_add_f(volatile __global float* address, const float value) {
-    float old = value;
-    while ((old = atomic_xchg(address, atomic_xchg(address, 0.0f) + old)) != 0.0f);
+// Atomic float addition implementations for various platforms 
+inline void atomic_add_f(volatile __global float* addr, const float val) {
+	#if defined(cl_nv_pragma_unroll) // use hardware-supported atomic addition on Nvidia GPUs with inline PTX assembly
+		float ret; asm volatile("atom.global.add.f32 %0,[%1],%2;":"=f"(ret):"l"(addr),"f"(val):"memory");
+	#elif defined(__opencl_c_ext_fp32_global_atomic_add) // use hardware-supported atomic addition on some Intel GPUs
+		atomic_fetch_add((volatile global atomic_float*)addr, val);
+	#elif __has_builtin(__builtin_amdgcn_global_atomic_fadd_f32) // use hardware-supported atomic addition on some AMD GPUs
+		__builtin_amdgcn_global_atomic_fadd_f32(addr, val);
+	#else // fallback emulation: https://forums.developer.nvidia.com/t/atomicadd-float-float-atomicmul-float-float/14639/5
+		float old = val; while((old=atomic_xchg(addr, atomic_xchg(addr, 0.0f)+old))!=0.0f);
+	#endif
 }
 
 
