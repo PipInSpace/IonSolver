@@ -471,6 +471,27 @@ int rainbow_colormap(float x) { // Is here for legacy reasons. Not to be used be
 	}
 	return color_from_floats(r, g, b);
 }
+int okrain_colormap(float x) { // Sequential colour map. Usable for 3D surfaces. Rainbow map with uniform gradients, higher computation time
+	#define ok_L 0.7f // Perceptual lightness
+	#define ok_C 0.2f // Chroma
+	#define PI 3.141592654f
+	float h = ((clamp(x, 0.0f, 1.0f) * 300.0f + 30.0f) * PI) / 180.0f; // hue, from 30°-330°
+	float a = ok_C * cos(h), b = ok_C * sin(h);
+
+	float l = ok_L + 0.3963377774f * a + 0.2158037573f * b;
+    float m = ok_L - 0.1055613458f * a - 0.0638541728f * b;
+    float s = ok_L - 0.0894841775f * a - 1.2914855480f * b;
+
+    l = l*l*l;
+    m = m*m*m;
+    s = s*s*s;
+
+    return color_from_floats(
+		pow(+4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s, 1.0f/2.2f),
+		pow(-1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s, 1.0f/2.2f),
+		pow(-0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s, 1.0f/2.2f)
+	);
+}
 
 
 
