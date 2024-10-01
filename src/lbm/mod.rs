@@ -537,8 +537,9 @@ fn get_device_defines(
     + if lbm_config.ext_volume_force {         "\n	#define VOLUME_FORCE"} else {""}
     + &if lbm_config.ext_magneto_hydro {
      "\n	#define MAGNETO_HYDRO".to_owned()
-    +"\n	#define DEF_KE "    + &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant scaled by distance per lattice cell
+    +"\n	#define DEF_KE "    + &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant in simulation units
     +"\n	#define DEF_KMU "   + &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * std::f32::consts::PI))
+    +"\n	#define DEF_KKGE  "  + &format!("{:?}f",lbm_config.units.si_to_kkge()) // electron mass/charge in simulation units
     +"\n	#define DEF_LOD_DEPTH " + &format!("{}u", lbm_config.mhd_lod_depth)
     +"\n    #define DEF_NUM_LOD " + &format!("{}u", n_lod)
     +"\n    #define DEF_NUM_LOD_OWN " + &format!("{}u", n_lod_own)

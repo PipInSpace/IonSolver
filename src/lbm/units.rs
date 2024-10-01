@@ -149,6 +149,10 @@ impl Units {
         1.0 //todo!()
     }
 
+    pub fn si_to_kkge(&self) -> f32 { // Mass per charge constant for electrons
+        (9.109_383_713_9E-31_f64/-1.602_176_634E-19_f64) as f32 / (self.kg / (self.a * self.s))
+    }
+
     /// From lbm.n_x and velocity u
     pub fn nu_from_Re(&self, Re: f32, x: f32, u: f32) -> f32 {
         x * u / Re

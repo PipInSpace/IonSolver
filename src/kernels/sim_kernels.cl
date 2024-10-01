@@ -478,7 +478,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
     float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
 
-    float Fin[DEF_VELOCITY_SET]; // forcing terms
+    float Fin[DEF_VELOCITY_SET]; // forcing terms, are used for ei too if MHD is enabled 
+	float feq[DEF_VELOCITY_SET]; // equilibrium DDFs, are used for ei too if MHD is enabled 
+    float w = DEF_W; // LBM relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
 
 	#ifdef FORCE_FIELD
 	{ // separate block to avoid variable name conflicts
@@ -490,37 +492,47 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 	#ifdef MAGNETO_HYDRO
 		/* -------- Cache fields -------- */
-		float Bnx = B_dyn[nxi];
+		float Bnx = B_dyn[nxi]; // Cache dynamic fields for multiple readings
 		float Bny = B_dyn[nyi];
 		float Bnz = B_dyn[nzi];
 		float Enx = E_dyn[nxi];
 		float Eny = E_dyn[nyi];
 		float Enz = E_dyn[nzi];
+		/* ---- Clear dynamic field ----- */
+		B_dyn[nxi] = B[nxi]; E_dyn[nxi] = E[nxi]; // Clear dynamic buffers with static buffers for recomputation
+		B_dyn[nyi] = B[nyi]; E_dyn[nyi] = E[nyi];
+		B_dyn[nzi] = B[nzi]; E_dyn[nzi] = E[nzi];
 
 		/* -------- Electron gas -------- */
 		float ehn[DEF_VELOCITY_SET]; // local DDFs
 		load_f(n, ehn, ei, j, t); // perform streaming (part 2)
 		float e_rhon, e_uxn, e_uyn, e_uzn; // calculate local density and velocity for collision
-		//#ifndef EQUILIBRIUM_BOUNDARIES // EQUILIBRIUM_BOUNDARIES
-		calculate_rho_u(ehn, &e_rhon, &e_uxn, &e_uyn, &e_uzn); // calculate density and velocity fields from fi
-		//#else
-		//	if(flagsn_bo==TYPE_E) {
-		//		rhon = rho[n]; // apply preset velocity/density
-		//		uxn  = u[nxi];
-		//		uyn  = u[nyi];
-		//		uzn  = u[nzi];
-		//	} else {
-		//		calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
-		//	}
-		//#endif // EQUILIBRIUM_BOUNDARIES
+
+		calculate_rho_u(ehn, &e_rhon, &e_uxn, &e_uyn, &e_uzn); // calculate (charge) density and velocity fields from ei
+
 		float e_fxn = e_rhon * (Enx + uyn*Bnz - uzn*Bny); // F = charge * (E + (U cross B))
 		float e_fyn = e_rhon * (Eny + uzn*Bnx - uxn*Bnz); // charge is the content of the ddf
 		float e_fzn = e_rhon * (Enz + uxn*Bny - uyn*Bnx);
-		const float e_rho2 = 0.5f/e_rhon; // apply external volume force (Guo forcing, Krueger p.233f)
+		const float e_rho2 = 0.5f/(e_rhon * DEF_KKGE); // convert charge density to mass density, apply external volume force (Guo forcing, Krueger p.233f)
 		e_uxn = clamp(fma(fxn, e_rho2, e_uxn), -DEF_C, DEF_C); // limit velocity (for stability purposes)
 		e_uyn = clamp(fma(fyn, e_rho2, e_uyn), -DEF_C, DEF_C); // force term: F*dt/(2*rho)
 		e_uzn = clamp(fma(fzn, e_rho2, e_uzn), -DEF_C, DEF_C);
 		calculate_forcing_terms(e_uxn, e_uyn, e_uzn, fxn, fyn, fzn, Fin); // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
+		
+		calculate_f_eq(e_rhon, e_uxn, e_uyn, e_uzn, feq); // calculate equilibrium DDFs
+
+		// Perform collision with SRT TODO: use correct kinematic viscosity
+		#ifdef VOLUME_FORCE
+			const float c_tau = fma(w, -0.5f, 1.0f);
+			for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] *= c_tau;
+		#endif // VOLUME_FORCE
+		#ifndef EQUILIBRIUM_BOUNDARIES
+			for(uint i=0u; i<DEF_VELOCITY_SET; i++) ehn[i] = fma(1.0f-w, ehn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
+		#else
+			for(uint i=0u; i<DEF_VELOCITY_SET; i++) ehn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(1.0f-w, ehn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
+		#endif // EQUILIBRIUM_BOUNDARIES
+
+		store_f(n, ehn, ei, j, t); // perform streaming (part 1)
 
 
 		/* ---- Gas charge advection ---- */
@@ -544,11 +556,6 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		fyn += Qn * (Eny + uzn*Bnx - uxn*Bnz);
 		fzn += Qn * (Enz + uxn*Bny - uyn*Bnx);
 
-		/* ---- Clear dynamic field ----- */
-		// Clear dynamic buffers with static buffers for recomputation
-		B_dyn[nxi] = B[nxi]; E_dyn[nxi] = E[nxi];
-		B_dyn[nyi] = B[nyi]; E_dyn[nyi] = E[nyi];
-		B_dyn[nzi] = B[nzi]; E_dyn[nzi] = E[nzi];
 
 		/* ------ LOD construction ------ */
 		#if DEF_LOD_DEPTH > 0 // Update LOD buffer
@@ -607,9 +614,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 	#endif // UPDATE_FIELDS
 	#endif // EQUILIBRIUM_BOUNDARIES
 
-    float feq[DEF_VELOCITY_SET]; // equilibrium DDFs
     calculate_f_eq(rhon, uxn, uyn, uzn, feq); // calculate equilibrium DDFs
-    float w = DEF_W; // LBM relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
 
     #if defined(SRT) // SRT
 		#ifdef VOLUME_FORCE
