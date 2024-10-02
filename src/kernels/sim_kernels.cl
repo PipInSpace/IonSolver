@@ -510,9 +510,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 		calculate_rho_u(ehn, &e_rhon, &e_uxn, &e_uyn, &e_uzn); // calculate (charge) density and velocity fields from ei
 
-		float e_fxn = e_rhon * (Enx + uyn*Bnz - uzn*Bny); // F = charge * (E + (U cross B))
-		float e_fyn = e_rhon * (Eny + uzn*Bnx - uxn*Bnz); // charge is the content of the ddf
-		float e_fzn = e_rhon * (Enz + uxn*Bny - uyn*Bnx);
+		float e_fxn = -e_rhon * (Enx + e_uyn*Bnz - e_uzn*Bny); // F = charge * (E + (U cross B))
+		float e_fyn = -e_rhon * (Eny + e_uzn*Bnx - e_uxn*Bnz); // charge is the content of the ddf
+		float e_fzn = -e_rhon * (Enz + e_uxn*Bny - e_uyn*Bnx);
 		const float e_rho2 = 0.5f/(e_rhon * DEF_KKGE); // convert charge density to mass density, apply external volume force (Guo forcing, Krueger p.233f)
 		e_uxn = clamp(fma(fxn, e_rho2, e_uxn), -DEF_C, DEF_C); // limit velocity (for stability purposes)
 		e_uyn = clamp(fma(fyn, e_rho2, e_uyn), -DEF_C, DEF_C); // force term: F*dt/(2*rho)
@@ -568,7 +568,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 			{
 				const uint ind = (lod_index(n, d) + off) * 4;
 				const float ils = 1/lod_s(d);
-				atomic_add_f(&QU_lod[ind+0], Qn);
+				atomic_add_f(&QU_lod[ind+0], Qn-e_rhon);
 				atomic_add_f(&QU_lod[ind+1], uxn * ils);
 				atomic_add_f(&QU_lod[ind+2], uyn * ils);
 				atomic_add_f(&QU_lod[ind+3], uzn * ils);
