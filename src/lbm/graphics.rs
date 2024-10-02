@@ -359,12 +359,6 @@ impl domain::LbmDomain {
     }
 }
 
-#[derive(Default)]
-pub struct Camera {
-    pub width: u32,
-    pub height: u32,
-}
-
 #[rustfmt::skip]
 /// Returns a string of OpenCL C `#define`s from the provided arguments that are appended to the base OpenCl code at runtime.
 pub fn get_graphics_defines(graphics_config: &GraphicsConfig) -> String {
