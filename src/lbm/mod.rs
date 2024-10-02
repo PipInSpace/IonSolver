@@ -216,6 +216,7 @@ impl Lbm {
         self.communicate_fi();
         if self.config.ext_magneto_hydro {
             self.communicate_fqi();
+            self.communicate_ei();
             self.communicate_qu_lods();
             self.update_e_b_dynamic();
         }
@@ -254,15 +255,8 @@ impl Lbm {
         self.communicate_fi();
         if self.config.ext_magneto_hydro {
             self.communicate_fqi();
-            //let lod = bget!(self.domains[0].qu_lod.as_ref().expect("msg"));
-            //println!("1b: {:?}", lod);
-            //let lod = bget!(self.domains[1].qu_lod.as_ref().expect("msg"));
-            //println!("2b: {:?}", lod);
+            self.communicate_ei();
             self.communicate_qu_lods();
-            //let lod = bget!(self.domains[0].qu_lod.as_ref().expect("msg"));
-            //println!("1a: {:?}", lod);
-            //let lod = bget!(self.domains[1].qu_lod.as_ref().expect("msg"));
-            //println!("2a: {:?}", lod);
             self.update_e_b_dynamic();
         }
         if self.get_d_n() == 1 || self.config.ext_magneto_hydro {
@@ -363,6 +357,13 @@ impl Lbm {
     fn communicate_fqi(&mut self) {
         let bytes_per_cell = self.config.float_type.size_of() * 1; // FP type size * transfers. The fixed D3Q7 lattice has 1 transfer
         self.communicate_field(TransferField::Qi, bytes_per_cell);
+    }
+
+    /// Communicate Ei across domain boundaries
+    fn communicate_ei(&mut self) {
+        let bytes_per_cell =
+            self.config.float_type.size_of() * self.config.velocity_set.get_transfers(); // FP type size * transfers.
+        self.communicate_field(TransferField::Ei, bytes_per_cell);
     }
 
     /// Communicate charge and velocity LODs across domains

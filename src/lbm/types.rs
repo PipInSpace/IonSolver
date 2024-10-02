@@ -106,5 +106,6 @@ pub enum VariableFloatBuffer {
 pub enum TransferField {
     Fi,
     RhoUFlags,
+    Ei,
     Qi,
 }
