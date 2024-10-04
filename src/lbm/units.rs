@@ -166,6 +166,31 @@ impl Units {
     }
 }
 
+// Enum holding different gas types and their ionization energies
+enum IonE {
+    H,
+    He,
+    Ne,
+    Ar,
+    Kr,
+    Xe,
+}
+
+impl IonE {
+    /// Returns the minimal energy value in eV for successfull first ionization
+    /// https://physics.nist.gov/PhysRefData/ASD/ionEnergy.html
+    fn val(&self) -> f32 {
+        match self {
+            IonE::H => 13.598434599702,
+            IonE::He =>  24.587389011,
+            IonE::Ne =>  21.564541,
+            IonE::Ar =>  15.7596119,
+            IonE::Kr => 13.9996055,
+            IonE::Xe =>  12.1298437,
+        }
+    }
+}
+
 #[inline]
 fn sq(x: f32) -> f32 {
     x * x

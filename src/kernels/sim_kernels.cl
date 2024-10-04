@@ -510,6 +510,8 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 		calculate_rho_u(ehn, &e_rhon, &e_uxn, &e_uyn, &e_uzn); // calculate (charge) density and velocity fields from ei
 
+		// TODO: Ionization
+
 		float e_fxn = -e_rhon * (Enx + e_uyn*Bnz - e_uzn*Bny); // F = charge * (E + (U cross B))
 		float e_fyn = -e_rhon * (Eny + e_uzn*Bnx - e_uxn*Bnz); // charge is the content of the ddf
 		float e_fzn = -e_rhon * (Enz + e_uxn*Bny - e_uyn*Bnx);
