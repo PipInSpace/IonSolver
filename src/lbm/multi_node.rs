@@ -132,6 +132,7 @@ fn node_domain(cfg: &mut LbmConfig, rank: u32) -> LbmDomain {
     let y = (rank % (cfg.d_x * cfg.d_y)) / cfg.d_x;
     let z =  rank / (cfg.d_x * cfg.d_y);
 
+    println!("Using device {} for node {}.", default_device!().name().expect("name"), rank);
     LbmDomain::new( &cfg, default_device!(), x, y, z, rank) // Initialize and return domain
 }
 
