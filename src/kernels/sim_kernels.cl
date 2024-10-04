@@ -490,6 +490,11 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 	}
 	#endif
 
+	#ifdef VOLUME_FORCE
+		 const float c_tau = fma(w, -0.5f, 1.0f);
+	#endif // VOLUME_FORCE
+
+
 	#ifdef MAGNETO_HYDRO
 		/* -------- Cache fields -------- */
 		float Bnx = B_dyn[nxi]; // Cache dynamic fields for multiple readings
@@ -525,7 +530,6 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 		// Perform collision with SRT TODO: use correct kinematic viscosity
 		#ifdef VOLUME_FORCE
-			const float c_tau = fma(w, -0.5f, 1.0f);
 			for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] *= c_tau;
 		#endif // VOLUME_FORCE
 		#ifndef EQUILIBRIUM_BOUNDARIES
@@ -620,7 +624,6 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
     #if defined(SRT) // SRT
 		#ifdef VOLUME_FORCE
-			const float c_tau = fma(w, -0.5f, 1.0f);
 			for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] *= c_tau;
 		#endif // VOLUME_FORCE
 
