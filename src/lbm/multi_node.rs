@@ -131,9 +131,22 @@ fn node_domain(cfg: &mut LbmConfig, rank: u32) -> LbmDomain {
     let x = (rank % (cfg.d_x * cfg.d_y)) % cfg.d_x; // Get domain coordinates
     let y = (rank % (cfg.d_x * cfg.d_y)) / cfg.d_x;
     let z =  rank / (cfg.d_x * cfg.d_y);
+    
+    let devices = device_vec!();
+    let dev;
+    if devices.is_empty() {
+        println!("No OpenCL Device detected. Aborting...");
+        std::process::exit(1);
+    } else if devices.len() == 1 {
+        dev = default_device!();
+        println!("1 OpenCL device detected on process {}. Using device 1: {}.", rank, dev.name().expect("name"));
+    } else {
+        dev = devices[rank % decices.len() as u32];
+        print!("{} OpenCL devices detected on process {}. Using device {}: {}", devices.len(), rank, rank % decices.len() as u32, dev.name().expect("name"));
+    }
 
-    println!("Using device {} for node {}.", default_device!().name().expect("name"), rank);
-    LbmDomain::new( &cfg, default_device!(), x, y, z, rank) // Initialize and return domain
+    //println!("Using device {} for node {}.", default_device!().name().expect("name"), rank);
+    LbmDomain::new( &cfg, dev, x, y, z, rank) // Initialize and return domain
 }
 
 // Additional functionality needed for multi-node exectution
