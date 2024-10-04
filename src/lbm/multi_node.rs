@@ -141,8 +141,8 @@ fn node_domain(cfg: &mut LbmConfig, rank: u32) -> LbmDomain {
         dev = default_device!();
         println!("1 OpenCL device detected on process {}. Using device 1: {}.", rank, dev.name().expect("name"));
     } else {
-        dev = devices[rank % decices.len() as u32];
-        print!("{} OpenCL devices detected on process {}. Using device {}: {}", devices.len(), rank, rank % decices.len() as u32, dev.name().expect("name"));
+        dev = devices[rank as usize % devices.len()];
+        print!("{} OpenCL devices detected on process {}. Using device {}: {}", devices.len(), rank, rank % devices.len() as u32, dev.name().expect("name"));
     }
 
     //println!("Using device {} for node {}.", default_device!().name().expect("name"), rank);
