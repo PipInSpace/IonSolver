@@ -150,88 +150,88 @@ ulong index_f(const uint n, const uint i) { // 64-bit indexing (maximum 2^32 lat
 	return (ulong)i*DEF_N+(ulong)n; // SoA (229% faster on GPU)
 }
 void calculate_f_eq(const float rho, float ux, float uy, float uz, float* feq) {
-    const float c3=-3.0f*(sq(ux)+sq(uy)+sq(uz)), rhom1=rho-1.0f; // c3 = -2*sq(u)/(2*sq(c)), rhom1 is arithmetic optimization to minimize digit extinction
-    ux *= 3.0f;
-    uy *= 3.0f;
-    uz *= 3.0f;
-    feq[ 0] = DEF_W0*fma(rho, 0.5f*c3, rhom1); // 000 (identical for all velocity sets)
-    #if defined(D2Q9)
-    const float u0=ux+uy, u1=ux-uy; // these pre-calculations make manual unrolling require less FLOPs
-    const float rhos=DEF_WS*rho, rhoe=DEF_WE*rho, rhom1s=DEF_WS*rhom1, rhom1e=DEF_WE*rhom1;
-    feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
-    feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
-    feq[ 5] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), u0), rhom1e); feq[ 6] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), -u0), rhom1e); // ++0 --0
-    feq[ 7] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), u1), rhom1e); feq[ 8] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), -u1), rhom1e); // +-0 -+0
-    #elif defined(D3Q15)
-    const float u0=ux+uy+uz, u1=ux+uy-uz, u2=ux-uy+uz, u3=-ux+uy+uz;
-    const float rhos=DEF_WS*rho, rhoc=DEF_WC*rho, rhom1s=DEF_WS*rhom1, rhom1c=DEF_WC*rhom1;
-    feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
-    feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
-    feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
-    feq[ 7] = fma(rhoc, fma(0.5f, fma(u0, u0, c3), u0), rhom1c); feq[ 8] = fma(rhoc, fma(0.5f, fma(u0, u0, c3), -u0), rhom1c); // +++ ---
-    feq[ 9] = fma(rhoc, fma(0.5f, fma(u1, u1, c3), u1), rhom1c); feq[10] = fma(rhoc, fma(0.5f, fma(u1, u1, c3), -u1), rhom1c); // ++- --+
-    feq[11] = fma(rhoc, fma(0.5f, fma(u2, u2, c3), u2), rhom1c); feq[12] = fma(rhoc, fma(0.5f, fma(u2, u2, c3), -u2), rhom1c); // +-+ -+-
-    feq[13] = fma(rhoc, fma(0.5f, fma(u3, u3, c3), u3), rhom1c); feq[14] = fma(rhoc, fma(0.5f, fma(u3, u3, c3), -u3), rhom1c); // -++ +--
-    #elif defined(D3Q19)
-    const float u0=ux+uy, u1=ux+uz, u2=uy+uz, u3=ux-uy, u4=ux-uz, u5=uy-uz;
-    const float rhos=DEF_WS*rho, rhoe=DEF_WE*rho, rhom1s=DEF_WS*rhom1, rhom1e=DEF_WE*rhom1;
-    feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
-    feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
-    feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
-    feq[ 7] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), u0), rhom1e); feq[ 8] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), -u0), rhom1e); // ++0 --0
-    feq[ 9] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), u1), rhom1e); feq[10] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), -u1), rhom1e); // +0+ -0-
-    feq[11] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), u2), rhom1e); feq[12] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), -u2), rhom1e); // 0++ 0--
-    feq[13] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), u3), rhom1e); feq[14] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), -u3), rhom1e); // +-0 -+0
-    feq[15] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), u4), rhom1e); feq[16] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), -u4), rhom1e); // +0- -0+
-    feq[17] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), u5), rhom1e); feq[18] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), -u5), rhom1e); // 0+- 0-+
-    #elif defined(D3Q27)
-    const float u0=ux+uy, u1=ux+uz, u2=uy+uz, u3=ux-uy, u4=ux-uz, u5=uy-uz, u6=ux+uy+uz, u7=ux+uy-uz, u8=ux-uy+uz, u9=-ux+uy+uz;
-    const float rhos=DEF_WS*rho, rhoe=DEF_WE*rho, rhoc=DEF_WC*rho, rhom1s=DEF_WS*rhom1, rhom1e=DEF_WE*rhom1, rhom1c=DEF_WC*rhom1;
-    feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
-    feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
-    feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
-    feq[ 7] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), u0), rhom1e); feq[ 8] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), -u0), rhom1e); // ++0 --0
-    feq[ 9] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), u1), rhom1e); feq[10] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), -u1), rhom1e); // +0+ -0-
-    feq[11] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), u2), rhom1e); feq[12] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), -u2), rhom1e); // 0++ 0--
-    feq[13] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), u3), rhom1e); feq[14] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), -u3), rhom1e); // +-0 -+0
-    feq[15] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), u4), rhom1e); feq[16] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), -u4), rhom1e); // +0- -0+
-    feq[17] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), u5), rhom1e); feq[18] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), -u5), rhom1e); // 0+- 0-+
-    feq[19] = fma(rhoc, fma(0.5f, fma(u6, u6, c3), u6), rhom1c); feq[20] = fma(rhoc, fma(0.5f, fma(u6, u6, c3), -u6), rhom1c); // +++ ---
-    feq[21] = fma(rhoc, fma(0.5f, fma(u7, u7, c3), u7), rhom1c); feq[22] = fma(rhoc, fma(0.5f, fma(u7, u7, c3), -u7), rhom1c); // ++- --+
-    feq[23] = fma(rhoc, fma(0.5f, fma(u8, u8, c3), u8), rhom1c); feq[24] = fma(rhoc, fma(0.5f, fma(u8, u8, c3), -u8), rhom1c); // +-+ -+-
-    feq[25] = fma(rhoc, fma(0.5f, fma(u9, u9, c3), u9), rhom1c); feq[26] = fma(rhoc, fma(0.5f, fma(u9, u9, c3), -u9), rhom1c); // -++ +--
-    #endif
+	const float c3=-3.0f*(sq(ux)+sq(uy)+sq(uz)), rhom1=rho-1.0f; // c3 = -2*sq(u)/(2*sq(c)), rhom1 is arithmetic optimization to minimize digit extinction
+	ux *= 3.0f;
+	uy *= 3.0f;
+	uz *= 3.0f;
+	feq[ 0] = DEF_W0*fma(rho, 0.5f*c3, rhom1); // 000 (identical for all velocity sets)
+	#if defined(D2Q9)
+	const float u0=ux+uy, u1=ux-uy; // these pre-calculations make manual unrolling require less FLOPs
+	const float rhos=DEF_WS*rho, rhoe=DEF_WE*rho, rhom1s=DEF_WS*rhom1, rhom1e=DEF_WE*rhom1;
+	feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
+	feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
+	feq[ 5] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), u0), rhom1e); feq[ 6] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), -u0), rhom1e); // ++0 --0
+	feq[ 7] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), u1), rhom1e); feq[ 8] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), -u1), rhom1e); // +-0 -+0
+	#elif defined(D3Q15)
+	const float u0=ux+uy+uz, u1=ux+uy-uz, u2=ux-uy+uz, u3=-ux+uy+uz;
+	const float rhos=DEF_WS*rho, rhoc=DEF_WC*rho, rhom1s=DEF_WS*rhom1, rhom1c=DEF_WC*rhom1;
+	feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
+	feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
+	feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
+	feq[ 7] = fma(rhoc, fma(0.5f, fma(u0, u0, c3), u0), rhom1c); feq[ 8] = fma(rhoc, fma(0.5f, fma(u0, u0, c3), -u0), rhom1c); // +++ ---
+	feq[ 9] = fma(rhoc, fma(0.5f, fma(u1, u1, c3), u1), rhom1c); feq[10] = fma(rhoc, fma(0.5f, fma(u1, u1, c3), -u1), rhom1c); // ++- --+
+	feq[11] = fma(rhoc, fma(0.5f, fma(u2, u2, c3), u2), rhom1c); feq[12] = fma(rhoc, fma(0.5f, fma(u2, u2, c3), -u2), rhom1c); // +-+ -+-
+	feq[13] = fma(rhoc, fma(0.5f, fma(u3, u3, c3), u3), rhom1c); feq[14] = fma(rhoc, fma(0.5f, fma(u3, u3, c3), -u3), rhom1c); // -++ +--
+	#elif defined(D3Q19)
+	const float u0=ux+uy, u1=ux+uz, u2=uy+uz, u3=ux-uy, u4=ux-uz, u5=uy-uz;
+	const float rhos=DEF_WS*rho, rhoe=DEF_WE*rho, rhom1s=DEF_WS*rhom1, rhom1e=DEF_WE*rhom1;
+	feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
+	feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
+	feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
+	feq[ 7] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), u0), rhom1e); feq[ 8] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), -u0), rhom1e); // ++0 --0
+	feq[ 9] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), u1), rhom1e); feq[10] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), -u1), rhom1e); // +0+ -0-
+	feq[11] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), u2), rhom1e); feq[12] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), -u2), rhom1e); // 0++ 0--
+	feq[13] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), u3), rhom1e); feq[14] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), -u3), rhom1e); // +-0 -+0
+	feq[15] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), u4), rhom1e); feq[16] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), -u4), rhom1e); // +0- -0+
+	feq[17] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), u5), rhom1e); feq[18] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), -u5), rhom1e); // 0+- 0-+
+	#elif defined(D3Q27)
+	const float u0=ux+uy, u1=ux+uz, u2=uy+uz, u3=ux-uy, u4=ux-uz, u5=uy-uz, u6=ux+uy+uz, u7=ux+uy-uz, u8=ux-uy+uz, u9=-ux+uy+uz;
+	const float rhos=DEF_WS*rho, rhoe=DEF_WE*rho, rhoc=DEF_WC*rho, rhom1s=DEF_WS*rhom1, rhom1e=DEF_WE*rhom1, rhom1c=DEF_WC*rhom1;
+	feq[ 1] = fma(rhos, fma(0.5f, fma(ux, ux, c3), ux), rhom1s); feq[ 2] = fma(rhos, fma(0.5f, fma(ux, ux, c3), -ux), rhom1s); // +00 -00
+	feq[ 3] = fma(rhos, fma(0.5f, fma(uy, uy, c3), uy), rhom1s); feq[ 4] = fma(rhos, fma(0.5f, fma(uy, uy, c3), -uy), rhom1s); // 0+0 0-0
+	feq[ 5] = fma(rhos, fma(0.5f, fma(uz, uz, c3), uz), rhom1s); feq[ 6] = fma(rhos, fma(0.5f, fma(uz, uz, c3), -uz), rhom1s); // 00+ 00-
+	feq[ 7] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), u0), rhom1e); feq[ 8] = fma(rhoe, fma(0.5f, fma(u0, u0, c3), -u0), rhom1e); // ++0 --0
+	feq[ 9] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), u1), rhom1e); feq[10] = fma(rhoe, fma(0.5f, fma(u1, u1, c3), -u1), rhom1e); // +0+ -0-
+	feq[11] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), u2), rhom1e); feq[12] = fma(rhoe, fma(0.5f, fma(u2, u2, c3), -u2), rhom1e); // 0++ 0--
+	feq[13] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), u3), rhom1e); feq[14] = fma(rhoe, fma(0.5f, fma(u3, u3, c3), -u3), rhom1e); // +-0 -+0
+	feq[15] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), u4), rhom1e); feq[16] = fma(rhoe, fma(0.5f, fma(u4, u4, c3), -u4), rhom1e); // +0- -0+
+	feq[17] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), u5), rhom1e); feq[18] = fma(rhoe, fma(0.5f, fma(u5, u5, c3), -u5), rhom1e); // 0+- 0-+
+	feq[19] = fma(rhoc, fma(0.5f, fma(u6, u6, c3), u6), rhom1c); feq[20] = fma(rhoc, fma(0.5f, fma(u6, u6, c3), -u6), rhom1c); // +++ ---
+	feq[21] = fma(rhoc, fma(0.5f, fma(u7, u7, c3), u7), rhom1c); feq[22] = fma(rhoc, fma(0.5f, fma(u7, u7, c3), -u7), rhom1c); // ++- --+
+	feq[23] = fma(rhoc, fma(0.5f, fma(u8, u8, c3), u8), rhom1c); feq[24] = fma(rhoc, fma(0.5f, fma(u8, u8, c3), -u8), rhom1c); // +-+ -+-
+	feq[25] = fma(rhoc, fma(0.5f, fma(u9, u9, c3), u9), rhom1c); feq[26] = fma(rhoc, fma(0.5f, fma(u9, u9, c3), -u9), rhom1c); // -++ +--
+	#endif
 }
 void calculate_rho_u(const float* f, float* rhon, float* uxn, float* uyn, float* uzn) {
-    float rho=f[0], ux, uy, uz;
-    for(uint i=1u; i<DEF_VELOCITY_SET; i++) rho += f[i]; // calculate density from fi
-    rho += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fi (perturbation method / DDF-shifting)
-    #if defined(D2Q9)
-    ux = f[1]-f[2]+f[5]-f[6]+f[7]-f[8]; // calculate velocity from fi (alternating + and - for best accuracy)
-    uy = f[3]-f[4]+f[5]-f[6]+f[8]-f[7];
-    uz = 0.0f;
-    #elif defined(D3Q15)
-    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[11]-f[12]+f[14]-f[13]; // calculate velocity from fi (alternating + and - for best accuracy)
-    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[12]-f[11]+f[13]-f[14];
-    uz = f[ 5]-f[ 6]+f[ 7]-f[ 8]+f[10]-f[ 9]+f[11]-f[12]+f[13]-f[14];
-    #elif defined(D3Q19)
-    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[13]-f[14]+f[15]-f[16]; // calculate velocity from fi (alternating + and - for best accuracy)
-    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[11]-f[12]+f[14]-f[13]+f[17]-f[18];
-    uz = f[ 5]-f[ 6]+f[ 9]-f[10]+f[11]-f[12]+f[16]-f[15]+f[18]-f[17];
-    #elif defined(D3Q27)
-    ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[13]-f[14]+f[15]-f[16]+f[19]-f[20]+f[21]-f[22]+f[23]-f[24]+f[26]-f[25]; // calculate velocity from fi (alternating + and - for best accuracy)
-    uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[11]-f[12]+f[14]-f[13]+f[17]-f[18]+f[19]-f[20]+f[21]-f[22]+f[24]-f[23]+f[25]-f[26];
-    uz = f[ 5]-f[ 6]+f[ 9]-f[10]+f[11]-f[12]+f[16]-f[15]+f[18]-f[17]+f[19]-f[20]+f[22]-f[21]+f[23]-f[24]+f[25]-f[26];
-    #endif
-    *rhon = rho;
-    *uxn = ux/rho;
-    *uyn = uy/rho;
-    *uzn = uz/rho;
+	float rho=f[0], ux, uy, uz;
+	for(uint i=1u; i<DEF_VELOCITY_SET; i++) rho += f[i]; // calculate density from fi
+	rho += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fi (perturbation method / DDF-shifting)
+	#if defined(D2Q9)
+	ux = f[1]-f[2]+f[5]-f[6]+f[7]-f[8]; // calculate velocity from fi (alternating + and - for best accuracy)
+	uy = f[3]-f[4]+f[5]-f[6]+f[8]-f[7];
+	uz = 0.0f;
+	#elif defined(D3Q15)
+	ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[11]-f[12]+f[14]-f[13]; // calculate velocity from fi (alternating + and - for best accuracy)
+	uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[12]-f[11]+f[13]-f[14];
+	uz = f[ 5]-f[ 6]+f[ 7]-f[ 8]+f[10]-f[ 9]+f[11]-f[12]+f[13]-f[14];
+	#elif defined(D3Q19)
+	ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[13]-f[14]+f[15]-f[16]; // calculate velocity from fi (alternating + and - for best accuracy)
+	uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[11]-f[12]+f[14]-f[13]+f[17]-f[18];
+	uz = f[ 5]-f[ 6]+f[ 9]-f[10]+f[11]-f[12]+f[16]-f[15]+f[18]-f[17];
+	#elif defined(D3Q27)
+	ux = f[ 1]-f[ 2]+f[ 7]-f[ 8]+f[ 9]-f[10]+f[13]-f[14]+f[15]-f[16]+f[19]-f[20]+f[21]-f[22]+f[23]-f[24]+f[26]-f[25]; // calculate velocity from fi (alternating + and - for best accuracy)
+	uy = f[ 3]-f[ 4]+f[ 7]-f[ 8]+f[11]-f[12]+f[14]-f[13]+f[17]-f[18]+f[19]-f[20]+f[21]-f[22]+f[24]-f[23]+f[25]-f[26];
+	uz = f[ 5]-f[ 6]+f[ 9]-f[10]+f[11]-f[12]+f[16]-f[15]+f[18]-f[17]+f[19]-f[20]+f[22]-f[21]+f[23]-f[24]+f[25]-f[26];
+	#endif
+	*rhon = rho;
+	*uxn = ux/rho;
+	*uyn = uy/rho;
+	*uzn = uz/rho;
 } // calculate_rho_u
 void load_f(const uint n, float* fhn, const global fpxx* fi, const uint* j, const ulong t) {
 	fhn[0] = load(fi, index_f(n, 0u)); // Esoteric-Pull
 	for(uint i=1u; i<DEF_VELOCITY_SET; i+=2u) {
-		fhn[i   ] = load(fi, index_f(n   , t%2ul ? i    : i+1u));
+		fhn[i   ] = load(fi, index_f(n   , t%2ul ? i	: i+1u));
 		fhn[i+1u] = load(fi, index_f(j[i], t%2ul ? i+1u : i   ));
 	}
 }
@@ -239,63 +239,63 @@ void store_f(const uint n, const float* fhn, global fpxx* fi, const uint* j, con
 	store(fi, index_f(n, 0u), fhn[0]); // Esoteric-Pull
 	for(uint i=1u; i<DEF_VELOCITY_SET; i+=2u) {
 		store(fi, index_f(j[i], t%2ul ? i+1u : i   ), fhn[i   ]);
-		store(fi, index_f(n   , t%2ul ? i    : i+1u), fhn[i+1u]);
-    }
+		store(fi, index_f(n   , t%2ul ? i	 : i+1u), fhn[i+1u]);
+	}
 }
 void calculate_indices(const uint n, uint* x0, uint* xp, uint* xm, uint* y0, uint* yp, uint* ym, uint* z0, uint* zp, uint* zm) {
-    const uint3 xyz = coordinates(n);
-    *x0 =   xyz.x; // pre-calculate indices (periodic boundary conditions)
-    *xp =  (xyz.x       +1u)%DEF_NX;
-    *xm =  (xyz.x+DEF_NX-1u)%DEF_NX;
-    *y0 =   xyz.y                   *DEF_NX;
-    *yp = ((xyz.y       +1u)%DEF_NY)*DEF_NX;
-    *ym = ((xyz.y+DEF_NY-1u)%DEF_NY)*DEF_NX;
-    *z0 =   xyz.z                   *DEF_NY*DEF_NX;
-    *zp = ((xyz.z       +1u)%DEF_NZ)*DEF_NY*DEF_NX;
-    *zm = ((xyz.z+DEF_NZ-1u)%DEF_NZ)*DEF_NY*DEF_NX;
+	const uint3 xyz = coordinates(n);
+	*x0 =   xyz.x; // pre-calculate indices (periodic boundary conditions)
+	*xp =  (xyz.x		+1u)%DEF_NX;
+	*xm =  (xyz.x+DEF_NX-1u)%DEF_NX;
+	*y0 =   xyz.y					*DEF_NX;
+	*yp = ((xyz.y		+1u)%DEF_NY)*DEF_NX;
+	*ym = ((xyz.y+DEF_NY-1u)%DEF_NY)*DEF_NX;
+	*z0 =   xyz.z					*DEF_NY*DEF_NX;
+	*zp = ((xyz.z		+1u)%DEF_NZ)*DEF_NY*DEF_NX;
+	*zm = ((xyz.z+DEF_NZ-1u)%DEF_NZ)*DEF_NY*DEF_NX;
 }
 void neighbors(const uint n, uint* j) {
-    uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
-    calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
-    j[0] = n;
-    #if defined(D2Q9)
-    j[ 1] = xp+y0; j[ 2] = xm+y0; // +00 -00
-    j[ 3] = x0+yp; j[ 4] = x0+ym; // 0+0 0-0
-    j[ 5] = xp+yp; j[ 6] = xm+ym; // ++0 --0
-    j[ 7] = xp+ym; j[ 8] = xm+yp; // +-0 -+0
-    #elif defined(D3Q15)
-    j[ 1] = xp+y0+z0; j[ 2] = xm+y0+z0; // +00 -00
-    j[ 3] = x0+yp+z0; j[ 4] = x0+ym+z0; // 0+0 0-0
-    j[ 5] = x0+y0+zp; j[ 6] = x0+y0+zm; // 00+ 00-
-    j[ 7] = xp+yp+zp; j[ 8] = xm+ym+zm; // +++ ---
-    j[ 9] = xp+yp+zm; j[10] = xm+ym+zp; // ++- --+
-    j[11] = xp+ym+zp; j[12] = xm+yp+zm; // +-+ -+-
-    j[13] = xm+yp+zp; j[14] = xp+ym+zm; // -++ +--
-    #elif defined(D3Q19)
-    j[ 1] = xp+y0+z0; j[ 2] = xm+y0+z0; // +00 -00
-    j[ 3] = x0+yp+z0; j[ 4] = x0+ym+z0; // 0+0 0-0
-    j[ 5] = x0+y0+zp; j[ 6] = x0+y0+zm; // 00+ 00-
-    j[ 7] = xp+yp+z0; j[ 8] = xm+ym+z0; // ++0 --0
-    j[ 9] = xp+y0+zp; j[10] = xm+y0+zm; // +0+ -0-
-    j[11] = x0+yp+zp; j[12] = x0+ym+zm; // 0++ 0--
-    j[13] = xp+ym+z0; j[14] = xm+yp+z0; // +-0 -+0
-    j[15] = xp+y0+zm; j[16] = xm+y0+zp; // +0- -0+
-    j[17] = x0+yp+zm; j[18] = x0+ym+zp; // 0+- 0-+
-    #elif defined(D3Q27)
-    j[ 1] = xp+y0+z0; j[ 2] = xm+y0+z0; // +00 -00
-    j[ 3] = x0+yp+z0; j[ 4] = x0+ym+z0; // 0+0 0-0
-    j[ 5] = x0+y0+zp; j[ 6] = x0+y0+zm; // 00+ 00-
-    j[ 7] = xp+yp+z0; j[ 8] = xm+ym+z0; // ++0 --0
-    j[ 9] = xp+y0+zp; j[10] = xm+y0+zm; // +0+ -0-
-    j[11] = x0+yp+zp; j[12] = x0+ym+zm; // 0++ 0--
-    j[13] = xp+ym+z0; j[14] = xm+yp+z0; // +-0 -+0
-    j[15] = xp+y0+zm; j[16] = xm+y0+zp; // +0- -0+
-    j[17] = x0+yp+zm; j[18] = x0+ym+zp; // 0+- 0-+
-    j[19] = xp+yp+zp; j[20] = xm+ym+zm; // +++ ---
-    j[21] = xp+yp+zm; j[22] = xm+ym+zp; // ++- --+
-    j[23] = xp+ym+zp; j[24] = xm+yp+zm; // +-+ -+-
-    j[25] = xm+yp+zp; j[26] = xp+ym+zm; // -++ +--
-    #endif
+	uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
+	calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
+	j[0] = n;
+	#if defined(D2Q9)
+	j[ 1] = xp+y0; j[ 2] = xm+y0; // +00 -00
+	j[ 3] = x0+yp; j[ 4] = x0+ym; // 0+0 0-0
+	j[ 5] = xp+yp; j[ 6] = xm+ym; // ++0 --0
+	j[ 7] = xp+ym; j[ 8] = xm+yp; // +-0 -+0
+	#elif defined(D3Q15)
+	j[ 1] = xp+y0+z0; j[ 2] = xm+y0+z0; // +00 -00
+	j[ 3] = x0+yp+z0; j[ 4] = x0+ym+z0; // 0+0 0-0
+	j[ 5] = x0+y0+zp; j[ 6] = x0+y0+zm; // 00+ 00-
+	j[ 7] = xp+yp+zp; j[ 8] = xm+ym+zm; // +++ ---
+	j[ 9] = xp+yp+zm; j[10] = xm+ym+zp; // ++- --+
+	j[11] = xp+ym+zp; j[12] = xm+yp+zm; // +-+ -+-
+	j[13] = xm+yp+zp; j[14] = xp+ym+zm; // -++ +--
+	#elif defined(D3Q19)
+	j[ 1] = xp+y0+z0; j[ 2] = xm+y0+z0; // +00 -00
+	j[ 3] = x0+yp+z0; j[ 4] = x0+ym+z0; // 0+0 0-0
+	j[ 5] = x0+y0+zp; j[ 6] = x0+y0+zm; // 00+ 00-
+	j[ 7] = xp+yp+z0; j[ 8] = xm+ym+z0; // ++0 --0
+	j[ 9] = xp+y0+zp; j[10] = xm+y0+zm; // +0+ -0-
+	j[11] = x0+yp+zp; j[12] = x0+ym+zm; // 0++ 0--
+	j[13] = xp+ym+z0; j[14] = xm+yp+z0; // +-0 -+0
+	j[15] = xp+y0+zm; j[16] = xm+y0+zp; // +0- -0+
+	j[17] = x0+yp+zm; j[18] = x0+ym+zp; // 0+- 0-+
+	#elif defined(D3Q27)
+	j[ 1] = xp+y0+z0; j[ 2] = xm+y0+z0; // +00 -00
+	j[ 3] = x0+yp+z0; j[ 4] = x0+ym+z0; // 0+0 0-0
+	j[ 5] = x0+y0+zp; j[ 6] = x0+y0+zm; // 00+ 00-
+	j[ 7] = xp+yp+z0; j[ 8] = xm+ym+z0; // ++0 --0
+	j[ 9] = xp+y0+zp; j[10] = xm+y0+zm; // +0+ -0-
+	j[11] = x0+yp+zp; j[12] = x0+ym+zm; // 0++ 0--
+	j[13] = xp+ym+z0; j[14] = xm+yp+z0; // +-0 -+0
+	j[15] = xp+y0+zm; j[16] = xm+y0+zp; // +0- -0+
+	j[17] = x0+yp+zm; j[18] = x0+ym+zp; // 0+- 0-+
+	j[19] = xp+yp+zp; j[20] = xm+ym+zm; // +++ ---
+	j[21] = xp+yp+zm; j[22] = xm+ym+zp; // ++- --+
+	j[23] = xp+ym+zp; j[24] = xm+yp+zm; // +-+ -+-
+	j[25] = xm+yp+zp; j[26] = xp+ym+zm; // -++ +--
+	#endif
 } //neighbors
 float3 load_u(const uint n, const global float* u) {
 	return (float3)(u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n]);
@@ -394,7 +394,7 @@ void calculate_q_eq(const float Q, const float ux, const float uy, const float u
 void load_q(const uint n, float* qhn, const global fpxx* fqi, const uint* j7, const ulong t) {
 	qhn[0] = load(fqi, index_f(n, 0u)); // Esoteric-Pull
 	for(uint i=1u; i<7u; i+=2u) {
-		qhn[i   ] = load(fqi, index_f(n    , t%2ul ? i    : i+1u));
+		qhn[i   ] = load(fqi, index_f(n	   , t%2ul ? i	: i+1u));
 		qhn[i+1u] = load(fqi, index_f(j7[i], t%2ul ? i+1u : i   ));
 	}
 }
@@ -402,7 +402,7 @@ void store_q(const uint n, const float* qhn, global fpxx* fqi, const uint* j7, c
 	store(fqi, index_f(n, 0u), qhn[0]); // Esoteric-Pull
 	for(uint i=1u; i<7u; i+=2u) {
 		store(fqi, index_f(j7[i], t%2ul ? i+1u : i   ), qhn[i   ]);
-		store(fqi, index_f(n    , t%2ul ? i    : i+1u), qhn[i+1u]);
+		store(fqi, index_f(n	, t%2ul ? i	: i+1u), qhn[i+1u]);
 	}
 }
 
@@ -454,40 +454,40 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , global float* QU_lod	// Level-of-detail for charge und velocity 
 #endif // MAGNETO_HYDRO
 ) {
-    const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute stream_collide() on halo
-    const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
-    const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
-    if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
+	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
+	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute stream_collide() on halo
+	const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
+	const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
+	if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
 
-    uint j[DEF_VELOCITY_SET]; // neighbor indices
-    neighbors(n, j); // calculate neighbor indices
+	uint j[DEF_VELOCITY_SET]; // neighbor indices
+	neighbors(n, j); // calculate neighbor indices
 
-    float fhn[DEF_VELOCITY_SET]; // local DDFs
-    load_f(n, fhn, fi, j, t); // perform streaming (part 2)
+	float fhn[DEF_VELOCITY_SET]; // local DDFs
+	load_f(n, fhn, fi, j, t); // perform streaming (part 2)
 
 	ulong nxi=(ulong)n, nyi=DEF_N+(ulong)n, nzi=2ul*DEF_N+(ulong)n; // n indecies for x, y and z components
 
-    float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
+	float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
 
-    #ifndef EQUILIBRIUM_BOUNDARIES // EQUILIBRIUM_BOUNDARIES
-        calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
-    #else
-        if(flagsn_bo==TYPE_E) {
-        	rhon = rho[n]; // apply preset velocity/density
-        	uxn  = u[nxi];
-        	uyn  = u[nyi];
-        	uzn  = u[nzi];
-        } else {
-        	calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
-        }
-    #endif // EQUILIBRIUM_BOUNDARIES
+	#ifndef EQUILIBRIUM_BOUNDARIES // EQUILIBRIUM_BOUNDARIES
+		calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
+	#else
+		if(flagsn_bo==TYPE_E) {
+			rhon = rho[n]; // apply preset velocity/density
+			uxn  = u[nxi];
+			uyn  = u[nyi];
+			uzn  = u[nzi];
+		} else {
+			calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
+		}
+	#endif // EQUILIBRIUM_BOUNDARIES
 
-    float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
+	float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
 
-    float Fin[DEF_VELOCITY_SET]; // forcing terms, are used for ei too if MHD is enabled 
+	float Fin[DEF_VELOCITY_SET]; // forcing terms, are used for ei too if MHD is enabled 
 	float feq[DEF_VELOCITY_SET]; // equilibrium DDFs, are used for ei too if MHD is enabled 
-    float w = DEF_W; // LBM relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+	float w = DEF_W; // LBM relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
 	#ifdef VOLUME_FORCE
 	const float c_tau = fma(w, -0.5f, 1.0f);
 	#endif // VOLUME_FORCE
@@ -608,10 +608,10 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		uzn = clamp(fma(fzn, rho2, uzn), -DEF_C, DEF_C);
 		calculate_forcing_terms(uxn, uyn, uzn, fxn, fyn, fzn, Fin); // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
 	#else // VOLUME_FORCE
-    	uxn = clamp(uxn, -DEF_C, DEF_C); // limit velocity (for stability purposes)
-    	uyn = clamp(uyn, -DEF_C, DEF_C); // force term: F*dt/(2*rho)
-    	uzn = clamp(uzn, -DEF_C, DEF_C);
-    	for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] = 0.0f;
+		uxn = clamp(uxn, -DEF_C, DEF_C); // limit velocity (for stability purposes)
+		uyn = clamp(uyn, -DEF_C, DEF_C); // force term: F*dt/(2*rho)
+		uzn = clamp(uzn, -DEF_C, DEF_C);
+		for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] = 0.0f;
 	#endif // VOLUME_FORCE
 
 
@@ -633,22 +633,22 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 	#endif // UPDATE_FIELDS
 	#endif // EQUILIBRIUM_BOUNDARIES
 
-    calculate_f_eq(rhon, uxn, uyn, uzn, feq); // calculate equilibrium DDFs
+	calculate_f_eq(rhon, uxn, uyn, uzn, feq); // calculate equilibrium DDFs
 
-    #if defined(SRT) // SRT
+	#if defined(SRT) // SRT
 		#ifdef VOLUME_FORCE
 			for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] *= c_tau;
 		#endif // VOLUME_FORCE
 
-        #ifndef EQUILIBRIUM_BOUNDARIES
-            for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
-        #else
-            for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
-        #endif // EQUILIBRIUM_BOUNDARIES
+		#ifndef EQUILIBRIUM_BOUNDARIES
+			for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
+		#else
+			for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(1.0f-w, fhn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
+		#endif // EQUILIBRIUM_BOUNDARIES
 
-    #elif defined(TRT) // TRT
-        const float wp = w; // TRT: inverse of "+" relaxation time
-        const float wm = 1.0f/(0.1875f/(1.0f/w-0.5f)+0.5f); // TRT: inverse of "-" relaxation time wm = 1.0f/(0.1875f/(3.0f*nu)+0.5f), nu = (1.0f/w-0.5f)/3.0f;
+	#elif defined(TRT) // TRT
+		const float wp = w; // TRT: inverse of "+" relaxation time
+		const float wm = 1.0f/(0.1875f/(1.0f/w-0.5f)+0.5f); // TRT: inverse of "-" relaxation time wm = 1.0f/(0.1875f/(3.0f*nu)+0.5f), nu = (1.0f/w-0.5f)/3.0f;
 
 		#ifdef VOLUME_FORCE
 			const float c_taup=fma(wp, -0.25f, 0.5f), c_taum=fma(wm, -0.25f, 0.5f); // source: https://arxiv.org/pdf/1901.08766.pdf
@@ -661,24 +661,24 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 			for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] = fma(c_taup, Fin[i]+Fib[i], c_taum*(Fin[i]-Fib[i]));
 		#endif // VOLUME_FORCE
 
-        float fhb[DEF_VELOCITY_SET]; // fhn in inverse directions
-        float feb[DEF_VELOCITY_SET]; // feq in inverse directions
-        fhb[0] = fhn[0];
-        feb[0] = feq[0];
-        for(uint i=1u; i<DEF_VELOCITY_SET; i+=2u) {
-        	fhb[i   ] = fhn[i+1u];
-        	fhb[i+1u] = fhn[i   ];
-        	feb[i   ] = feq[i+1u];
-        	feb[i+1u] = feq[i   ];
-        }
-        #ifndef EQUILIBRIUM_BOUNDARIES
-            for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = fma(0.5f*wp, feq[i]-fhn[i]+feb[i]-fhb[i], fma(0.5f*wm, feq[i]-feb[i]-fhn[i]+fhb[i], fhn[i]+Fin[i])); // perform collision (TRT)
-        #else // EQUILIBRIUM_BOUNDARIES
-            for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(0.5f*wp, feq[i]-fhn[i]+feb[i]-fhb[i], fma(0.5f*wm, feq[i]-feb[i]-fhn[i]+fhb[i], fhn[i]+Fin[i])); // perform collision (TRT)
-        #endif // EQUILIBRIUM_BOUNDARIES
-    #endif // TRT
+		float fhb[DEF_VELOCITY_SET]; // fhn in inverse directions
+		float feb[DEF_VELOCITY_SET]; // feq in inverse directions
+		fhb[0] = fhn[0];
+		feb[0] = feq[0];
+		for(uint i=1u; i<DEF_VELOCITY_SET; i+=2u) {
+			fhb[i   ] = fhn[i+1u];
+			fhb[i+1u] = fhn[i   ];
+			feb[i   ] = feq[i+1u];
+			feb[i+1u] = feq[i   ];
+		}
+		#ifndef EQUILIBRIUM_BOUNDARIES
+			for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = fma(0.5f*wp, feq[i]-fhn[i]+feb[i]-fhb[i], fma(0.5f*wm, feq[i]-feb[i]-fhn[i]+fhb[i], fhn[i]+Fin[i])); // perform collision (TRT)
+		#else // EQUILIBRIUM_BOUNDARIES
+			for(uint i=0u; i<DEF_VELOCITY_SET; i++) fhn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(0.5f*wp, feq[i]-fhn[i]+feb[i]-fhb[i], fma(0.5f*wm, feq[i]-feb[i]-fhn[i]+fhb[i], fhn[i]+Fin[i])); // perform collision (TRT)
+		#endif // EQUILIBRIUM_BOUNDARIES
+	#endif // TRT
 
-    store_f(n, fhn, fi, j, t); // perform streaming (part 1)
+	store_f(n, fhn, fi, j, t); // perform streaming (part 1)
 } // stream_collide()
 
 __kernel void initialize(global fpxx* fi, global float* rho, global float* u, global uchar* flags
@@ -692,38 +692,38 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 , global float* Q
 #endif // MAGNETO_HYDRO
 ) {
-    const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute initialize() on halo
+	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
+	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute initialize() on halo
 	ulong nxi=(ulong)n, nyi=DEF_N+(ulong)n, nzi=2ul*DEF_N+(ulong)n; // n indecies for x, y and z components
-    uchar flagsn = flags[n];
-    const uchar flagsn_bo = flagsn&TYPE_BO; // extract boundary flags
-    uint j[DEF_VELOCITY_SET]; // neighbor indices
-    neighbors(n, j); // calculate neighbor indices
-    uchar flagsj[DEF_VELOCITY_SET]; // cache neighbor flags for multiple readings
-    for(uint i=1u; i<DEF_VELOCITY_SET; i++) flagsj[i] = flags[j[i]];
-    if(flagsn_bo==TYPE_S) { // cell is solid
-	    bool TYPE_ONLY_S = true; // has only solid neighbors
-	    for(uint i=1u; i<DEF_VELOCITY_SET; i++) TYPE_ONLY_S = TYPE_ONLY_S&&(flagsj[i]&TYPE_BO)==TYPE_S;
-	    if(TYPE_ONLY_S) {
-	    	u[nxi] = 0.0f; // reset velocity for solid lattice points with only boundary neighbors
-	    	u[nyi] = 0.0f;
-	    	u[nzi] = 0.0f;
+	uchar flagsn = flags[n];
+	const uchar flagsn_bo = flagsn&TYPE_BO; // extract boundary flags
+	uint j[DEF_VELOCITY_SET]; // neighbor indices
+	neighbors(n, j); // calculate neighbor indices
+	uchar flagsj[DEF_VELOCITY_SET]; // cache neighbor flags for multiple readings
+	for(uint i=1u; i<DEF_VELOCITY_SET; i++) flagsj[i] = flags[j[i]];
+	if(flagsn_bo==TYPE_S) { // cell is solid
+		bool TYPE_ONLY_S = true; // has only solid neighbors
+		for(uint i=1u; i<DEF_VELOCITY_SET; i++) TYPE_ONLY_S = TYPE_ONLY_S&&(flagsj[i]&TYPE_BO)==TYPE_S;
+		if(TYPE_ONLY_S) {
+			u[nxi] = 0.0f; // reset velocity for solid lattice points with only boundary neighbors
+			u[nyi] = 0.0f;
+			u[nzi] = 0.0f;
 			#ifdef MAGNETO_HYDRO
 			Q[n] = 0.0f;
 			#endif
-	    }
-        if(flagsn_bo==TYPE_S) {
-	        u[nxi] = 0.0f; // reset velocity for all solid lattice points
-	        u[nyi] = 0.0f;
-	        u[nzi] = 0.0f;
+		}
+		if(flagsn_bo==TYPE_S) {
+			u[nxi] = 0.0f; // reset velocity for all solid lattice points
+			u[nyi] = 0.0f;
+			u[nzi] = 0.0f;
 			#ifdef MAGNETO_HYDRO
 			Q[n] = 0.0f;
 			#endif
-        }
-    }
-    float fe_eq[DEF_VELOCITY_SET]; // f_equilibrium, reused for e_equilibrium
-    calculate_f_eq(rho[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], fe_eq);
-    store_f(n, fe_eq, fi, j, 1ul); // write to fi
+		}
+	}
+	float fe_eq[DEF_VELOCITY_SET]; // f_equilibrium, reused for e_equilibrium
+	calculate_f_eq(rho[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], fe_eq);
+	store_f(n, fe_eq, fi, j, 1ul); // write to fi
 
 	#ifdef MAGNETO_HYDRO
 		// Initialize charge ddfs
@@ -741,44 +741,44 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 		E_dyn[nzi] = E[nzi];
 		// Initialize electron gas ddfs
 		calculate_f_eq(Q[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], fe_eq);
-    	store_f(n, fe_eq, ei, j, 1ul); // write to fi
+		store_f(n, fe_eq, ei, j, 1ul); // write to fi
 	#endif // MAGNETO_HYDRO
 } // initialize()
 
 __kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
-    const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute update_fields() on halo
-    const uchar flagsn = flags[n];
-    const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
-    if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // don't update fields for boundary or gas lattice points
+	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
+	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute update_fields() on halo
+	const uchar flagsn = flags[n];
+	const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
+	if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // don't update fields for boundary or gas lattice points
 
-    uint j[DEF_VELOCITY_SET]; // neighbor indices
-    neighbors(n, j); // calculate neighbor indices
-    float fhn[DEF_VELOCITY_SET]; // local DDFs
-    load_f(n, fhn, fi, j, t); // perform streaming (part 2)
+	uint j[DEF_VELOCITY_SET]; // neighbor indices
+	neighbors(n, j); // calculate neighbor indices
+	float fhn[DEF_VELOCITY_SET]; // local DDFs
+	load_f(n, fhn, fi, j, t); // perform streaming (part 2)
 
-    float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
-    calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
-    float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
-    {
-        uxn = clamp(uxn, -DEF_C, DEF_C); // limit velocity (for stability purposes)
-        uyn = clamp(uyn, -DEF_C, DEF_C); // force term: F*dt/(2*rho)
-        uzn = clamp(uzn, -DEF_C, DEF_C);
-    }
+	float rhon, uxn, uyn, uzn; // calculate local density and velocity for collision
+	calculate_rho_u(fhn, &rhon, &uxn, &uyn, &uzn); // calculate density and velocity fields from fi
+	float fxn=fx, fyn=fy, fzn=fz; // force starts as constant volume force, can be modified before call of calculate_forcing_terms(...)
+	{
+		uxn = clamp(uxn, -DEF_C, DEF_C); // limit velocity (for stability purposes)
+		uyn = clamp(uyn, -DEF_C, DEF_C); // force term: F*dt/(2*rho)
+		uzn = clamp(uzn, -DEF_C, DEF_C);
+	}
 
-    rho[               n] = rhon; // update density field
-    u[                 n] = uxn; // update velocity field
-    u[    DEF_N+(ulong)n] = uyn;
-    u[2ul*DEF_N+(ulong)n] = uzn;
+	rho[			   n] = rhon; // update density field
+	u[				   n] = uxn; // update velocity field
+	u[	  DEF_N+(ulong)n] = uyn;
+	u[2ul*DEF_N+(ulong)n] = uzn;
 } // update_fields()
 
 #ifdef MAGNETO_HYDRO
 __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* Q, const global float* u, const global float* QU_lod, const global uchar* flags) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
-    if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
-    const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
-    const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
-    if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
+	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
+	const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
+	const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
+	if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
 
 	const uint3 coord_n = coordinates(n); // Cell coordinate
 	const float3 coord_nf = convert_float3(coord_n); // Cell coordinate as float vector
@@ -807,10 +807,10 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 				const float3 v_c = {u[n_c], u[(ulong)n_c+DEF_N], u[(ulong)n_c+DEF_N*2ul]}; // velocity of nearby cell
 
 				// precalculation for both fields
-				const float3 vec_r     = coord_nf - convert_float3(coordinates(n_c));
+				const float3 vec_r = coord_nf - convert_float3(coordinates(n_c));
 				const float3 pre_field = vec_r / cbmagnitude(vec_r);
 
-				e += q_c * pre_field;             // E imparted by nearby cell (Coulomb)
+				e += q_c * pre_field;			 // E imparted by nearby cell (Coulomb)
 				b += q_c * cross(v_c, pre_field); // B imparted by nearby cell (Biot-Savart)
 			}
 		}
@@ -826,10 +826,10 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 		const float3 v_c = {QU_lod[(d*4)+1], QU_lod[(d*4)+2], QU_lod[(d*4)+3]}; // velocity of LOD
 
 		// precalculation for both fields
-		const float3 vec_r     = coord_nf - d_c;
+		const float3 vec_r = coord_nf - d_c;
 		const float3 pre_field = vec_r / cbmagnitude(vec_r);
 
-		e += q_c * pre_field;             // E imparted by LOD (Coulomb)
+		e += q_c * pre_field; // E imparted by LOD (Coulomb)
 		b += q_c * cross(v_c, pre_field); // B imparted by LOD (Biot-Savart)
 	}
 
@@ -852,10 +852,10 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 			const float  q_c =  QU_lod[(offset+l)*4+0]; // charge of LOD
 			const float3 v_c = {QU_lod[(offset+l)*4+1], QU_lod[(offset+l)*4+2], QU_lod[(offset+l)*4+3]}; // velocity of LOD
 
-			const float3 vec_r     = coord_nf - lc;
+			const float3 vec_r = coord_nf - lc;
 			const float3 pre_field = vec_r / cbmagnitude(vec_r);
 
-			e += q_c * pre_field;             // E imparted by LOD (Coulomb)
+			e += q_c * pre_field; // E imparted by LOD (Coulomb)
 			b += q_c * cross(v_c, pre_field); // B imparted by LOD (Biot-Savart)
 		}
 		offset += n_lod_fd;
@@ -874,7 +874,7 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 __kernel void clear_qu_lod(global float* QU_lod) {
 	// Clears own domain LODs for recomputation
 	const uint n = get_global_id(0);
-    if(n>DEF_NUM_LOD_OWN) return;
+	if(n>DEF_NUM_LOD_OWN) return;
 	QU_lod[(n * 4)+0] = 0.0f;
 	QU_lod[(n * 4)+1] = 0.0f;
 	QU_lod[(n * 4)+2] = 0.0f;
@@ -893,7 +893,7 @@ uint index_extract_p(const uint a, const uint direction) {
 	return index(coordinates[direction]);
 }
 uint index_extract_m(const uint a, const uint direction) {
-	const uint3 coordinates[3] = { (uint3)(       1u, a%DEF_NY, a/DEF_NY), (uint3)(a/DEF_NZ,        1u, a%DEF_NZ), (uint3)(a%DEF_NX, a/DEF_NX,        1u) };
+	const uint3 coordinates[3] = { (uint3)(		  1u, a%DEF_NY, a/DEF_NY), (uint3)(a/DEF_NZ,		1u, a%DEF_NZ), (uint3)(a%DEF_NX, a/DEF_NX,		1u) };
 	return index(coordinates[direction]);
 }
 uint index_insert_p(const uint a, const uint direction) {
@@ -901,7 +901,7 @@ uint index_insert_p(const uint a, const uint direction) {
 	return index(coordinates[direction]);
 }
 uint index_insert_m(const uint a, const uint direction) {
-	const uint3 coordinates[3] = { (uint3)(       0u, a%DEF_NY, a/DEF_NY), (uint3)(a/DEF_NZ,        0u, a%DEF_NZ), (uint3)(a%DEF_NX, a/DEF_NX,        0u) };
+	const uint3 coordinates[3] = { (uint3)(		  0u, a%DEF_NY, a/DEF_NY), (uint3)(a/DEF_NZ,		0u, a%DEF_NZ), (uint3)(a%DEF_NX, a/DEF_NX,		0u) };
 	return index(coordinates[direction]);
 }
 // Returns an index for the transferred ddfs
@@ -971,18 +971,18 @@ kernel void transfer__insert_fi(const uint direction, const ulong t, const globa
 }
 // Rho, u and flags (needed if graphics are active)
 void extract_rho_u_flags(const uint a, const uint A, const uint n, global char* transfer_buffer, const global float* rho, const global float* u, const global uchar* flags) {
-	((global float*)transfer_buffer)[      a] = rho[               n];
-	((global float*)transfer_buffer)[    A+a] = u[                 n];
-	((global float*)transfer_buffer)[ 2u*A+a] = u[    DEF_N+(ulong)n];
+	((global float*)transfer_buffer)[	   a] = rho[			   n];
+	((global float*)transfer_buffer)[	 A+a] = u[				   n];
+	((global float*)transfer_buffer)[ 2u*A+a] = u[	  DEF_N+(ulong)n];
 	((global float*)transfer_buffer)[ 3u*A+a] = u[2ul*DEF_N+(ulong)n];
-	((global uchar*)transfer_buffer)[16u*A+a] = flags[             n];
+	((global uchar*)transfer_buffer)[16u*A+a] = flags[			   n];
 }
 void insert_rho_u_flags(const uint a, const uint A, const uint n, const global char* transfer_buffer, global float* rho, global float* u, global uchar* flags) {
-	rho[               n] = ((const global float*)transfer_buffer)[      a];
-	u[                 n] = ((const global float*)transfer_buffer)[    A+a];
-	u[    DEF_N+(ulong)n] = ((const global float*)transfer_buffer)[ 2u*A+a];
+	rho[			   n] = ((const global float*)transfer_buffer)[		 a];
+	u[				   n] = ((const global float*)transfer_buffer)[	   A+a];
+	u[	  DEF_N+(ulong)n] = ((const global float*)transfer_buffer)[ 2u*A+a];
 	u[2ul*DEF_N+(ulong)n] = ((const global float*)transfer_buffer)[ 3u*A+a];
-	flags[             n] = ((const global uchar*)transfer_buffer)[16u*A+a];
+	flags[			   n] = ((const global uchar*)transfer_buffer)[16u*A+a];
 }
 kernel void transfer_extract_rho_u_flags(const uint direction, const ulong t, global uchar* transfer_buffer_p, global uchar* transfer_buffer_m, const global float* rho, const global float* u, const global uchar* flags) {
 	const uint a=get_global_id(0), A=get_area(direction); // a = domain area index for each side, A = area of the domain boundary
