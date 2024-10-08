@@ -690,6 +690,8 @@ fn get_device_defines(
     +"\n	#define DEF_KE "    + &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant in simulation units
     +"\n	#define DEF_KMU "   + &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * std::f32::consts::PI))
     +"\n	#define DEF_KKGE  "  + &format!("{:?}f",lbm_config.units.si_to_kkge()) // electron mass/charge in simulation units
+    +"\n	#define DEF_KIMG  "  + &format!("{:?}f",lbm_config.units.si_to_kimg()) // Inverse of mass of a propellant gas atom, scaled by 10^20
+    +"\n	#define DEF_KVEV  "  + &format!("{:?}f",lbm_config.units.si_to_kveV()) // 9.10938356e-31kg / (2*1.6021766208e-19)
     +"\n	#define DEF_LOD_DEPTH " + &format!("{}u", lbm_config.mhd_lod_depth)
     +"\n    #define DEF_NUM_LOD " + &format!("{}u", n_lod)
     +"\n    #define DEF_NUM_LOD_OWN " + &format!("{}u", n_lod_own)

@@ -33,7 +33,9 @@
 #define DEF_KMU 0.0f
 #define def_ind_r 5 // Range of induction fill around cell
 #define DEF_WQ 0.1f
-#define DEF_KKGE 1.0f
+#define DEF_KKGE 1.0f // Constant mass/charge for an electron
+#define DEF_KIMG 1.0f // Inverse of mass of a propellant gas atom, scaled by 10^20
+#define DEF_KVEV 1.0f // 9.10938356e-31kg / (2*1.6021766208e-19)
 
 #define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
 #define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
@@ -407,8 +409,14 @@ void store_q(const uint n, const float* qhn, global fpxx* fqi, const uint* j7, c
 }
 
 // Ionization crosssection
-float calculate_sigma_i() {
-	return 0.0f;
+float calculate_sigma_i(const float v) {
+	// eV = 9.10938356e-31/(2*1.6021766208e-19) * v^2 = 0.00000000000284281503 * v^2 = DEF_KVEV * v^2
+	float ev = DEF_KVEV * sq(v);
+	#if defined(PROP_XE) // xenon propellant
+		return 6.5f*pow((ev-12.f)/ev, 1.2f) // ionization crosssection for xenon scaled by 10^20, https://descanso.jpl.nasa.gov/SciTechBook/series1/Goebel_AppD_IonizationCross.pdf
+	#else
+		return 0.0f;
+	#endif
 }
 
 // LOD handling
@@ -524,7 +532,8 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		// TODO: Ionization
 		float v_r = sqrt(sq(uxn-e_uxn) + sq(uyn-e_uyn) + sq(uzn-e_uzn))
 		// $\Delta e_rhon=(rhon/m_g)*e_rhon*v_r*sigma_i(v_r)$
-		float delta_q_rho = ((rhon/DEF_KMG) * (e_rhon * DEF_KKGE) * v_r * calculate_sigma_i(v_r)) / DEF_KKGE;
+		// DEF_KMG & sigma_i are scaled by a factor of 10^20 to minimize floating point imprecision
+		float delta_q_rho = ((rhon*DEF_KIMG) * (e_rhon * DEF_KKGE) * v_r * calculate_sigma_i(v_r)) / DEF_KKGE;
 		e_rhon += delta_q_rho; // Freeing of electrons through ionization
 
 

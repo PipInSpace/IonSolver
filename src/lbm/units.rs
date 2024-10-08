@@ -20,6 +20,8 @@ pub struct Units {
     pub s: f32,
     /// ampere
     pub a: f32,
+    // propellant gas
+    pub prop: Propellant,
 }
 
 impl Units {
@@ -29,6 +31,7 @@ impl Units {
             kg: 1.0,
             s: 1.0,
             a: 1.0,
+            prop: Propellant::default(),
         }
     }
 
@@ -153,6 +156,14 @@ impl Units {
         (9.109_383_713_9E-31_f64/-1.602_176_634E-19_f64) as f32 / (self.kg / (self.a * self.s))
     }
 
+    pub fn si_to_kimg(&self) -> f32 { // Inverse of mass of a propellant gas atom, scaled by 10^20
+        ((1.0/(self.prop.atom_mass() * 1e20)) / self.kg as f64) as f32
+    }
+
+    pub fn si_to_kveV(&self) -> f32 { // 9.10938356e-31kg / (2*1.6021766208e-19), velocity to eV for electrons
+        (9.109_383_713_9E-31_f64/(2.0_f64 * 1.602_176_634E-19_f64) / self.kg as f64) as f32
+    }
+
     /// From lbm.n_x and velocity u
     pub fn nu_from_Re(&self, Re: f32, x: f32, u: f32) -> f32 {
         x * u / Re
@@ -166,8 +177,10 @@ impl Units {
     }
 }
 
-// Enum holding different gas types and their ionization energies
-enum IonE {
+/// Enum holding different gas types and their ionization energies
+#[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+pub enum Propellant {
+    #[default]
     H,
     He,
     Ne,
@@ -176,17 +189,28 @@ enum IonE {
     Xe,
 }
 
-impl IonE {
+impl Propellant {
     /// Returns the minimal energy value in eV for successfull first ionization
     /// https://physics.nist.gov/PhysRefData/ASD/ionEnergy.html
-    fn val(&self) -> f32 {
+    fn ion_energy(&self) -> f32 {
         match self {
-            IonE::H => 13.598434599702,
-            IonE::He =>  24.587389011,
-            IonE::Ne =>  21.564541,
-            IonE::Ar =>  15.7596119,
-            IonE::Kr => 13.9996055,
-            IonE::Xe =>  12.1298437,
+            Propellant::H => 13.598434599702,
+            Propellant::He =>  24.587389011,
+            Propellant::Ne =>  21.564541,
+            Propellant::Ar =>  15.7596119,
+            Propellant::Kr => 13.9996055,
+            Propellant::Xe =>  12.1298437,
+        }
+    }
+
+    fn atom_mass(&self) -> f64 {
+        match self {
+            Propellant::H =>  1.6735575e-27_f64,
+            Propellant::He => 6.6464731e-27_f64,
+            Propellant::Ne => 3.3509177e-26_f64,
+            Propellant::Ar => 6.6335209e-26_f64,
+            Propellant::Kr => 1.3914984e-25_f64,
+            Propellant::Xe => 2.1801714e-25_f64,
         }
     }
 }
