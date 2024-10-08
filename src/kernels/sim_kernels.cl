@@ -33,6 +33,7 @@
 #define DEF_KMU 0.0f
 #define def_ind_r 5 // Range of induction fill around cell
 #define DEF_WQ 0.1f
+#define DEF_KKGE 1.0f
 
 #define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
 #define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
@@ -404,6 +405,12 @@ void store_q(const uint n, const float* qhn, global fpxx* fqi, const uint* j7, c
 		store(fqi, index_f(n    , t%2ul ? i    : i+1u), qhn[i+1u]);
 	}
 }
+
+// Ionization crosssection
+float calculate_sigma_i() {
+	return 0.0f;
+}
+
 // LOD handling
 // Get 1D LOD index from cell index n and depth d (No offset for previous lod depths)
 uint lod_index(const uint n, const uint d) {
@@ -481,6 +488,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
     float Fin[DEF_VELOCITY_SET]; // forcing terms, are used for ei too if MHD is enabled 
 	float feq[DEF_VELOCITY_SET]; // equilibrium DDFs, are used for ei too if MHD is enabled 
     float w = DEF_W; // LBM relaxation rate w = dt/tau = dt/(nu/c^2+dt/2) = 1/(3*nu+1/2)
+	#ifdef VOLUME_FORCE
+	const float c_tau = fma(w, -0.5f, 1.0f);
+	#endif // VOLUME_FORCE
 
 	#ifdef FORCE_FIELD
 	{ // separate block to avoid variable name conflicts
@@ -490,11 +500,6 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 	}
 	#endif
 
-	#ifdef VOLUME_FORCE
-		 const float c_tau = fma(w, -0.5f, 1.0f);
-	#endif // VOLUME_FORCE
-
-
 	#ifdef MAGNETO_HYDRO
 		/* -------- Cache fields -------- */
 		float Bnx = B_dyn[nxi]; // Cache dynamic fields for multiple readings
@@ -503,24 +508,50 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		float Enx = E_dyn[nxi];
 		float Eny = E_dyn[nyi];
 		float Enz = E_dyn[nzi];
-		/* ---- Clear dynamic field ----- */
 		B_dyn[nxi] = B[nxi]; E_dyn[nxi] = E[nxi]; // Clear dynamic buffers with static buffers for recomputation
 		B_dyn[nyi] = B[nyi]; E_dyn[nyi] = E[nyi];
 		B_dyn[nzi] = B[nzi]; E_dyn[nzi] = E[nzi];
 
-		/* -------- Electron gas -------- */
+
+		/* ---- Electron gas part 1 ----- */
 		float ehn[DEF_VELOCITY_SET]; // local DDFs
 		load_f(n, ehn, ei, j, t); // perform streaming (part 2)
 		float e_rhon, e_uxn, e_uyn, e_uzn; // calculate local density and velocity for collision
 
 		calculate_rho_u(ehn, &e_rhon, &e_uxn, &e_uyn, &e_uzn); // calculate (charge) density and velocity fields from ei
 
+		//float e_rhon_m = e_rhon * DEF_KKGE; // convert charge density to mass density,
 		// TODO: Ionization
+		float v_r = sqrt(sq(uxn-e_uxn) + sq(uyn-e_uyn) + sq(uzn-e_uzn))
+		// $\Delta e_rhon=(rhon/m_g)*e_rhon*v_r*sigma_i(v_r)$
+		float delta_q_rho = ((rhon/DEF_KMG) * (e_rhon * DEF_KKGE) * v_r * calculate_sigma_i(v_r)) / DEF_KKGE;
+		e_rhon += delta_q_rho; // Freeing of electrons through ionization
 
-		float e_fxn = -e_rhon * (Enx + e_uyn*Bnz - e_uzn*Bny); // F = charge * (E + (U cross B))
-		float e_fyn = -e_rhon * (Eny + e_uzn*Bnx - e_uxn*Bnz); // charge is the content of the ddf
-		float e_fzn = -e_rhon * (Enz + e_uxn*Bny - e_uyn*Bnx);
-		const float e_rho2 = 0.5f/(e_rhon * DEF_KKGE); // convert charge density to mass density, apply external volume force (Guo forcing, Krueger p.233f)
+
+		/* ---- Gas charge advection ---- */
+		// Advection of charge. Cell charge is stored in charge ddfs 'fqi' for advection with 'fi'.
+		uint j7[7]; // neighbors of D3Q7 subset
+		neighbors_charge(n, j7);
+		float qhn[7]; // read from qA and stream to gh (D3Q7 subset, periodic boundary conditions)
+		load_q(n, qhn, fqi, j7, t); // perform streaming (part 2)
+		float q_rhon = 0.0f;
+		for(uint i=0u; i<7u; i++) q_rhon += qhn[i]; // calculate charge from q
+		q_rhon += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fqi (perturbation method / DDF-shifting)
+
+		q_rhon += delta_q_rho; // Ionization of neutral gas
+		Q[n] = q_rhon-e_rhon; // update charge field
+
+		float qeq[7]; // cache f_equilibrium[n]
+		calculate_q_eq(q_rhon, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
+		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-DEF_WQ, qhn[i], DEF_WQ*qeq[i]); // perform collision
+		store_q(n, qhn, fqi, j7, t); // perform streaming (part 1)
+
+
+		/* ---- Electron gas part 2 ----- */
+		float e_fxn = (q_rhon-e_rhon) * (Enx + e_uyn*Bnz - e_uzn*Bny); // F = charge * (E + (U cross B))
+		float e_fyn = (q_rhon-e_rhon) * (Eny + e_uzn*Bnx - e_uxn*Bnz); // charge is the content of the ddf
+		float e_fzn = (q_rhon-e_rhon) * (Enz + e_uxn*Bny - e_uyn*Bnx);
+		const float e_rho2 = 0.5f/(e_rhon * DEF_KKGE); // apply external volume force (Guo forcing, Krueger p.233f)
 		e_uxn = clamp(fma(fxn, e_rho2, e_uxn), -DEF_C, DEF_C); // limit velocity (for stability purposes)
 		e_uyn = clamp(fma(fyn, e_rho2, e_uyn), -DEF_C, DEF_C); // force term: F*dt/(2*rho)
 		e_uzn = clamp(fma(fzn, e_rho2, e_uzn), -DEF_C, DEF_C);
@@ -529,9 +560,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		calculate_f_eq(e_rhon, e_uxn, e_uyn, e_uzn, feq); // calculate equilibrium DDFs
 
 		// Perform collision with SRT TODO: use correct kinematic viscosity
-		#ifdef VOLUME_FORCE
-			for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] *= c_tau;
-		#endif // VOLUME_FORCE
+		for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] *= c_tau;
 		#ifndef EQUILIBRIUM_BOUNDARIES
 			for(uint i=0u; i<DEF_VELOCITY_SET; i++) ehn[i] = fma(1.0f-w, ehn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
 		#else
@@ -541,26 +570,10 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		store_f(n, ehn, ei, j, t); // perform streaming (part 1)
 
 
-		/* ---- Gas charge advection ---- */
-		// Advection of charge. Cell charge is stored in charge ddfs 'fqi' for advection with 'fi'.
-		uint j7[7]; // neighbors of D3Q7 subset
-		neighbors_charge(n, j7);
-		float qhn[7]; // read from qA and stream to gh (D3Q7 subset, periodic boundary conditions)
-		load_q(n, qhn, fqi, j7, t); // perform streaming (part 2)
-		float Qn = 0.0f;
-		for(uint i=0u; i<7u; i++) Qn += qhn[i]; // calculate charge from q
-		Qn += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fqi (perturbation method / DDF-shifting)
-		float qeq[7]; // cache f_equilibrium[n]
-		calculate_q_eq(Qn, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
-		Q[n] = Qn; // update charge field
-		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-DEF_WQ, qhn[i], DEF_WQ*qeq[i]); // perform collision
-		store_q(n, qhn, fqi, j7, t); // perform streaming (part 1)
-
 		/* ------ EM force on gas ------- */
-		// F = charge * (E + (U cross B))
-		fxn += Qn * (Enx + uyn*Bnz - uzn*Bny);
-		fyn += Qn * (Eny + uzn*Bnx - uxn*Bnz);
-		fzn += Qn * (Enz + uxn*Bny - uyn*Bnx);
+		fxn += e_fxn;
+		fyn += e_fyn;
+		fzn += e_fzn;
 
 
 		/* ------ LOD construction ------ */
@@ -573,8 +586,8 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 			#endif // Single Domain
 			{
 				const uint ind = (lod_index(n, d) + off) * 4;
-				const float ils = 1/lod_s(d);
-				atomic_add_f(&QU_lod[ind+0], Qn-e_rhon);
+				const float ils = 1/lod_s(d); // factor for averaging accross LODs
+				atomic_add_f(&QU_lod[ind+0], q_rhon-e_rhon);
 				atomic_add_f(&QU_lod[ind+1], uxn * ils);
 				atomic_add_f(&QU_lod[ind+2], uyn * ils);
 				atomic_add_f(&QU_lod[ind+3], uzn * ils);
