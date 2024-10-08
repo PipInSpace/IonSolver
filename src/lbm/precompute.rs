@@ -43,7 +43,7 @@ pub fn precompute_E(lbm: &Lbm) {
     let (domain_numbers, dx, dy, dz, dsx, dsy, dsz) = domain_sizes(&lbm.config);
     let dtotal = dsx as u64 * dsy as u64 * dsz as u64;
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
-    let def_ke = lbm.config.units.si_to_ke();
+    let def_ke = lbm.config.units.ke_lu();
     let charges = lbm.charges.as_ref().unwrap();
 
     println!(
@@ -156,7 +156,7 @@ pub fn precompute_B(lbm: &Lbm) {
     let (domain_numbers, dx, dy, dz, dsx, dsy, dsz) = domain_sizes(&lbm.config);
     let dtotal = dsx as u64 * dsy as u64 * dsz as u64;
     let lengths: (u32, u32, u32) = (lbm.config.n_x, lbm.config.n_y, lbm.config.n_z);
-    let def_mu0 = lbm.config.units.si_to_mu_0();
+    let def_mu0 = lbm.config.units.mu_0_lu();
 
     println!(
         "Precomputing magnetic field for {} cells. (This may take a while)",

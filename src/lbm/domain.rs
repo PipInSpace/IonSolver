@@ -497,23 +497,23 @@ impl LbmDomain {
             None => {}
         }
 
-        let rho_si = cfg.units.dens_to_si(rho[c]);
-        let u_x_si = cfg.units.speed_to_si(u[c_x]);
-        let u_y_si = cfg.units.speed_to_si(u[c_y]);
-        let u_z_si = cfg.units.speed_to_si(u[c_z]);
-        let b_x_si = cfg.units.mag_flux_to_si(b[c_x]);
-        let b_y_si = cfg.units.mag_flux_to_si(b[c_y]);
-        let b_z_si = cfg.units.mag_flux_to_si(b[c_z]);
-        let b_dyn_x_si = cfg.units.mag_flux_to_si(b_dyn[c_x]);
-        let b_dyn_y_si = cfg.units.mag_flux_to_si(b_dyn[c_y]);
-        let b_dyn_z_si = cfg.units.mag_flux_to_si(b_dyn[c_z]);
-        let e_x_si = cfg.units.e_field_to_si(e[c_x]);
-        let e_y_si = cfg.units.e_field_to_si(e[c_y]);
-        let e_z_si = cfg.units.e_field_to_si(e[c_z]);
-        let e_dyn_x_si = cfg.units.e_field_to_si(e_dyn[c_x]);
-        let e_dyn_y_si = cfg.units.e_field_to_si(e_dyn[c_y]);
-        let e_dyn_z_si = cfg.units.e_field_to_si(e_dyn[c_z]);
-        let charge = cfg.units.charge_to_si(q[c]);
+        let rho_si = cfg.units.dens_lu_si(rho[c]);
+        let u_x_si = cfg.units.speed_lu_si(u[c_x]);
+        let u_y_si = cfg.units.speed_lu_si(u[c_y]);
+        let u_z_si = cfg.units.speed_lu_si(u[c_z]);
+        let b_x_si = cfg.units.mag_flux_lu_si(b[c_x]);
+        let b_y_si = cfg.units.mag_flux_lu_si(b[c_y]);
+        let b_z_si = cfg.units.mag_flux_lu_si(b[c_z]);
+        let b_dyn_x_si = cfg.units.mag_flux_lu_si(b_dyn[c_x]);
+        let b_dyn_y_si = cfg.units.mag_flux_lu_si(b_dyn[c_y]);
+        let b_dyn_z_si = cfg.units.mag_flux_lu_si(b_dyn[c_z]);
+        let e_x_si = cfg.units.e_field_lu_si(e[c_x]);
+        let e_y_si = cfg.units.e_field_lu_si(e[c_y]);
+        let e_z_si = cfg.units.e_field_lu_si(e[c_z]);
+        let e_dyn_x_si = cfg.units.e_field_lu_si(e_dyn[c_x]);
+        let e_dyn_y_si = cfg.units.e_field_lu_si(e_dyn[c_y]);
+        let e_dyn_z_si = cfg.units.e_field_lu_si(e_dyn[c_z]);
+        let charge = cfg.units.charge_lu_si(q[c]);
 
         println!(
             "Dumping cell {}:
@@ -687,15 +687,15 @@ fn get_device_defines(
     + if lbm_config.ext_volume_force {         "\n	#define VOLUME_FORCE"} else {""}
     + &if lbm_config.ext_magneto_hydro {
      "\n	#define MAGNETO_HYDRO".to_owned()
-    +"\n	#define DEF_KE "    + &format!("{:?}f", lbm_config.units.si_to_ke()) // coulomb constant in simulation units
-    +"\n	#define DEF_KMU "   + &format!("{:?}f", lbm_config.units.si_to_mu_0() / (4.0 * std::f32::consts::PI))
-    +"\n	#define DEF_KKGE  "  + &format!("{:?}f",lbm_config.units.si_to_kkge()) // electron mass/charge in simulation units
-    +"\n	#define DEF_KIMG  "  + &format!("{:?}f",lbm_config.units.si_to_kimg()) // Inverse of mass of a propellant gas atom, scaled by 10^20
-    +"\n	#define DEF_KVEV  "  + &format!("{:?}f",lbm_config.units.si_to_kveV()) // 9.10938356e-31kg / (2*1.6021766208e-19)
+    +"\n	#define DEF_KE "    + &format!("{:?}f", lbm_config.units.ke_lu()) // coulomb constant in simulation units
+    +"\n	#define DEF_KMU "   + &format!("{:?}f", lbm_config.units.mu_0_lu() / (4.0 * std::f32::consts::PI))
+    +"\n	#define DEF_KKGE  "  + &format!("{:?}f",lbm_config.units.kkge_lu()) // electron mass/charge in simulation units
+    +"\n	#define DEF_KIMG  "  + &format!("{:?}f",lbm_config.units.kimg_lu()) // Inverse of mass of a propellant gas atom, scaled by 10^20
+    +"\n	#define DEF_KVEV  "  + &format!("{:?}f",lbm_config.units.kveV_lu()) // 9.10938356e-31kg / (2*1.6021766208e-19)
     +"\n	#define DEF_LOD_DEPTH " + &format!("{}u", lbm_config.mhd_lod_depth)
     +"\n    #define DEF_NUM_LOD " + &format!("{}u", n_lod)
     +"\n    #define DEF_NUM_LOD_OWN " + &format!("{}u", n_lod_own)
-    +"\n	#define DEF_WQ  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.si_to_k_charge_expansion()+0.5))
+    +"\n	#define DEF_WQ  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.k_charge_expansion_lu()+0.5))
     } else {"".to_string()}
     + if lbm_config.ext_force_field {                "\n	#define FORCE_FIELD"} else {""}
     + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}

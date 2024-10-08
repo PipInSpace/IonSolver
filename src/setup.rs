@@ -110,7 +110,7 @@ fn setup_taylor_green() -> Lbm {
     lbm_config.n_x = 256;
     lbm_config.n_y = 256;
     lbm_config.n_z = 256;
-    lbm_config.nu = lbm_config.units.si_to_nu(0.1);
+    lbm_config.nu = lbm_config.units.nu_si_lu(0.1);
     lbm_config.velocity_set = VelocitySet::D3Q19;
     // Graphics
     lbm_config.graphics_config.graphics_active = true;
@@ -137,7 +137,7 @@ fn setup_domain_test() -> Lbm {
     lbm_config.d_z = 2; // Two domains on z-axis (128 cells long each)
     lbm_config.velocity_set = VelocitySet::D3Q19;
 
-    lbm_config.nu = lbm_config.units.si_to_nu(0.00148);
+    lbm_config.nu = lbm_config.units.nu_si_lu(0.00148);
 
     // Graphics
     lbm_config.graphics_config.graphics_active = true;
@@ -163,8 +163,8 @@ fn setup_bfield_spin() -> Lbm {
     lbm_config.n_y = 128;
     lbm_config.n_z = 256;
     lbm_config.d_z = 2;
-    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
-    println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
+    lbm_config.nu = lbm_config.units.nu_si_lu(1.48E-5);
+    println!("    nu in LU is: {}", lbm_config.units.nu_si_lu(1.48E-3));
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.mhd_lod_depth = 4;
     // Extensions
@@ -223,8 +223,8 @@ fn setup_verification() -> Lbm {
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
     lbm_config.n_z = 128;
-    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
-    println!("    nu in LU is: {}", lbm_config.units.si_to_nu(1.48E-3));
+    lbm_config.nu = lbm_config.units.nu_si_lu(1.48E-5);
+    println!("    nu in LU is: {}", lbm_config.units.nu_si_lu(1.48E-3));
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.mhd_lod_depth = 4;
     // Extensions
@@ -263,7 +263,7 @@ fn setup_field_vis() -> Lbm {
     lbm_config.n_x = 256;
     lbm_config.n_y = 256;
     lbm_config.n_z = 256;
-    lbm_config.nu = lbm_config.units.si_to_nu(1.48E-5);
+    lbm_config.nu = lbm_config.units.nu_si_lu(1.48E-5);
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.mhd_lod_depth = 4;
     // Extensions
