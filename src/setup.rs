@@ -71,12 +71,13 @@ pub fn setup() -> Lbm {
     lbm
     */
     //setup_domain_test()
-    setup_bfield_spin()
+    //setup_bfield_spin()
     //file::write(&setup_bfield_spin(), "./testfile.ion");
     //setup_from_file("./testfile.ion")
     //setup_taylor_green()
     //setup_verification()
     //setup_field_vis()
+    setup_ecr_test()
 }
 
 #[allow(unused)]
@@ -288,6 +289,24 @@ fn setup_field_vis() -> Lbm {
     }
     lbm.magnets = Some(vec_m);
     precompute::precompute_B(&lbm);
+
+    lbm
+}
+
+#[allow(unused)]
+fn setup_ecr_test() -> Lbm {
+    let mut lbm_config = LbmConfig::new();
+    lbm_config.n_x = 1;
+    lbm_config.n_y = 1;
+    lbm_config.n_z = 1;
+    lbm_config.velocity_set = VelocitySet::D3Q19;
+    lbm_config.ext_volume_force = true;
+    lbm_config.ext_magneto_hydro = true;
+    lbm_config.ext_electron_cyclotron_resonance = true;
+    lbm_config.ecr_freq = 0.1f32;
+    lbm_config.ecr_field_strength = 1.0f32;
+
+    let mut lbm = Lbm::new(lbm_config);
 
     lbm
 }

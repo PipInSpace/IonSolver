@@ -216,6 +216,9 @@ impl LbmDomain {
                 kernel!(program, queue, "clear_qu_lod", [n_lod], ("QU_lod", qu_lod.as_ref().expect("QU_lod")))
             );
         }
+        if lbm_config.ext_electron_cyclotron_resonance {
+            kernel_args!(stream_collide_builder, ("ecr_f", lbm_config.ecr_freq), ("ecr_fs", lbm_config.ecr_field_strength));
+        }
         
         let kernel_stream_collide: Kernel = stream_collide_builder.build().unwrap();
         let kernel_initialize: Kernel = initialize_builder.build().unwrap();
@@ -664,20 +667,16 @@ fn get_device_defines(
         RelaxationTime::Srt => srt,
         RelaxationTime::Trt => trt
     }
-    +"\n	#define TYPE_S 0x01" // 0b00000001 // (stationary or moving) solid boundary
-    +"\n	#define TYPE_E 0x02" // 0b00000010 // equilibrium boundary (inflow/outflow)
-    +"\n	#define TYPE_T 0x04" // 0b00000100 // temperature boundary
-    +"\n	#define TYPE_F 0x08" // 0b00001000 // fluid
-    +"\n	#define TYPE_I 0x10" // 0b00010000 // interface
-    +"\n	#define TYPE_G 0x20" // 0b00100000 // gas
-    +"\n	#define TYPE_X 0x40" // 0b01000000 // reserved type X
-    +"\n	#define TYPE_Y 0x80" // 0b10000000 // reserved type Y
+    +"\n	#define TYPE_S  0x01" // 0b00000001 // (stationary or moving) solid boundary
+    +"\n	#define TYPE_E  0x02" // 0b00000010 // equilibrium boundary (inflow/outflow)
+    +"\n	#define TYPE_C  0x04" // 0b00000100 // changing electric field
+    +"\n	#define TYPE_F  0x08" // 0b00001000 // reserved type 1
+    +"\n	#define TYPE_I  0x10" // 0b00010000 // reserved type 2
+    +"\n	#define TYPE_G  0x20" // 0b00100000 // reserved type 3
+    +"\n	#define TYPE_X  0x40" // 0b01000000 // reserved type 4
+    +"\n	#define TYPE_Y  0x80" // 0b10000000 // reserved type 5
     +"\n	#define TYPE_MS 0x03" // 0b00000011 // cell next to moving solid boundary
-    +"\n	#define TYPE_BO 0x03" // 0b00000011 // any flag bit used for boundaries (temperature excluded)
-    +"\n	#define TYPE_IF 0x18" // 0b00011000 // change from interface to fluid
-    +"\n	#define TYPE_IG 0x30" // 0b00110000 // change from interface to gas
-    +"\n	#define TYPE_GI 0x38" // 0b00111000 // change from gas to interface
-    +"\n	#define TYPE_SU 0x38" // 0b00111000 // any flag bit used for SURFACE
+    +"\n	#define TYPE_BO 0x03" // 0b00000011 // any flag bit used for boundaries
     + match lbm_config.float_type { //Floatingpoint types
         FloatType::FP16S => &fp16s,
         FloatType::FP16C => &fp16c,
@@ -697,7 +696,8 @@ fn get_device_defines(
     +"\n    #define DEF_NUM_LOD_OWN " + &format!("{}u", n_lod_own)
     +"\n	#define DEF_WQ  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.k_charge_expansion_lu()+0.5))
     } else {"".to_string()}
-    + if lbm_config.ext_force_field {                "\n	#define FORCE_FIELD"} else {""}
-    + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}
+    + if lbm_config.ext_electron_cyclotron_resonance {"\n	#define ELECTRON_CYCLOTRON"} else {""}
+    + if lbm_config.ext_force_field {                 "\n	#define FORCE_FIELD"} else {""}
+    + if lbm_config.graphics_config.graphics_active { "\n	#define UPDATE_FIELDS"} else {""}
     //Extensions
 }

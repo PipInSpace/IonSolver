@@ -37,20 +37,16 @@
 #define DEF_KIMG 1.0f // Inverse of mass of a propellant gas atom, scaled by 10^20
 #define DEF_KVEV 1.0f // 9.10938356e-31kg / (2*1.6021766208e-19)
 
-#define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
-#define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
-#define TYPE_T 0x04 // 0b00000100 // temperature boundary
-#define TYPE_F 0x08 // 0b00001000 // fluid
-#define TYPE_I 0x10 // 0b00010000 // interface
-#define TYPE_G 0x20 // 0b00100000 // gas
-#define TYPE_X 0x40 // 0b01000000 // reserved type X
-#define TYPE_Y 0x80 // 0b10000000 // reserved type Y
+#define TYPE_S  0x01 // 0b00000001 // (stationary or moving) solid boundary
+#define TYPE_E  0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
+#define TYPE_C  0x04 // 0b00000100 // changing electric field
+#define TYPE_F  0x08 // 0b00001000 // reserved type 1
+#define TYPE_I  0x10 // 0b00010000 // reserved type 2
+#define TYPE_G  0x20 // 0b00100000 // reserved type 3
+#define TYPE_X  0x40 // 0b01000000 // reserved type 4
+#define TYPE_Y  0x80 // 0b10000000 // reserved type 5
 #define TYPE_MS 0x03 // 0b00000011 // cell next to moving solid boundary
-#define TYPE_BO 0x03 // 0b00000011 // any flag bit used for boundaries (temperature excluded)
-#define TYPE_IF 0x18 // 0b00011000 // change from interface to fluid
-#define TYPE_IG 0x30 // 0b00110000 // change from interface to gas
-#define TYPE_GI 0x38 // 0b00111000 // change from gas to interface
-#define TYPE_SU 0x38 // 0b00111000 // any flag bit used for SURFACE
+#define TYPE_BO 0x03 // 0b00000011 // any flag bit used for boundaries
 
 #define fpxx_copy ushort
 #define load(p,o) half_to_float_custom(p[o])
@@ -461,12 +457,16 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , global float* Q		// cell charge
 , global float* QU_lod	// Level-of-detail for charge und velocity 
 #endif // MAGNETO_HYDRO
+#ifdef ELECTRON_CYCLOTRON
+, const float ecrf // ECR frequency
+, const float ecrfs // ECR field strength
+#endif // ELECTRON_CYCLOTRON
 ) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
 	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute stream_collide() on halo
 	const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
-	const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
-	if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
+	const uchar flagsn_bo=flagsn&TYPE_BO; // extract boundary and surface flags
+	if(flagsn_bo==TYPE_S) return; // if cell is solid boundary or gas, just return
 
 	uint j[DEF_VELOCITY_SET]; // neighbor indices
 	neighbors(n, j); // calculate neighbor indices
@@ -519,6 +519,14 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		B_dyn[nxi] = B[nxi]; E_dyn[nxi] = E[nxi]; // Clear dynamic buffers with static buffers for recomputation
 		B_dyn[nyi] = B[nyi]; E_dyn[nyi] = E[nyi];
 		B_dyn[nzi] = B[nzi]; E_dyn[nzi] = E[nzi];
+
+		#ifdef ELECTRON_CYCLOTRON
+			if(flagsn&TYPE_C) { // has changing electric field spinning around y axis
+				Enx += sin(2.0f * M_PI_F * ecrf * (float)t) * ecrfs;
+				Enz += cos(2.0f * M_PI_F * ecrf * (float)t) * ecrfs;
+				printf("%f\n", Enx);
+			}
+		#endif // ELECTRON_CYCLOTRON
 
 
 		/* ---- Electron gas part 1 ----- */
@@ -758,8 +766,8 @@ __kernel void update_fields(const global fpxx* fi, global float* rho, global flo
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
 	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute update_fields() on halo
 	const uchar flagsn = flags[n];
-	const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
-	if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // don't update fields for boundary or gas lattice points
+	const uchar flagsn_bo=flagsn&TYPE_BO; // extract boundary and surface flags
+	if(flagsn_bo==TYPE_S) return; // don't update fields for boundary or gas lattice points
 
 	uint j[DEF_VELOCITY_SET]; // neighbor indices
 	neighbors(n, j); // calculate neighbor indices
@@ -786,8 +794,8 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
 	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
 	const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
-	const uchar flagsn_bo=flagsn&TYPE_BO, flagsn_su=flagsn&TYPE_SU; // extract boundary and surface flags
-	if(flagsn_bo==TYPE_S||flagsn_su==TYPE_G) return; // if cell is solid boundary or gas, just return
+	const uchar flagsn_bo=flagsn&TYPE_BO; // extract boundary and surface flags
+	if(flagsn_bo==TYPE_S) return; // if cell is solid boundary or gas, just return
 
 	const uint3 coord_n = coordinates(n); // Cell coordinate
 	const float3 coord_nf = convert_float3(coord_n); // Cell coordinate as float vector

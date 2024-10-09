@@ -78,12 +78,19 @@ pub struct LbmConfig {
     pub ext_force_field: bool,
     /// Enable magnetohydrodynamics extension. Needs ext_volume_force to work 
     pub ext_magneto_hydro: bool,
+    /// Enable ECR extension. Needs ext_magneto_hydro to work 
+    pub ext_electron_cyclotron_resonance: bool,
 
     /// LOD option for dynamic fields.
     /// 
     /// Dynamic field quality improves with higher values: 1 is very coarse, 4 is higher quality (Performance does not peek at lowest values).
     /// Set this to 0 to disable LODs (VERY SLOW). 
     pub mhd_lod_depth: u8,
+
+    /// ECR frequency
+    pub ecr_freq: f32,
+    /// ECR field strenght
+    pub ecr_field_strength: f32,
 
     /// Configuration struct for the built-in graphics engine
     pub graphics_config: GraphicsConfig,
@@ -113,10 +120,13 @@ impl LbmConfig {
 
             ext_equilibrium_boudaries: false,
             ext_volume_force: false,
-            ext_magneto_hydro: false,
             ext_force_field: false,
+            ext_magneto_hydro: false,
+            ext_electron_cyclotron_resonance: false,
 
             mhd_lod_depth: 4, // Dynamic field LODs
+            ecr_freq: 0.0f32,
+            ecr_field_strength: 0.0f32,
 
             graphics_config: graphics::GraphicsConfig::new(),
             run_steps: 0,
