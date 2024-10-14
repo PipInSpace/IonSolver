@@ -216,7 +216,7 @@ impl LbmDomain {
                 kernel!(program, queue, "clear_qu_lod", [n_lod], ("QU_lod", qu_lod.as_ref().expect("QU_lod")))
             );
         }
-        if lbm_config.ext_electron_cyclotron_resonance {
+        if lbm_config.ext_subgrid_ecr {
             kernel_args!(stream_collide_builder, ("ecr_f", lbm_config.ecr_freq), ("ecr_fs", lbm_config.ecr_field_strength));
         }
         
@@ -696,8 +696,8 @@ fn get_device_defines(
     +"\n    #define DEF_NUM_LOD_OWN " + &format!("{}u", n_lod_own)
     +"\n	#define DEF_WQ  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.k_charge_expansion_lu()+0.5))
     } else {"".to_string()}
-    + if lbm_config.ext_electron_cyclotron_resonance {"\n	#define ELECTRON_CYCLOTRON"} else {""}
-    + if lbm_config.ext_force_field {                 "\n	#define FORCE_FIELD"} else {""}
-    + if lbm_config.graphics_config.graphics_active { "\n	#define UPDATE_FIELDS"} else {""}
+    + if lbm_config.ext_subgrid_ecr {                "\n	#define SUBGRID_ECR"} else {""}
+    + if lbm_config.ext_force_field {                "\n	#define FORCE_FIELD"} else {""}
+    + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}
     //Extensions
 }

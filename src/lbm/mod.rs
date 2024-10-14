@@ -78,8 +78,8 @@ pub struct LbmConfig {
     pub ext_force_field: bool,
     /// Enable magnetohydrodynamics extension. Needs ext_volume_force to work 
     pub ext_magneto_hydro: bool,
-    /// Enable ECR extension. Needs ext_magneto_hydro to work 
-    pub ext_electron_cyclotron_resonance: bool,
+    /// Enable the subgrid ECR extension to model small-scale electron cyclotron resonance. Needs ext_magneto_hydro to work 
+    pub ext_subgrid_ecr: bool,
 
     /// LOD option for dynamic fields.
     /// 
@@ -122,7 +122,7 @@ impl LbmConfig {
             ext_volume_force: false,
             ext_force_field: false,
             ext_magneto_hydro: false,
-            ext_electron_cyclotron_resonance: false,
+            ext_subgrid_ecr: false,
 
             mhd_lod_depth: 4, // Dynamic field LODs
             ecr_freq: 0.0f32,

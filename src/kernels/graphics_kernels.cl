@@ -16,7 +16,6 @@
 
 #define TYPE_S 0x01 // 0b00000001 // (stationary or moving) solid boundary
 #define TYPE_E 0x02 // 0b00000010 // equilibrium boundary (inflow/outflow)
-#define TYPE_T 0x04 // 0b00000100 // temperature boundary
 #define TYPE_F 0x08 // 0b00001000 // fluid
 #define TYPE_I 0x10 // 0b00010000 // interface
 #define TYPE_G 0x20 // 0b00100000 // gas
@@ -516,9 +515,6 @@ kernel void graphics_flags(const global uchar* flags, const global float* camera
 	calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
 	const int c =  // coloring scheme
 		flagsn_bo==TYPE_S ? COLOR_S : // solid boundary
-		((flagsn&TYPE_T)&&flagsn_bo==TYPE_E) ? color_average(COLOR_T, COLOR_E) : // both temperature boundary and equilibrium boundary
-		((flagsn&TYPE_T)&&flagsn_bo==TYPE_MS) ? color_average(COLOR_T, COLOR_M) : // both temperature boundary and moving boundary
-		flagsn&TYPE_T ? COLOR_T : // temperature boundary
 		flagsn_bo==TYPE_E ? COLOR_E : // equilibrium boundary
 		flagsn_bo==TYPE_MS ? COLOR_M : // moving boundary
 		flagsn&TYPE_F ? COLOR_F : // fluid

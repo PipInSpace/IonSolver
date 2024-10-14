@@ -457,10 +457,10 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , global float* Q		// cell charge
 , global float* QU_lod	// Level-of-detail for charge und velocity 
 #endif // MAGNETO_HYDRO
-#ifdef ELECTRON_CYCLOTRON
+#ifdef SUBGRID_ECR
 , const float ecrf // ECR frequency
-, const float ecrfs // ECR field strength
-#endif // ELECTRON_CYCLOTRON
+, const global float* E_var // Oscillating electric field
+#endif // SUBGRID_ECR
 ) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
 	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute stream_collide() on halo
@@ -513,20 +513,23 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		float Bnx = B_dyn[nxi]; // Cache dynamic fields for multiple readings
 		float Bny = B_dyn[nyi];
 		float Bnz = B_dyn[nzi];
+		float3 Bn = {B_dyn[nxi], B_dyn[nyi], B_dyn[nzi]};
 		float Enx = E_dyn[nxi];
 		float Eny = E_dyn[nyi];
 		float Enz = E_dyn[nzi];
+		float3 En = {E_dyn[nxi], E_dyn[nyi], E_dyn[nzi]};
 		B_dyn[nxi] = B[nxi]; E_dyn[nxi] = E[nxi]; // Clear dynamic buffers with static buffers for recomputation
 		B_dyn[nyi] = B[nyi]; E_dyn[nyi] = E[nyi];
 		B_dyn[nzi] = B[nzi]; E_dyn[nzi] = E[nzi];
 
-		#ifdef ELECTRON_CYCLOTRON
-			if(flagsn&TYPE_C) { // has changing electric field spinning around y axis
-				Enx += sin(2.0f * M_PI_F * ecrf * (float)t) * ecrfs;
-				Enz += cos(2.0f * M_PI_F * ecrf * (float)t) * ecrfs;
-				printf("%f\n", Enx);
-			}
-		#endif // ELECTRON_CYCLOTRON
+		#ifdef SUBGRID_ECR
+			float3 Env = {E_var[nxi], E_var[nyi], E_var[nzi]}; // Oscillating electric field as vector
+			// calculate energy absorbtion under the possibility that frequency does not fulfill ECR condition
+			float f_c = length(Bn) * (1.0f / (DEF_KME * 2.0f * M_PI_F)); // The cyclotron frequency needed to fulfill ECR condition at current cell
+			float rel_absorbtion = 1.0f / (1.0f + sq(ecrf / (0.02 * f_c) - 50)); // dampening value 0.02, 50 computed through simulation
+			float Env_mag = length(Env - (dot(Env, Bn) / sq(length(B)))*Bn); // Magnitude of oscillating electric field components perpendicular to B, only these have effect for ECR
+			
+		#endif // SUBGRID_ECR
 
 
 		/* ---- Electron gas part 1 ----- */
@@ -538,7 +541,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 		//float e_rhon_m = e_rhon * DEF_KKGE; // convert charge density to mass density,
 		// TODO: Ionization
-		float v_r = sqrt(sq(uxn-e_uxn) + sq(uyn-e_uyn) + sq(uzn-e_uzn))
+		float v_r = sqrt(sq(uxn-e_uxn) + sq(uyn-e_uyn) + sq(uzn-e_uzn));
 		// $\Delta e_rhon=(rhon/m_g)*e_rhon*v_r*sigma_i(v_r)$
 		// DEF_KMG & sigma_i are scaled by a factor of 10^20 to minimize floating point imprecision
 		float delta_q_rho = ((rhon*DEF_KIMG) * (e_rhon * DEF_KKGE) * v_r * calculate_sigma_i(v_r)) / DEF_KKGE;
