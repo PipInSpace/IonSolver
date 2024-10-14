@@ -526,7 +526,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 			float3 Env = {E_var[nxi], E_var[nyi], E_var[nzi]}; // Oscillating electric field as vector
 			// calculate energy absorbtion under the possibility that frequency does not fulfill ECR condition
 			float f_c = length(Bn) * (1.0f / (DEF_KME * 2.0f * M_PI_F)); // The cyclotron frequency needed to fulfill ECR condition at current cell
-			float rel_absorbtion = 1.0f / (1.0f + sq(ecrf / (0.02 * f_c) - 50)); // dampening value 0.02, 50 computed through simulation
+			float rel_absorbtion = 1.0f / (1.0f + sq(ecrf / (0.03125 * f_c) - 32)); // dampening value 0.03125/32, computed through simulation and best fit aproximation
 			float Env_mag = length(Env - (dot(Env, Bn) / sq(length(B)))*Bn); // Magnitude of oscillating electric field components perpendicular to B, only these have effect for ECR
 			
 		#endif // SUBGRID_ECR
