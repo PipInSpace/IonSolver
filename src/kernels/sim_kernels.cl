@@ -458,8 +458,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , global float* QU_lod	// Level-of-detail for charge und velocity 
 #endif // MAGNETO_HYDRO
 #ifdef SUBGRID_ECR
+, const global float* E_var // Oscillating electric field, actually static, contained information is direction of oscillation + magnitude of field strenght
+, const global fpxx* eti
 , const float ecrf // ECR frequency
-, const global float* E_var // Oscillating electric field
 #endif // SUBGRID_ECR
 ) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx

@@ -50,6 +50,7 @@ pub struct LbmDomain {
     pub transfer_lod_host: Option<Vec<f32>>,
     pub n_lod_own: usize, // The number of LOD data chunks that belong to this domain
 
+    pub f: Option<Buffer<f32>>,
     pub e: Option<Buffer<f32>>, // Optional Buffers
     pub b: Option<Buffer<f32>>,
     pub e_dyn: Option<Buffer<f32>>,
@@ -58,7 +59,9 @@ pub struct LbmDomain {
     pub ei: Option<VariableFloatBuffer>,
     pub q: Option<Buffer<f32>>,
     pub qu_lod: Option<Buffer<f32>>,
-    pub f: Option<Buffer<f32>>,
+    pub e_var: Option<Buffer<f32>>,
+    pub eti: Option<VariableFloatBuffer>,
+
     pub t: u64, // Timestep
 
     pub graphics: Option<graphics::Graphics>, // Graphics struct, handles rendering
@@ -117,11 +120,15 @@ impl LbmDomain {
         let platform = Platform::default();
         let context = Context::builder().platform(platform).devices(device).build().unwrap();
         let queue = Queue::new(&context, device, None).unwrap();
-        println!("    Compiling Program...");
+        print!("    Compiling Program");
+        let mut now = std::time::Instant::now();
         let program = Program::builder().devices(device).src(&ocl_code).build(&context).unwrap();
+        println!(" - Done ({}ms)", now.elapsed().as_millis()); // Compiling Program
 
 
         // Allocate Buffers
+        print!("    Allocating Buffers");
+        now = std::time::Instant::now();
         let fi: VariableFloatBuffer = match lbm_config.float_type {
             FloatType::FP32 => { VariableFloatBuffer::F32(buffer!(&queue,[n * velocity_set as u64],0.0f32)) } // Float Type F32
             _               => { VariableFloatBuffer::U16(buffer!(&queue,[n * velocity_set as u64],0u16)) }   // Float Type F16S/F16C
@@ -164,9 +171,23 @@ impl LbmDomain {
         let transfer_lod_host: Option<Vec<f32>> = if lbm_config.ext_magneto_hydro { Some(vec![0.0f32; n_lod * 4]) } else { None }; // Transfer buffer needs to be bigger in multi-node mode
         #[cfg(not(feature = "multi-node"))]
         let transfer_lod_host: Option<Vec<f32>> = if lbm_config.ext_magneto_hydro { Some(vec![0.0f32; n_lod_own * 4]) } else { None };
+        
+        // SUBGRID_ECR extension
+        // Variable electric field
+        let e_var: Option<Buffer<f32>> = if lbm_config.ext_subgrid_ecr { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
+        // Electron temperature ddfs
+        let eti: Option<VariableFloatBuffer> = if lbm_config.ext_subgrid_ecr {
+            Some(match lbm_config.float_type {
+                FloatType::FP32 => { VariableFloatBuffer::F32(buffer!(&queue, [n * 7], 0.0f32)) } // Float Type F32
+                _               => { VariableFloatBuffer::U16(buffer!(&queue, [n * 7], 0u16)) }   // Float Type F16S/F16C
+            })
+        } else { None };
+        println!(" - Done ({}ms)", now.elapsed().as_millis()); // Allocating buffers
 
 
         // Initialize Kernels
+        print!("    Initializing Simulation Kernels");
+        now = std::time::Instant::now();
         let mut initialize_builder = kernel_builder!(program, queue, "initialize", [n]);
         let mut stream_collide_builder = kernel_builder!(program, queue, "stream_collide", [n]);
         let mut update_fields_builder = kernel_builder!(program, queue, "update_fields", [n]);
@@ -217,16 +238,22 @@ impl LbmDomain {
             );
         }
         if lbm_config.ext_subgrid_ecr {
-            kernel_args!(stream_collide_builder, ("ecr_f", lbm_config.ecr_freq), ("ecr_fs", lbm_config.ecr_field_strength));
+            match eti.as_ref().expect("eti should be initialized") {
+                VariableFloatBuffer::U16(eti_u16) => { kernel_args!(stream_collide_builder, ("E_var", e_var.as_ref().expect("e_var")), ("eti", eti_u16), ("ecrf", lbm_config.ecr_freq)); },
+                VariableFloatBuffer::F32(eti_f32) => { kernel_args!(stream_collide_builder, ("E_var", e_var.as_ref().expect("e_var")), ("eti", eti_f32), ("ecrf", lbm_config.ecr_freq)); },
+            }
         }
         
         let kernel_stream_collide: Kernel = stream_collide_builder.build().unwrap();
         let kernel_initialize: Kernel = initialize_builder.build().unwrap();
         let kernel_update_fields: Kernel = update_fields_builder.build().unwrap();
+        println!(" - Done ({}ms)", now.elapsed().as_millis()); // Initializing Simulation Kernels
 
 
         // Multi-Domain-Transfers:
         // Transfer buffer initializaton:
+        print!("    Initializing Transfer Buffers/Kernels");
+        now = std::time::Instant::now();
         let mut a_max: usize = 0;
         if lbm_config.d_x > 1 { a_max = cmp::max(a_max, n_y as usize * n_z as usize); } // Ax
         if lbm_config.d_y > 1 { a_max = cmp::max(a_max, n_x as usize * n_z as usize); } // Ay
@@ -285,10 +312,12 @@ impl LbmDomain {
                 } else { None }, // Insert Qi
             ], // Qi gas charge advection ddfs
         ];
-        println!("    Kernels for domain compiled.");
+        println!(" - Done ({}ms)", now.elapsed().as_millis());
 
 
         let graphics: Option<graphics::Graphics> = if lbm_config.graphics_config.graphics_active { Some(graphics::Graphics::new(lbm_config, &program, &queue, &flags, &u, (n_x, n_y, n_z))) } else { None };
+        
+        println!("Domain {} ready.", i);
 
         LbmDomain {
             queue,
@@ -312,7 +341,11 @@ impl LbmDomain {
             transfer_lod_host,
             n_lod_own,
 
-            e, b, e_dyn, b_dyn, fqi, ei, q, qu_lod, f, t, graphics, cfg: lbm_config.clone()
+            f, e, b, e_dyn, b_dyn, fqi, ei, q, qu_lod, e_var, eti,
+
+            t,
+            graphics,
+            cfg: lbm_config.clone()
         } //Returns initialised domain
     }
 
