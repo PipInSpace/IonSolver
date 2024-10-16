@@ -448,8 +448,6 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , const global float* F 
 #endif // FORCE_FIELD
 #ifdef MAGNETO_HYDRO
-, const global float* E	// static electric field
-, const global float* B	// static magnetic flux density
 , global float* E_dyn	// dynamic electric field
 , global float* B_dyn	// dynamic magnetic flux density
 , global fpxx* fqi		// charge property of gas as ddfs
@@ -518,19 +516,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		float Enx = E_dyn[nxi];
 		float Eny = E_dyn[nyi];
 		float Enz = E_dyn[nzi];
-		float3 En = {E_dyn[nxi], E_dyn[nyi], E_dyn[nzi]};
-		B_dyn[nxi] = B[nxi]; E_dyn[nxi] = E[nxi]; // Clear dynamic buffers with static buffers for recomputation
-		B_dyn[nyi] = B[nyi]; E_dyn[nyi] = E[nyi];
-		B_dyn[nzi] = B[nzi]; E_dyn[nzi] = E[nzi];
-
-		#ifdef SUBGRID_ECR
-			float3 Env = {E_var[nxi], E_var[nyi], E_var[nzi]}; // Oscillating electric field as vector
-			// calculate energy absorbtion under the possibility that frequency does not fulfill ECR condition
-			float f_c = length(Bn) * (1.0f / (DEF_KME * 2.0f * M_PI_F)); // The cyclotron frequency needed to fulfill ECR condition at current cell
-			float rel_absorbtion = 1.0f / (1.0f + sq(ecrf / (0.03125 * f_c) - 32)); // dampening value 0.03125/32, computed through simulation and best fit aproximation
-			float Env_mag = length(Env - (dot(Env, Bn) / sq(length(B)))*Bn); // Magnitude of oscillating electric field components perpendicular to B, only these have effect for ECR
-			
-		#endif // SUBGRID_ECR
+		float3 En = {E_dyn[nxi], E_dyn[nyi], E_dyn[nzi]};		
 
 
 		/* ---- Electron gas part 1 ----- */
@@ -540,13 +526,24 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 		calculate_rho_u(ehn, &e_rhon, &e_uxn, &e_uyn, &e_uzn); // calculate (charge) density and velocity fields from ei
 
-		//float e_rhon_m = e_rhon * DEF_KKGE; // convert charge density to mass density,
-		// TODO: Ionization
-		float v_r = sqrt(sq(uxn-e_uxn) + sq(uyn-e_uyn) + sq(uzn-e_uzn));
-		// $\Delta e_rhon=(rhon/m_g)*e_rhon*v_r*sigma_i(v_r)$
-		// DEF_KMG & sigma_i are scaled by a factor of 10^20 to minimize floating point imprecision
-		float delta_q_rho = ((rhon*DEF_KIMG) * (e_rhon * DEF_KKGE) * v_r * calculate_sigma_i(v_r)) / DEF_KKGE;
-		e_rhon += delta_q_rho; // Freeing of electrons through ionization
+
+		/* --------- Subgrid ECR -------- */
+		#ifdef SUBGRID_ECR
+			float3 Env = {E_var[nxi], E_var[nyi], E_var[nzi]}; // Oscillating electric field as vector
+			// calculate energy absorbtion under the possibility that frequency does not fulfill ECR condition
+			float f_c = length(Bn) * (1.0f / (DEF_KME * 2.0f * M_PI_F)); // The cyclotron frequency needed to fulfill ECR condition at current cell
+			float rel_absorbtion = 1.0f / (1.0f + sq(ecrf / (0.03125 * f_c) - 32)); // dampening value 0.03125/32, computed through simulation and best fit aproximation
+			float Env_mag = length(Env - (dot(Env, Bn) / sq(length(B)))*Bn); // Magnitude of oscillating electric field components perpendicular to B, only these have effect for ECR
+			
+			//float e_rhon_m = e_rhon * DEF_KKGE; // convert charge density to mass density,
+			// TODO: Ionization
+			//float v_r = sqrt(sq(uxn-e_uxn) + sq(uyn-e_uyn) + sq(uzn-e_uzn));
+			// $\Delta e_rhon=(rhon/m_g)*e_rhon*v_r*sigma_i(v_r)$
+			// DEF_KMG & sigma_i are scaled by a factor of 10^20 to minimize floating point imprecision
+			//float delta_q_rho = ((rhon*DEF_KIMG) * (e_rhon * DEF_KKGE) * v_r * calculate_sigma_i(v_r)) / DEF_KKGE;
+			float delta_q_rho = 0.0f;
+			e_rhon += delta_q_rho; // Freeing of electrons through ionization
+		#endif // SUBGRID_ECR
 
 
 		/* ---- Gas charge advection ---- */
@@ -559,7 +556,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		for(uint i=0u; i<7u; i++) q_rhon += qhn[i]; // calculate charge from q
 		q_rhon += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fqi (perturbation method / DDF-shifting)
 
-		q_rhon += delta_q_rho; // Ionization of neutral gas
+		#ifdef SUBGRID_ECR
+			q_rhon += delta_q_rho; // Ionization of neutral gas
+		#endif // SUBGRID_ECR
 		Q[n] = q_rhon-e_rhon; // update charge field
 
 		float qeq[7]; // cache f_equilibrium[n]
@@ -569,14 +568,12 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 
 		/* ---- Electron gas part 2 ----- */
-		float e_fxn = (q_rhon-e_rhon) * (Enx + e_uyn*Bnz - e_uzn*Bny); // F = charge * (E + (U cross B))
-		float e_fyn = (q_rhon-e_rhon) * (Eny + e_uzn*Bnx - e_uxn*Bnz); // charge is the content of the ddf
-		float e_fzn = (q_rhon-e_rhon) * (Enz + e_uxn*Bny - e_uyn*Bnx);
+		float3 e_fn = -e_rhon * (En + cross((float3){e_uxn, e_uyn, e_uzn}, Bn)); // F = charge * (E + (U cross B)), charge is content f ddfs
 		const float e_rho2 = 0.5f/(e_rhon * DEF_KKGE); // apply external volume force (Guo forcing, Krueger p.233f)
 		e_uxn = clamp(fma(fxn, e_rho2, e_uxn), -DEF_C, DEF_C); // limit velocity (for stability purposes)
 		e_uyn = clamp(fma(fyn, e_rho2, e_uyn), -DEF_C, DEF_C); // force term: F*dt/(2*rho)
 		e_uzn = clamp(fma(fzn, e_rho2, e_uzn), -DEF_C, DEF_C);
-		calculate_forcing_terms(e_uxn, e_uyn, e_uzn, fxn, fyn, fzn, Fin); // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
+		calculate_forcing_terms(e_uxn, e_uyn, e_uzn, e_fn.x, e_fn.y, e_fn.z, Fin); // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
 		
 		calculate_f_eq(e_rhon, e_uxn, e_uyn, e_uzn, feq); // calculate equilibrium DDFs
 
@@ -592,9 +589,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 
 		/* ------ EM force on gas ------- */
-		fxn += e_fxn;
-		fyn += e_fyn;
-		fzn += e_fzn;
+		fxn += q_rhon * (En.x + uyn*Bn.z - uzn*Bn.y); // F = charge * (E + (U cross B))
+		fyn += q_rhon * (En.y + uzn*Bn.x - uxn*Bn.z); // charge is the content of the ddf
+		fzn += q_rhon * (En.z + uxn*Bn.y - uyn*Bn.x);
 
 
 		/* ------ LOD construction ------ */
@@ -794,7 +791,7 @@ __kernel void update_fields(const global fpxx* fi, global float* rho, global flo
 } // update_fields()
 
 #ifdef MAGNETO_HYDRO
-__kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const global float* Q, const global float* u, const global float* QU_lod, const global uchar* flags) {
+__kernel void update_e_b_dynamic(const global float* E_stat, const global float* B_stat, global float* E_dyn, global float* B_dyn, const global float* Q, const global float* u, const global float* QU_lod, const global uchar* flags) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
 	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute update_e_b_dynamic() on halo
 	const uchar flagsn = flags[n]; // cache flags[n] for multiple readings
@@ -882,14 +879,14 @@ __kernel void update_e_b_dynamic(global float* E_dyn, global float* B_dyn, const
 		offset += n_lod_fd;
 	}
 
-	// update buffers
-	E_dyn[n					] += DEF_KE * e.x;
-	E_dyn[(ulong)n+DEF_N	] += DEF_KE * e.y;
-	E_dyn[(ulong)n+DEF_N*2ul] += DEF_KE * e.z;
+	// update buffers with static buffers and updated dynamic values
+	E_dyn[n					] = E_stat[n				 ] + DEF_KE * e.x;
+	E_dyn[(ulong)n+DEF_N	] = E_stat[(ulong)n+DEF_N	 ] + DEF_KE * e.y;
+	E_dyn[(ulong)n+DEF_N*2ul] = E_stat[(ulong)n+DEF_N*2ul] + DEF_KE * e.z;
 
-	B_dyn[n					] += DEF_KMU * b.x;
-	B_dyn[(ulong)n+DEF_N	] += DEF_KMU * b.y;
-	B_dyn[(ulong)n+DEF_N*2ul] += DEF_KMU * b.z;
+	B_dyn[n					] = B_stat[n				 ] + DEF_KMU * b.x;
+	B_dyn[(ulong)n+DEF_N	] = B_stat[(ulong)n+DEF_N	 ] + DEF_KMU * b.y;
+	B_dyn[(ulong)n+DEF_N*2ul] = B_stat[(ulong)n+DEF_N*2ul] + DEF_KMU * b.z;
 } // update_e_b_dynamic()
 
 __kernel void clear_qu_lod(global float* QU_lod) {

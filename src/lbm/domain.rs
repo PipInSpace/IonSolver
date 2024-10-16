@@ -213,7 +213,7 @@ impl LbmDomain {
         // Conditional arguments. Place at end of kernel functions
         if lbm_config.ext_force_field { kernel_args!(stream_collide_builder, ("F", f.as_ref().expect("F"))); }
         if lbm_config.ext_magneto_hydro {
-            kernel_args!(stream_collide_builder, ("E", e.as_ref().expect("e")), ("B", b.as_ref().expect("b")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
+            kernel_args!(stream_collide_builder, ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
             kernel_args!(initialize_builder,     ("E", e.as_ref().expect("e")), ("B", b.as_ref().expect("b")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
             
             match fqi.as_ref().expect("fqi should be initialized") {
@@ -230,7 +230,7 @@ impl LbmDomain {
 
             // Dynamic E/B kernel
             kernel_update_e_b_dyn = Some(
-                kernel!(program, queue, "update_e_b_dynamic", [n], ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")), ("Q", q.as_ref().expect("q")), ("u", &u), ("QU_lod", qu_lod.as_ref().expect("QU_lod")), ("flags", &flags))
+                kernel!(program, queue, "update_e_b_dynamic", [n], ("E_stat", e.as_ref().expect("e_stat")), ("B_stat", b.as_ref().expect("b_stat")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")), ("Q", q.as_ref().expect("q")), ("u", &u), ("QU_lod", qu_lod.as_ref().expect("QU_lod")), ("flags", &flags))
             );
             // Clear LOD
             kernel_clear_qu_lod = Some(
