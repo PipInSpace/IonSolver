@@ -441,6 +441,19 @@ float3 lod_coordinates(const uint n, const uint d) { //
 	return (float3)((float)(t%nd)*dsx+(0.5f*dsx), (float)(t/nd)*dsy+(0.5f*dsy), (float)(n/(nd*nd))*dsz+(0.5f*dsz)); // n = x+(y+z*Ny)*Nx
 }
 #endif
+#ifdef SUBGRID_ECR
+float mag_v(const uint n, const global float* V) { // Magnitude of a vector field at n
+	return sqrt(sq(V[n]) + sq(V[DEF_N+(ulong)n]) + sq(V[2ul*DEF_N+(ulong)n]));
+}
+float3 grad_mag_v(const uint n, const global float* V) { // Gradient of the magnitude of a vector field at n
+	uint3 c = coordinates(n);
+	return (float3)(
+		mag_v(index(c + (uint3)(1, 0, 0)), V) - mag_v(index(c - (uint3)(1, 0, 0)), V) / 2.0f,
+		mag_v(index(c + (uint3)(0, 1, 0)), V) - mag_v(index(c - (uint3)(0, 1, 0)), V) / 2.0f,
+		mag_v(index(c + (uint3)(0, 0, 1)), V) - mag_v(index(c - (uint3)(0, 0, 1)), V) / 2.0f,
+	);
+}
+#endif // SUBGRID_ECR
 
 // Simulation kernel functions
 __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u, global uchar* flags, const ulong t, const float fx, const float fy, const float fz 
@@ -448,8 +461,8 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 , const global float* F 
 #endif // FORCE_FIELD
 #ifdef MAGNETO_HYDRO
-, global float* E_dyn	// dynamic electric field
-, global float* B_dyn	// dynamic magnetic flux density
+, const global float* E_dyn	// dynamic electric field
+, const global float* B_dyn	// dynamic magnetic flux density
 , global fpxx* fqi		// charge property of gas as ddfs
 , global fpxx* ei		// electron gas ddfs
 , global float* Q		// cell charge
@@ -522,9 +535,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		/* ---- Electron gas part 1 ----- */
 		float ehn[DEF_VELOCITY_SET]; // local DDFs
 		load_f(n, ehn, ei, j, t); // perform streaming (part 2)
-		float e_rhon, e_uxn, e_uyn, e_uzn; // calculate local density and velocity for collision
+		float rhon_e, uxn_e, uyn_e, uzn_e; // calculate local density and velocity for collision
 
-		calculate_rho_u(ehn, &e_rhon, &e_uxn, &e_uyn, &e_uzn); // calculate (charge) density and velocity fields from ei
+		calculate_rho_u(ehn, &rhon_e, &uxn_e, &uyn_e, &uzn_e); // calculate (charge) density and velocity fields from ei
 
 
 		/* --------- Subgrid ECR -------- */
@@ -535,14 +548,18 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 			float rel_absorbtion = 1.0f / (1.0f + sq(ecrf / (0.03125 * f_c) - 32)); // dampening value 0.03125/32, computed through simulation and best fit aproximation
 			float Env_mag = length(Env - (dot(Env, Bn) / sq(length(B)))*Bn); // Magnitude of oscillating electric field components perpendicular to B, only these have effect for ECR
 			
-			//float e_rhon_m = e_rhon * DEF_KKGE; // convert charge density to mass density,
+			// dv/dt = (-0.5 * v_||^2 ∇ B)/B = (-1.5 * k_B * T_e * ∇ B)/(m_e * B)
+			float Te = 0.0f; // Electron temperature, proportional to velocity perp. to B
+			float3 delta_u_par = (DEF_KBME * Te * grad_mag_v(n, B_dyn)) / length(Bn);
+
+			//float e_rhon_m = rhon_e * DEF_KKGE; // convert charge density to mass density,
 			// TODO: Ionization
-			//float v_r = sqrt(sq(uxn-e_uxn) + sq(uyn-e_uyn) + sq(uzn-e_uzn));
-			// $\Delta e_rhon=(rhon/m_g)*e_rhon*v_r*sigma_i(v_r)$
+			//float v_r = sqrt(sq(uxn-uxn_e) + sq(uyn-uyn_e) + sq(uzn-uzn_e));
+			// $\Delta rhon_e=(rhon/m_g)*rhon_e*v_r*sigma_i(v_r)$
 			// DEF_KMG & sigma_i are scaled by a factor of 10^20 to minimize floating point imprecision
-			//float delta_q_rho = ((rhon*DEF_KIMG) * (e_rhon * DEF_KKGE) * v_r * calculate_sigma_i(v_r)) / DEF_KKGE;
+			//float delta_q_rho = ((rhon*DEF_KIMG) * (rhon_e * DEF_KKGE) * v_r * calculate_sigma_i(v_r)) / DEF_KKGE;
 			float delta_q_rho = 0.0f;
-			e_rhon += delta_q_rho; // Freeing of electrons through ionization
+			rhon_e += delta_q_rho; // Freeing of electrons through ionization
 		#endif // SUBGRID_ECR
 
 
@@ -552,30 +569,30 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		neighbors_charge(n, j7);
 		float qhn[7]; // read from qA and stream to gh (D3Q7 subset, periodic boundary conditions)
 		load_q(n, qhn, fqi, j7, t); // perform streaming (part 2)
-		float q_rhon = 0.0f;
-		for(uint i=0u; i<7u; i++) q_rhon += qhn[i]; // calculate charge from q
-		q_rhon += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fqi (perturbation method / DDF-shifting)
+		float rhon_q = 0.0f;
+		for(uint i=0u; i<7u; i++) rhon_q += qhn[i]; // calculate charge from q
+		rhon_q += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fqi (perturbation method / DDF-shifting)
 
 		#ifdef SUBGRID_ECR
-			q_rhon += delta_q_rho; // Ionization of neutral gas
+			rhon_q += delta_q_rho; // Ionization of neutral gas
 		#endif // SUBGRID_ECR
-		Q[n] = q_rhon-e_rhon; // update charge field
+		Q[n] = rhon_q-rhon_e; // update charge field
 
 		float qeq[7]; // cache f_equilibrium[n]
-		calculate_q_eq(q_rhon, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
+		calculate_q_eq(rhon_q, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
 		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-DEF_WQ, qhn[i], DEF_WQ*qeq[i]); // perform collision
 		store_q(n, qhn, fqi, j7, t); // perform streaming (part 1)
 
 
 		/* ---- Electron gas part 2 ----- */
-		float3 e_fn = -e_rhon * (En + cross((float3){e_uxn, e_uyn, e_uzn}, Bn)); // F = charge * (E + (U cross B)), charge is content f ddfs
-		const float e_rho2 = 0.5f/(e_rhon * DEF_KKGE); // apply external volume force (Guo forcing, Krueger p.233f)
-		e_uxn = clamp(fma(fxn, e_rho2, e_uxn), -DEF_C, DEF_C); // limit velocity (for stability purposes)
-		e_uyn = clamp(fma(fyn, e_rho2, e_uyn), -DEF_C, DEF_C); // force term: F*dt/(2*rho)
-		e_uzn = clamp(fma(fzn, e_rho2, e_uzn), -DEF_C, DEF_C);
-		calculate_forcing_terms(e_uxn, e_uyn, e_uzn, e_fn.x, e_fn.y, e_fn.z, Fin); // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
+		float3 e_fn = -rhon_e * (En + cross((float3)(uxn_e, uyn_e, uzn_e), Bn)); // F = charge * (E + (U cross B)), charge is content f ddfs
+		const float rho2_e = 0.5f/(rhon_e * DEF_KKGE); // apply external volume force (Guo forcing, Krueger p.233f)
+		uxn_e = clamp(fma(fxn, rho2_e, uxn_e), -DEF_C, DEF_C); // limit velocity (for stability purposes)
+		uyn_e = clamp(fma(fyn, rho2_e, uyn_e), -DEF_C, DEF_C); // force term: F*dt/(2*rho)
+		uzn_e = clamp(fma(fzn, rho2_e, uzn_e), -DEF_C, DEF_C);
+		calculate_forcing_terms(uxn_e, uyn_e, uzn_e, e_fn.x, e_fn.y, e_fn.z, Fin); // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
 		
-		calculate_f_eq(e_rhon, e_uxn, e_uyn, e_uzn, feq); // calculate equilibrium DDFs
+		calculate_f_eq(rhon_e, uxn_e, uyn_e, uzn_e, feq); // calculate equilibrium DDFs
 
 		// Perform collision with SRT TODO: use correct kinematic viscosity
 		for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] *= c_tau;
@@ -589,9 +606,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 
 		/* ------ EM force on gas ------- */
-		fxn += q_rhon * (En.x + uyn*Bn.z - uzn*Bn.y); // F = charge * (E + (U cross B))
-		fyn += q_rhon * (En.y + uzn*Bn.x - uxn*Bn.z); // charge is the content of the ddf
-		fzn += q_rhon * (En.z + uxn*Bn.y - uyn*Bn.x);
+		fxn += rhon_q * (En.x + uyn*Bn.z - uzn*Bn.y); // F = charge * (E + (U cross B))
+		fyn += rhon_q * (En.y + uzn*Bn.x - uxn*Bn.z); // charge is the content of the ddf
+		fzn += rhon_q * (En.z + uxn*Bn.y - uyn*Bn.x);
 
 
 		/* ------ LOD construction ------ */
@@ -605,7 +622,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 			{
 				const uint ind = (lod_index(n, d) + off) * 4;
 				const float ils = 1/lod_s(d); // factor for averaging accross LODs
-				atomic_add_f(&QU_lod[ind+0], q_rhon-e_rhon);
+				atomic_add_f(&QU_lod[ind+0], rhon_q-rhon_e);
 				atomic_add_f(&QU_lod[ind+1], uxn * ils);
 				atomic_add_f(&QU_lod[ind+2], uyn * ils);
 				atomic_add_f(&QU_lod[ind+3], uzn * ils);
