@@ -16,8 +16,8 @@ use crate::{lbm::*, SimState};
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum VecVisMode {
     U,
-    E,
-    B,
+    EStat,
+    BStat,
     EDyn,
     BDyn,
 }
@@ -329,11 +329,11 @@ impl domain::LbmDomain {
                 graphics.kernel_graphics_axes.enq().unwrap();
             }
             if graphics.streamline_mode {
-                // Streamlines can show velocity, dynamic and static E and B field
+                // Streamlines can show velocity, dynamic and static EStat and BStat field
                 graphics.kernel_graphics_streamline.set_arg("u", match graphics.vec_vis_mode {
                     VecVisMode::U => &self.u,
-                    VecVisMode::E => self.e.as_ref().expect("E buffer used but not initialized"),
-                    VecVisMode::B => self.b.as_ref().expect("B buffer used but not initialized"),
+                    VecVisMode::EStat => self.e_stat.as_ref().expect("E_stat buffer used but not initialized"),
+                    VecVisMode::BStat => self.b_stat.as_ref().expect("B_stat buffer used but not initialized"),
                     VecVisMode::EDyn => self.e_dyn.as_ref().expect("E_dyn buffer used but not initialized"),
                     VecVisMode::BDyn => self.b_dyn.as_ref().expect("B_dyn buffer used but not initialized"),
                 }).unwrap();
@@ -342,8 +342,8 @@ impl domain::LbmDomain {
             if graphics.field_mode {
                 graphics.kernel_graphics_field.set_arg("u", match graphics.vec_vis_mode {
                     VecVisMode::U => &self.u,
-                    VecVisMode::E => self.e.as_ref().expect("E buffer used but not initialized"),
-                    VecVisMode::B => self.b.as_ref().expect("B buffer used but not initialized"),
+                    VecVisMode::EStat => self.e_stat.as_ref().expect("E_stat buffer used but not initialized"),
+                    VecVisMode::BStat => self.b_stat.as_ref().expect("B_stat buffer used but not initialized"),
                     VecVisMode::EDyn => self.e_dyn.as_ref().expect("E_dyn buffer used but not initialized"),
                     VecVisMode::BDyn => self.b_dyn.as_ref().expect("B_dyn buffer used but not initialized"),
                 }).unwrap();

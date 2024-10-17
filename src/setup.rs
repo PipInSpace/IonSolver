@@ -20,13 +20,12 @@ use crate::*;
 ///
 /// Run `your_lbm.initialize()` and return it with the config.
 pub fn setup() -> Lbm {
-    /*
+    
     let mut cfg = LbmConfig::new();
-    cfg.n_x = 256;
-    cfg.n_y = 256;
-    cfg.n_z = 256;
-    cfg.d_y = 1;
-    cfg.nu = cfg.units.si_to_nu(0.05);
+    cfg.n_x = 416;
+    cfg.n_y = 416;
+    cfg.n_z = 416;
+    cfg.nu = cfg.units.nu_si_lu(0.05);
     cfg.velocity_set = VelocitySet::D3Q19;
     cfg.run_steps = 1000;
     cfg.ext_volume_force = true;
@@ -68,16 +67,23 @@ pub fn setup() -> Lbm {
     //lbm.setup_velocity_field((0.01, 0.001, 0.0), 1.0);
     lbm.set_taylor_green(1);
 
-    lbm
-    */
+    //lbm
+    
+    
     //setup_domain_test()
     //setup_bfield_spin()
     //file::write(&setup_bfield_spin(), "./testfile.ion");
     //setup_from_file("./testfile.ion")
-    //setup_taylor_green()
+    //let mut lbm = setup_taylor_green();
     //setup_verification()
     //setup_field_vis()
-    setup_ecr_test()
+    //setup_ecr_test()
+
+    let now = std::time::Instant::now();
+    lbm.run(10);
+    println!("10 time steps with 416^3 cells took: {}", now.elapsed().as_millis());
+    lbm
+    
 }
 
 #[allow(unused)]
@@ -108,9 +114,9 @@ pub fn setup_from_file(path: &str) -> Lbm {
 #[allow(unused)]
 fn setup_taylor_green() -> Lbm {
     let mut lbm_config = LbmConfig::new();
-    lbm_config.n_x = 256;
-    lbm_config.n_y = 256;
-    lbm_config.n_z = 256;
+    lbm_config.n_x = 428;
+    lbm_config.n_y = 428;
+    lbm_config.n_z = 428;
     lbm_config.nu = lbm_config.units.nu_si_lu(0.1);
     lbm_config.velocity_set = VelocitySet::D3Q19;
     // Graphics
@@ -237,7 +243,7 @@ fn setup_verification() -> Lbm {
     lbm_config.graphics_config.camera_width = 1920;
     lbm_config.graphics_config.camera_height = 1080;
     lbm_config.graphics_config.streamline_every = 8;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::BStat;
     lbm_config.graphics_config.streamline_mode = true;
     lbm_config.graphics_config.axes_mode = true;
     lbm_config.graphics_config.q_mode = true;
@@ -276,7 +282,7 @@ fn setup_field_vis() -> Lbm {
     lbm_config.graphics_config.camera_width = 800;
     lbm_config.graphics_config.camera_height = 540;
     lbm_config.graphics_config.streamline_every = 16;
-    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::B;
+    lbm_config.graphics_config.vec_vis_mode = graphics::VecVisMode::BStat;
     lbm_config.graphics_config.u_max = 0.000000002;
     lbm_config.graphics_config.streamline_mode = true;
 
@@ -302,7 +308,7 @@ fn setup_ecr_test() -> Lbm {
     lbm_config.velocity_set = VelocitySet::D3Q19;
     lbm_config.ext_volume_force = true;
     lbm_config.ext_magneto_hydro = true;
-    lbm_config.ext_electron_cyclotron_resonance = true;
+    lbm_config.ext_subgrid_ecr = true;
     lbm_config.ecr_freq = 0.1f32;
     lbm_config.ecr_field_strength = 1.0f32;
 

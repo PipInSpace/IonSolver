@@ -26,7 +26,7 @@ pub fn constant_E(lbm: &Lbm, e: [f32; 3]) {
         });
     
         // Write to device
-        bwrite!(lbm.domains[d as usize].e.as_ref().expect("e"), e_field);
+        bwrite!(lbm.domains[d as usize].e_stat.as_ref().expect("e_stat"), e_field);
     }
 }
 
@@ -79,7 +79,7 @@ pub fn precompute_E(lbm: &Lbm) {
         });
     
         // Write to device
-        bwrite!(lbm.domains[d as usize].e.as_ref().expect("e"), e_field);
+        bwrite!(lbm.domains[d as usize].e_stat.as_ref().expect("e_stat"), e_field);
     }
 }
 
@@ -138,7 +138,7 @@ pub fn constant_B(lbm: &Lbm, b: [f32; 3]) {
         });
     
         // Write to device
-        bwrite!(lbm.domains[d as usize].b.as_ref().expect("b"), b_field);
+        bwrite!(lbm.domains[d as usize].b_stat.as_ref().expect("b_stat"), b_field);
     }
 }
 
@@ -188,7 +188,7 @@ pub fn precompute_B(lbm: &Lbm) {
         });
     
         // Write to device
-        bwrite!(lbm.domains[d as usize].b.as_ref().expect("b"), b_field);
+        bwrite!(lbm.domains[d as usize].b_stat.as_ref().expect("b_stat"), b_field);
     }
 }
 
