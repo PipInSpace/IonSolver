@@ -137,7 +137,7 @@ fn setup_taylor_green() -> Lbm {
 #[allow(unused)]
 fn setup_domain_test() -> Lbm {
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 10.0, 1.2250, 1.0);
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 1.0, 10.0, 1.2250, 1.0, 1.0);
     lbm_config.n_x = 256;
     lbm_config.n_y = 256;
     lbm_config.n_z = 256;
@@ -164,7 +164,7 @@ fn setup_domain_test() -> Lbm {
 #[allow(unused)]
 fn setup_bfield_spin() -> Lbm {
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 0.1, 1.0, 1.2250, 0.0000000001);
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 0.1, 1.0, 1.2250, 0.0000000001, 1.0);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
@@ -225,7 +225,7 @@ fn setup_bfield_spin() -> Lbm {
 #[allow(unused)]
 fn setup_verification() -> Lbm {
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 10.0);
+    lbm_config.units.set(1.0, 1.0, 1.0, 1.0, 1.0, 0.5, 1.0, 1.0, 10.0, 1.0);
     lbm_config.units.print();
     lbm_config.n_x = 128;
     lbm_config.n_y = 128;
@@ -266,7 +266,7 @@ fn setup_verification() -> Lbm {
 #[allow(unused)]
 fn setup_field_vis() -> Lbm {
     let mut lbm_config = LbmConfig::new();
-    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 0.1, 1.0, 1.2250, 0.0000000001);
+    lbm_config.units.set(128.0, 1.0, 1.0, 1.0, 1.0, 0.1, 1.0, 1.2250, 0.0000000001, 1.0);
     lbm_config.n_x = 256;
     lbm_config.n_y = 256;
     lbm_config.n_z = 256;

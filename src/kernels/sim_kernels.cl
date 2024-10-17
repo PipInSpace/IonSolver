@@ -522,13 +522,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 
 	#ifdef MAGNETO_HYDRO
 		/* -------- Cache fields -------- */
-		float Bnx = B_dyn[nxi]; // Cache dynamic fields for multiple readings
-		float Bny = B_dyn[nyi];
-		float Bnz = B_dyn[nzi];
-		float3 Bn = {B_dyn[nxi], B_dyn[nyi], B_dyn[nzi]};
-		float Enx = E_dyn[nxi];
-		float Eny = E_dyn[nyi];
-		float Enz = E_dyn[nzi];
+		float3 Bn = {B_dyn[nxi], B_dyn[nyi], B_dyn[nzi]}; // Cache dynamic fields for multiple readings
 		float3 En = {E_dyn[nxi], E_dyn[nyi], E_dyn[nzi]};		
 
 
@@ -536,34 +530,10 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		float ehn[DEF_VELOCITY_SET]; // local DDFs
 		load_f(n, ehn, ei, j, t); // perform streaming (part 2)
 		float rhon_e, uxn_e, uyn_e, uzn_e; // calculate local density and velocity for collision
-
 		calculate_rho_u(ehn, &rhon_e, &uxn_e, &uyn_e, &uzn_e); // calculate (charge) density and velocity fields from ei
 
 
-		/* --------- Subgrid ECR -------- */
-		#ifdef SUBGRID_ECR
-			float3 Env = {E_var[nxi], E_var[nyi], E_var[nzi]}; // Oscillating electric field as vector
-			// calculate energy absorbtion under the possibility that frequency does not fulfill ECR condition
-			float f_c = length(Bn) * (1.0f / (DEF_KME * 2.0f * M_PI_F)); // The cyclotron frequency needed to fulfill ECR condition at current cell
-			float rel_absorbtion = 1.0f / (1.0f + sq(ecrf / (0.03125 * f_c) - 32)); // dampening value 0.03125/32, computed through simulation and best fit aproximation
-			float Env_mag = length(Env - (dot(Env, Bn) / sq(length(B)))*Bn); // Magnitude of oscillating electric field components perpendicular to B, only these have effect for ECR
-			
-			// dv/dt = (-0.5 * v_||^2 ∇ B)/B = (-1.5 * k_B * T_e * ∇ B)/(m_e * B)
-			float Te = 0.0f; // Electron temperature, proportional to velocity perp. to B
-			float3 delta_u_par = (DEF_KBME * Te * grad_mag_v(n, B_dyn)) / length(Bn);
-
-			//float e_rhon_m = rhon_e * DEF_KKGE; // convert charge density to mass density,
-			// TODO: Ionization
-			//float v_r = sqrt(sq(uxn-uxn_e) + sq(uyn-uyn_e) + sq(uzn-uzn_e));
-			// $\Delta rhon_e=(rhon/m_g)*rhon_e*v_r*sigma_i(v_r)$
-			// DEF_KMG & sigma_i are scaled by a factor of 10^20 to minimize floating point imprecision
-			//float delta_q_rho = ((rhon*DEF_KIMG) * (rhon_e * DEF_KKGE) * v_r * calculate_sigma_i(v_r)) / DEF_KKGE;
-			float delta_q_rho = 0.0f;
-			rhon_e += delta_q_rho; // Freeing of electrons through ionization
-		#endif // SUBGRID_ECR
-
-
-		/* ---- Gas charge advection ---- */
+		/* --- Gas charge advection 1 --- */
 		// Advection of charge. Cell charge is stored in charge ddfs 'fqi' for advection with 'fi'.
 		uint j7[7]; // neighbors of D3Q7 subset
 		neighbors_charge(n, j7);
@@ -573,11 +543,68 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		for(uint i=0u; i<7u; i++) rhon_q += qhn[i]; // calculate charge from q
 		rhon_q += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fqi (perturbation method / DDF-shifting)
 
-		#ifdef SUBGRID_ECR
-			rhon_q += delta_q_rho; // Ionization of neutral gas
-		#endif // SUBGRID_ECR
-		Q[n] = rhon_q-rhon_e; // update charge field
 
+		/* --------- Subgrid ECR -------- */
+		#ifdef SUBGRID_ECR
+			// The SUBGRID ECR extension provides electron temperature, ionization modelling and electron 
+			// cyclotron resonance heating. The electron temperature is assumed to be proportional to
+			// the gyrating motion of the electrons in a magnetic field, the speed in the electron gas ddfs
+			// represents a guiding center drift.
+			/* ---- Electron temperature ---- */
+			float ethn[7]; // read from gA and stream to gh (D3Q7 subset, periodic boundary conditions)
+			load_g(n, ethn, eti, j7, t); // perform streaming (part 2)
+			float Etn;
+			//if(flagsn&TYPE_T) {
+			//	Etn = T[n]; // apply preset temperature
+			//} else {
+			Etn = 0.0f;
+			for(uint i=0u; i<7u; i++) Etn += ethn[i]; // calculate temperature from g
+			Etn += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up gi (perturbation method / DDF-shifting)
+			//}
+			float eteq[7]; // cache f_equilibrium[n]
+			calculate_g_eq(Etn, uxn, uyn, uzn, eteq); // calculate equilibrium DDFs
+			//if(flagsn&TYPE_T) {
+			//	for(uint i=0u; i<7u; i++) ethn[i] = eteq[i]; // just write eteq to ethn (no collision)
+			//} else {
+			#ifdef UPDATE_FIELDS
+				T[n] = Etn; // update temperature field
+			#endif // UPDATE_FIELDS
+			for(uint i=0u; i<7u; i++) ethn[i] = fma(1.0f-def_w_T, ethn[i], def_w_T*eteq[i]); // perform collision
+			//}
+			store_g(n, ethn, gi, j7, t); // perform streaming (part 1)
+
+
+			/* --------- ECR heating -------- */
+			float3 Env = {E_var[nxi], E_var[nyi], E_var[nzi]}; // Oscillating electric field as vector
+			// calculate energy absorbtion under the possibility that frequency does not fulfill ECR condition
+			float f_c = length(Bn) * (1.0f / (DEF_KME * 2.0f * M_PI_F)); // The cyclotron frequency needed to fulfill ECR condition at current cell
+			float rel_absorbtion = 1.0f / (1.0f + sq(ecrf / (0.03125 * f_c) - 32)); // dampening value 0.03125/32, computed through simulation and best fit aproximation
+			float Env_mag = length(Env - (dot(Env, Bn) / sq(length(B)))*Bn); // Magnitude of oscillating electric field components perpendicular to B, only these have effect for ECR
+
+			// Drift of gyrating electrons in magnetic field. We assume all kinetic energy from electron
+			// temperature is directed perpendicular to the magnetic field.
+			// dv_∥/dt = (-0.5 * v_⟂^2 ∇ B)/B = (-1.5 * k_B * T_e * ∇ B)/(m_e * B)
+			float3 delta_u_par = (DEF_KKBME * Etn * grad_mag_v(n, B_dyn)) / length(Bn);
+			uxn_e += delta_u_par.x;
+			uyn_e += delta_u_par.y;
+			uzn_e += delta_u_par.z;
+
+
+			/* --------- Ionization --------- */
+			//float e_rhon_m = rhon_e * DEF_KKGE; // convert charge density to mass density,
+			// TODO: Ionization
+			//float v_r = sqrt(sq(uxn-uxn_e) + sq(uyn-uyn_e) + sq(uzn-uzn_e));
+			// $\Delta rhon_e=(rhon/m_g)*rhon_e*v_r*sigma_i(v_r)$
+			// DEF_KMG & sigma_i are scaled by a factor of 10^20 to minimize floating point imprecision
+			//float delta_q_rho = ((rhon*DEF_KIMG) * (rhon_e * DEF_KKGE) * v_r * calculate_sigma_i(v_r)) / DEF_KKGE;
+			float delta_q_rho = 0.0f;
+			rhon_e += delta_q_rho; // Freeing of electrons through ionization adds charge/mass to the electron gas 
+			rhon_q += delta_q_rho; // Ionization of neutral gas adds charge to the neutral gas
+		#endif // SUBGRID_ECR
+
+
+		/* --- Gas charge advection 2 --- */
+		Q[n] = rhon_q-rhon_e; // update charge field
 		float qeq[7]; // cache f_equilibrium[n]
 		calculate_q_eq(rhon_q, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
 		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-DEF_WQ, qhn[i], DEF_WQ*qeq[i]); // perform collision
@@ -587,13 +614,11 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		/* ---- Electron gas part 2 ----- */
 		float3 e_fn = -rhon_e * (En + cross((float3)(uxn_e, uyn_e, uzn_e), Bn)); // F = charge * (E + (U cross B)), charge is content f ddfs
 		const float rho2_e = 0.5f/(rhon_e * DEF_KKGE); // apply external volume force (Guo forcing, Krueger p.233f)
-		uxn_e = clamp(fma(fxn, rho2_e, uxn_e), -DEF_C, DEF_C); // limit velocity (for stability purposes)
-		uyn_e = clamp(fma(fyn, rho2_e, uyn_e), -DEF_C, DEF_C); // force term: F*dt/(2*rho)
-		uzn_e = clamp(fma(fzn, rho2_e, uzn_e), -DEF_C, DEF_C);
+		uxn_e = clamp(fma(e_fn.x, rho2_e, uxn_e), -DEF_C, DEF_C); // limit velocity (for stability purposes)
+		uyn_e = clamp(fma(e_fn.y, rho2_e, uyn_e), -DEF_C, DEF_C); // force term: F*dt/(2*rho)
+		uzn_e = clamp(fma(e_fn.z, rho2_e, uzn_e), -DEF_C, DEF_C);
 		calculate_forcing_terms(uxn_e, uyn_e, uzn_e, e_fn.x, e_fn.y, e_fn.z, Fin); // calculate volume force terms Fin from velocity field (Guo forcing, Krueger p.233f)
-		
 		calculate_f_eq(rhon_e, uxn_e, uyn_e, uzn_e, feq); // calculate equilibrium DDFs
-
 		// Perform collision with SRT TODO: use correct kinematic viscosity
 		for(uint i=0u; i<DEF_VELOCITY_SET; i++) Fin[i] *= c_tau;
 		#ifndef EQUILIBRIUM_BOUNDARIES
@@ -601,7 +626,6 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		#else
 			for(uint i=0u; i<DEF_VELOCITY_SET; i++) ehn[i] = flagsn_bo==TYPE_E ? feq[i] : fma(1.0f-w, ehn[i], fma(w, feq[i], Fin[i])); // perform collision (SRT)
 		#endif // EQUILIBRIUM_BOUNDARIES
-
 		store_f(n, ehn, ei, j, t); // perform streaming (part 1)
 
 

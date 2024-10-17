@@ -20,6 +20,8 @@ pub struct Units {
     pub s: f32,
     /// ampere
     pub a: f32,
+    /// kelvin
+    pub k: f32,
     // propellant gas
     pub prop: Propellant,
 }
@@ -31,6 +33,7 @@ impl Units {
             kg: 1.0,
             s: 1.0,
             a: 1.0,
+            k: 1.0,
             prop: Propellant::default(),
         }
     }
@@ -41,15 +44,18 @@ impl Units {
         lbm_velocity: f32,
         lbm_rho: f32,
         lbm_charge: f32,
+        lbm_temp: f32,
         si_length: f32,
         si_velocity: f32,
         si_rho: f32,
         si_charge: f32,
+        si_temp: f32,
     ) {
         self.m = si_length / lbm_length;
         self.kg = si_rho / lbm_rho * cb(self.m);
         self.s = self.m / (si_velocity / lbm_velocity);
         self.a = si_charge / lbm_charge / self.s;
+        self.k = si_temp / lbm_temp;
     }
 
     // from lattice units to si units (need to be called after .set();)
@@ -164,6 +170,10 @@ impl Units {
         (9.109_383_713_9E-31_f64/(2.0_f64 * 1.602_176_634E-19_f64) / self.kg as f64) as f32
     }
 
+    pub fn kkBme_lu(&self) -> f32 { // -1.5 * 1.38064852e-23J/K / 9.10938356e-31kg -- m^2 * s^-2 * K^-1
+        (-22734499.72063751808909449412_f64 / (sqd(self.m as f64) / (sqd(self.s as f64) * self.k as f64)) ) as f32
+    }
+
     /// From lbm.n_x and velocity u
     pub fn nu_from_Re(&self, Re: f32, x: f32, u: f32) -> f32 {
         x * u / Re
@@ -217,6 +227,11 @@ impl Propellant {
 
 #[inline]
 fn sq(x: f32) -> f32 {
+    x * x
+}
+
+#[inline]
+fn sqd(x: f64) -> f64 {
     x * x
 }
 

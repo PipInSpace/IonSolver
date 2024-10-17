@@ -719,17 +719,20 @@ fn get_device_defines(
     + if lbm_config.ext_volume_force {         "\n	#define VOLUME_FORCE"} else {""}
     + &if lbm_config.ext_magneto_hydro {
      "\n	#define MAGNETO_HYDRO".to_owned()
-    +"\n	#define DEF_KE "    + &format!("{:?}f", lbm_config.units.ke_lu()) // coulomb constant in simulation units
-    +"\n	#define DEF_KMU "   + &format!("{:?}f", lbm_config.units.mu_0_lu() / (4.0 * std::f32::consts::PI))
-    +"\n	#define DEF_KKGE  "  + &format!("{:?}f",lbm_config.units.kkge_lu()) // electron mass/charge in simulation units
-    +"\n	#define DEF_KIMG  "  + &format!("{:?}f",lbm_config.units.kimg_lu()) // Inverse of mass of a propellant gas atom, scaled by 10^20
-    +"\n	#define DEF_KVEV  "  + &format!("{:?}f",lbm_config.units.kveV_lu()) // 9.10938356e-31kg / (2*1.6021766208e-19)
-    +"\n	#define DEF_LOD_DEPTH " + &format!("{}u", lbm_config.mhd_lod_depth)
-    +"\n    #define DEF_NUM_LOD " + &format!("{}u", n_lod)
+    +"\n	#define DEF_KE "          + &format!("{:?}f", lbm_config.units.ke_lu()) // coulomb constant in simulation units
+    +"\n	#define DEF_KMU "         + &format!("{:?}f", lbm_config.units.mu_0_lu() / (4.0 * std::f32::consts::PI))
+    +"\n	#define DEF_KKGE  "       + &format!("{:?}f", lbm_config.units.kkge_lu()) // electron mass/charge in simulation units
+    +"\n	#define DEF_KIMG  "       + &format!("{:?}f", lbm_config.units.kimg_lu()) // Inverse of mass of a propellant gas atom, scaled by 10^20
+    +"\n	#define DEF_KVEV  "       + &format!("{:?}f", lbm_config.units.kveV_lu()) // 9.10938356e-31kg / (2*1.6021766208e-19)
+    +"\n	#define DEF_LOD_DEPTH "   + &format!("{}u", lbm_config.mhd_lod_depth)
+    +"\n    #define DEF_NUM_LOD "     + &format!("{}u", n_lod)
     +"\n    #define DEF_NUM_LOD_OWN " + &format!("{}u", n_lod_own)
-    +"\n	#define DEF_WQ  "  + &format!("{:?}f", 1.0/(2.0*lbm_config.units.k_charge_expansion_lu()+0.5))
+    +"\n	#define DEF_WQ  "         + &format!("{:?}f", 1.0/(2.0*lbm_config.units.k_charge_expansion_lu()+0.5))
     } else {"".to_string()}
-    + if lbm_config.ext_subgrid_ecr {                "\n	#define SUBGRID_ECR"} else {""}
+    + &if lbm_config.ext_subgrid_ecr {
+     "\n	#define SUBGRID_ECR".to_owned()
+    +"\n	#define DEF_KKBME "       + &format!("{:?}f", lbm_config.units.kkBme_lu())
+    } else {"".to_string()}
     + if lbm_config.ext_force_field {                "\n	#define FORCE_FIELD"} else {""}
     + if lbm_config.graphics_config.graphics_active {"\n	#define UPDATE_FIELDS"} else {""}
     //Extensions
