@@ -374,7 +374,7 @@ void calculate_forcing_terms(const float ux, const float uy, const float uz, con
 
 #ifdef MAGNETO_HYDRO
 // Charge advection
-void neighbors_charge(const uint n, uint* j7) { // calculate neighbor indices
+void neighbors_a(const uint n, uint* j7) { // calculate advection property neighbor indices
 	uint x0, xp, xm, y0, yp, ym, z0, zp, zm;
 	calculate_indices(n, &x0, &xp, &xm, &y0, &yp, &ym, &z0, &zp, &zm);
 	j7[0] = n;
@@ -382,21 +382,21 @@ void neighbors_charge(const uint n, uint* j7) { // calculate neighbor indices
 	j7[3] = x0+yp+z0; j7[4] = x0+ym+z0; // 0+0 0-0
 	j7[5] = x0+y0+zp; j7[6] = x0+y0+zm; // 00+ 00-
 }
-void calculate_q_eq(const float Q, const float ux, const float uy, const float uz, float* qeq) { // calculate q_equilibrium from density and velocity field (perturbation method / DDF-shifting)
+void calculate_a_eq(const float Q, const float ux, const float uy, const float uz, float* qeq) { // calculate a_equilibrium from density and velocity field (perturbation method / DDF-shifting)
 	const float wsT4=0.5f*Q, wsTm1=0.125f*(Q-1.0f); // 0.125f*Q*4.0f (straight directions in D3Q7), wsTm1 is arithmetic optimization to minimize digit extinction, lattice speed of sound is 1/2 for D3Q7 and not 1/sqrt(3)
 	qeq[0] = fma(0.25f, Q, -0.25f); // 000
 	qeq[1] = fma(wsT4, ux, wsTm1); qeq[2] = fma(wsT4, -ux, wsTm1); // +00 -00, source: http://dx.doi.org/10.1016/j.ijheatmasstransfer.2009.11.014
 	qeq[3] = fma(wsT4, uy, wsTm1); qeq[4] = fma(wsT4, -uy, wsTm1); // 0+0 0-0
 	qeq[5] = fma(wsT4, uz, wsTm1); qeq[6] = fma(wsT4, -uz, wsTm1); // 00+ 00-
 }
-void load_q(const uint n, float* qhn, const global fpxx* fqi, const uint* j7, const ulong t) {
+void load_a(const uint n, float* qhn, const global fpxx* fqi, const uint* j7, const ulong t) {
 	qhn[0] = load(fqi, index_f(n, 0u)); // Esoteric-Pull
 	for(uint i=1u; i<7u; i+=2u) {
 		qhn[i   ] = load(fqi, index_f(n	   , t%2ul ? i	: i+1u));
 		qhn[i+1u] = load(fqi, index_f(j7[i], t%2ul ? i+1u : i   ));
 	}
 }
-void store_q(const uint n, const float* qhn, global fpxx* fqi, const uint* j7, const ulong t) {
+void store_a(const uint n, const float* qhn, global fpxx* fqi, const uint* j7, const ulong t) {
 	store(fqi, index_f(n, 0u), qhn[0]); // Esoteric-Pull
 	for(uint i=1u; i<7u; i+=2u) {
 		store(fqi, index_f(j7[i], t%2ul ? i+1u : i   ), qhn[i   ]);
@@ -470,8 +470,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 #endif // MAGNETO_HYDRO
 #ifdef SUBGRID_ECR
 , const global float* E_var // Oscillating electric field, actually static, contained information is direction of oscillation + magnitude of field strenght
-, const global fpxx* eti
-, const float ecrf // ECR frequency
+, global fpxx* eti          // electron temperature ddfs
+, global float* Et          // electron temperature field
+, const float ecrf          // ECR frequency
 #endif // SUBGRID_ECR
 ) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
@@ -536,9 +537,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		/* --- Gas charge advection 1 --- */
 		// Advection of charge. Cell charge is stored in charge ddfs 'fqi' for advection with 'fi'.
 		uint j7[7]; // neighbors of D3Q7 subset
-		neighbors_charge(n, j7);
+		neighbors_a(n, j7);
 		float qhn[7]; // read from qA and stream to gh (D3Q7 subset, periodic boundary conditions)
-		load_q(n, qhn, fqi, j7, t); // perform streaming (part 2)
+		load_a(n, qhn, fqi, j7, t); // perform streaming (part 2)
 		float rhon_q = 0.0f;
 		for(uint i=0u; i<7u; i++) rhon_q += qhn[i]; // calculate charge from q
 		rhon_q += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up fqi (perturbation method / DDF-shifting)
@@ -552,7 +553,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 			// represents a guiding center drift.
 			/* ---- Electron temperature ---- */
 			float ethn[7]; // read from gA and stream to gh (D3Q7 subset, periodic boundary conditions)
-			load_g(n, ethn, eti, j7, t); // perform streaming (part 2)
+			load_a(n, ethn, eti, j7, t); // perform streaming (part 2)
 			float Etn;
 			//if(flagsn&TYPE_T) {
 			//	Etn = T[n]; // apply preset temperature
@@ -562,16 +563,16 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 			Etn += 1.0f; // add 1.0f last to avoid digit extinction effects when summing up gi (perturbation method / DDF-shifting)
 			//}
 			float eteq[7]; // cache f_equilibrium[n]
-			calculate_g_eq(Etn, uxn, uyn, uzn, eteq); // calculate equilibrium DDFs
+			calculate_a_eq(Etn, uxn, uyn, uzn, eteq); // calculate equilibrium DDFs
 			//if(flagsn&TYPE_T) {
 			//	for(uint i=0u; i<7u; i++) ethn[i] = eteq[i]; // just write eteq to ethn (no collision)
 			//} else {
 			#ifdef UPDATE_FIELDS
-				T[n] = Etn; // update temperature field
+				Et[n] = Etn; // update temperature field
 			#endif // UPDATE_FIELDS
 			for(uint i=0u; i<7u; i++) ethn[i] = fma(1.0f-def_w_T, ethn[i], def_w_T*eteq[i]); // perform collision
 			//}
-			store_g(n, ethn, gi, j7, t); // perform streaming (part 1)
+			store_a(n, ethn, gi, j7, t); // perform streaming (part 1)
 
 
 			/* --------- ECR heating -------- */
@@ -606,9 +607,9 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 		/* --- Gas charge advection 2 --- */
 		Q[n] = rhon_q-rhon_e; // update charge field
 		float qeq[7]; // cache f_equilibrium[n]
-		calculate_q_eq(rhon_q, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
+		calculate_a_eq(rhon_q, uxn, uyn, uzn, qeq); // calculate equilibrium DDFs
 		for(uint i=0u; i<7u; i++) qhn[i] = fma(1.0f-DEF_WQ, qhn[i], DEF_WQ*qeq[i]); // perform collision
-		store_q(n, qhn, fqi, j7, t); // perform streaming (part 1)
+		store_a(n, qhn, fqi, j7, t); // perform streaming (part 1)
 
 
 		/* ---- Electron gas part 2 ----- */
@@ -750,6 +751,10 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 , global fpxx* ei		// electron gas ddfs
 , global float* Q
 #endif // MAGNETO_HYDRO
+#ifdef SUBGRID_ECR
+, global fpxx* eti
+, const global float* Et
+#endif // SUBGRID_ECR
 ) {
 	const uint n = get_global_id(0); // n = x+(y+z*Ny)*Nx
 	if(n>=(uint)DEF_N||is_halo(n)) return; // don't execute initialize() on halo
@@ -787,10 +792,10 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 	#ifdef MAGNETO_HYDRO
 		// Initialize charge ddfs
 		float qeq[7]; // q_equilibrium
-		calculate_q_eq(Q[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], qeq);
+		calculate_a_eq(Q[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], qeq);
 		uint j7[7]; // neighbors of D3Q7 subset
-		neighbors_charge(n, j7);
-		store_q(n, qeq, fqi, j7, 1ul); // write to fqi. perform streaming (part 1)
+		neighbors_a(n, j7);
+		store_a(n, qeq, fqi, j7, 1ul); // write to fqi. perform streaming (part 1)
 		// Clear dyn with static field for recomputation
 		B_dyn[nxi] = B[nxi];
 		B_dyn[nyi] = B[nyi];
@@ -802,6 +807,11 @@ __kernel void initialize(global fpxx* fi, global float* rho, global float* u, gl
 		calculate_f_eq(Q[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], fe_eq);
 		store_f(n, fe_eq, ei, j, 1ul); // write to fi
 	#endif // MAGNETO_HYDRO
+	#ifdef SUBGRID_ECR
+		 // Initialize electron temperature ddfs
+		calculate_a_eq(Et[n], u[n], u[DEF_N+(ulong)n], u[2ul*DEF_N+(ulong)n], qeq);
+		store_a(n, qeq, eti, j7, 1ul); // write to eti. perform streaming (part 1)
+	#endif // SUBGRID_ECR
 } // initialize()
 
 __kernel void update_fields(const global fpxx* fi, global float* rho, global float* u, const global uchar* flags, const ulong t, const float fx, const float fy, const float fz) {
@@ -1059,14 +1069,14 @@ kernel void transfer__insert_rho_u_flags(const uint direction, const ulong t, co
 #ifdef MAGNETO_HYDRO
 void extract_fqi(const uint a, const uint n, const uint side, const ulong t, global fpxx_copy* transfer_buffer, const global fpxx_copy* fqi) {
 	uint j7[7u]; // neighbor indices
-	neighbors_charge(n, j7); // calculate neighbor indices
+	neighbors_a(n, j7); // calculate neighbor indices
 	const uint i = side+1u;
 	const ulong index = index_f(i%2u ? j7[i] : n, t%2ul ? (i%2u ? i+1u : i-1u) : i); // Esoteric-Pull: standard store, or streaming part 1/2
 	transfer_buffer[a] = fqi[index]; // fpxx_copy allows direct copying without decompression+compression
 }
 void insert_fqi(const uint a, const uint n, const uint side, const ulong t, const global fpxx_copy* transfer_buffer, global fpxx_copy* fqi) {
 	uint j7[7u]; // neighbor indices
-	neighbors_charge(n, j7); // calculate neighbor indices
+	neighbors_a(n, j7); // calculate neighbor indices
 	const uint i = side+1u;
 	const ulong index = index_f(i%2u ? n : j7[i-1u], t%2ul ? i : (i%2u ? i+1u : i-1u)); // Esoteric-Pull: standard load, or streaming part 2/2
 	fqi[index] = transfer_buffer[a]; // fpxx_copy allows direct copying without decompression+compression

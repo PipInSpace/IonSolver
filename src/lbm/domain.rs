@@ -56,11 +56,12 @@ pub struct LbmDomain {
     pub e_dyn: Option<Buffer<f32>>,
     pub b_dyn: Option<Buffer<f32>>,
     pub fqi: Option<VariableFloatBuffer>,
-    pub ei: Option<VariableFloatBuffer>,
     pub q: Option<Buffer<f32>>,
     pub qu_lod: Option<Buffer<f32>>,
+    pub ei: Option<VariableFloatBuffer>,
     pub e_var: Option<Buffer<f32>>,
     pub eti: Option<VariableFloatBuffer>,
+    pub et: Option<Buffer<f32>>,
 
     pub t: u64, // Timestep
 
@@ -182,6 +183,8 @@ impl LbmDomain {
                 _               => { VariableFloatBuffer::U16(buffer!(&queue, [n * 7], 0u16)) }   // Float Type F16S/F16C
             })
         } else { None };
+        // Electron temperature field
+        let et: Option<Buffer<f32>> = if lbm_config.ext_subgrid_ecr { Some(buffer!(&queue, [n], 0f32)) } else { None };
         println!(" - Done ({}ms)", now.elapsed().as_millis()); // Allocating buffers
 
 
@@ -239,8 +242,14 @@ impl LbmDomain {
         }
         if lbm_config.ext_subgrid_ecr {
             match eti.as_ref().expect("eti should be initialized") {
-                VariableFloatBuffer::U16(eti_u16) => { kernel_args!(stream_collide_builder, ("E_var", e_var.as_ref().expect("e_var")), ("eti", eti_u16), ("ecrf", lbm_config.ecr_freq)); },
-                VariableFloatBuffer::F32(eti_f32) => { kernel_args!(stream_collide_builder, ("E_var", e_var.as_ref().expect("e_var")), ("eti", eti_f32), ("ecrf", lbm_config.ecr_freq)); },
+                VariableFloatBuffer::U16(eti_u16) => {
+                    kernel_args!(stream_collide_builder, ("E_var", e_var.as_ref().expect("e_var")), ("eti", eti_u16), ("et", et.as_ref().expect("et")), ("ecrf", lbm_config.ecr_freq));
+                    kernel_args!(initialize_builder,                                                ("eti", eti_u16), ("et", et.as_ref().expect("et")))
+                },
+                VariableFloatBuffer::F32(eti_f32) => {
+                    kernel_args!(stream_collide_builder, ("E_var", e_var.as_ref().expect("e_var")), ("eti", eti_f32), ("et", et.as_ref().expect("et")), ("ecrf", lbm_config.ecr_freq));
+                    kernel_args!(initialize_builder,                                                ("eti", eti_f32), ("et", et.as_ref().expect("et")))
+                },
             }
         }
         
@@ -341,7 +350,7 @@ impl LbmDomain {
             transfer_lod_host,
             n_lod_own,
 
-            f, e_stat, b_stat, e_dyn, b_dyn, fqi, ei, q, qu_lod, e_var, eti,
+            f, e_stat, b_stat, e_dyn, b_dyn, fqi, q, qu_lod, ei, e_var, eti, et,
 
             t,
             graphics,
