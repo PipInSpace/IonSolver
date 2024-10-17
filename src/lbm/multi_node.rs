@@ -23,21 +23,22 @@ pub fn run_node() {
     let size = world.size();
     let rank = world.rank();
     rprintln("IonSolver - © 2024\n", &world);
-    rprintln("IonSolver - © 2024\n", &world);
     println!("Launched Node {} of {}", rank, size);
 
     let mut cfg: LbmConfig;
     if rank == 0 { // If root, read and send config to all nodes
         cfg = LbmConfig::new();
-        cfg.units.set(128.0, 1.0, 1.0, 1.0, 0.1, 1.0, 1.2250, 0.0000000001);
-        cfg.n_x = 128;
-        cfg.n_y = 128;
-        cfg.n_z = 256;
+        cfg.units.set(1320.0, 1.0, 1.0, 1.0, 1.0, 0.1, 1.0, 1.2250, 0.0000000001, 1.0);
+        cfg.n_x = 1320;
+        cfg.n_y = 1320;
+        cfg.n_z = 1320;
+        cfg.d_x = 4;
+        cfg.d_y = 4;
         cfg.d_z = 2;
-        cfg.nu = cfg.units.si_to_nu(1.48E-5);
+        cfg.nu = cfg.units.nu_si_lu(1.48E-5);
         cfg.velocity_set = VelocitySet::D3Q19;
         cfg.mhd_lod_depth = 4;
-        cfg.run_steps = 1000;
+        cfg.run_steps = 30;
         // Extensions
         cfg.ext_volume_force = true;
         cfg.ext_magneto_hydro = true;
@@ -47,20 +48,20 @@ pub fn run_node() {
         cfg.graphics_config.camera_width = 1920;
         cfg.graphics_config.camera_height = 1080;
         cfg.graphics_config.streamline_every = 8;
-        cfg.graphics_config.vec_vis_mode = graphics::VecVisMode::EDyn;
-        cfg.graphics_config.u_max = 100.0;
+        cfg.graphics_config.vec_vis_mode = graphics::VecVisMode::U;
+        cfg.graphics_config.u_max = 0.4;
         cfg.graphics_config.streamline_mode = true;
         cfg.graphics_config.axes_mode = true;
         // Animation
         cfg.graphics_config.render_intervals = true;
         let mut f: Vec<graphics::Keyframe> = vec![];
-        for i in 0..100 {
+        for i in 0..800 {
             f.push(graphics::Keyframe {
                 time: i * 5,
                 repeat: false,
-                cam_rot_x: 50.0 + (i * 5) as f32,
+                cam_rot_x: 50.0 + (i as f32 * 0.5),
                 cam_rot_y: -20.0,
-                cam_zoom: 2.0,
+                cam_zoom: 0.4,
                 ..graphics::Keyframe::default()
             })
         }
@@ -85,15 +86,15 @@ pub fn run_node() {
 
     let mut domain = node_domain(&mut cfg, rank as u32); // Build domain for node
     println!("Build domain at Node {}", rank);
-    if rank == 0 {
-        let cpc = 0.002;
-        let charge: Vec<f32> = vec![cpc; 128 * 128 * 32];
-        bwrite!(domain.q.as_ref().expect("q"), charge);
-    }
+    //if rank == 0 {
+    //    let cpc = 0.002;
+    //    let charge: Vec<f32> = vec![cpc; 128 * 128 * 32];
+    //    bwrite!(domain.q.as_ref().expect("q"), charge);
+    //}
     world.barrier();
     rprintln("Beginning execution\n", &world);
-    //domain.node_taylor_green(1.0, &world);
-    domain.node_setup_velocity_field((0.1, 0.01, 0.0), 1.0);
+    domain.node_taylor_green(1.0, &world);
+    //domain.node_setup_velocity_field((0.1, 0.01, 0.0), 1.0);
     domain.node_initialize(&world);
 
     // Set correct camera parameters
@@ -105,6 +106,7 @@ pub fn run_node() {
     bwrite!(domain.graphics.as_ref().expect("graphics").camera_params, params);
 
     // Run for the configured step amount
+    let now = std::time::Instant::now();
     for s in 0..cfg.run_steps {
         // Run simulation time step
         domain.node_do_time_step(&world);
@@ -113,6 +115,7 @@ pub fn run_node() {
             domain.node_render_keyframes(s, &world);
         }
     }
+    rprintln(&format!("{} steps took {}s", cfg.run_steps, now.elapsed().as_secs()), &world);
 }
 
 /// Initialize an `LbmDomain` for a compute node
@@ -142,7 +145,7 @@ fn node_domain(cfg: &mut LbmConfig, rank: u32) -> LbmDomain {
         println!("1 OpenCL device detected on process {}. Using device 1: {}.", rank, dev.name().expect("name"));
     } else {
         dev = devices[rank as usize % devices.len()];
-        print!("{} OpenCL devices detected on process {}. Using device {}: {}", devices.len(), rank, rank % devices.len() as u32, dev.name().expect("name"));
+        println!("{} OpenCL devices detected on process {}. Using device {}: {}", devices.len(), rank, rank % devices.len() as u32, dev.name().expect("name"));
     }
 
     //println!("Using device {} for node {}.", default_device!().name().expect("name"), rank);
@@ -350,8 +353,8 @@ impl LbmDomain {
                     save_buffer.push((color & 0xFF) as u8);
                 }
                 let imgbuffer: ImageBuffer<Rgb<u8>, _> = ImageBuffer::from_raw(width, height, save_buffer).unwrap();
-                imgbuffer.save(format!(r"{}/../out/{}_{}.png", std::env::current_exe().unwrap().display(), name, step)).unwrap();
-                
+                //imgbuffer.save(format!(r"{}/../out/{}_{}.png", std::env::current_exe().unwrap().display(), name, step)).unwrap();
+                imgbuffer.save(format!(r"out/step_{}.png", step)).unwrap();
             });
         }
     }
