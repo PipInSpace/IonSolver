@@ -51,8 +51,8 @@ pub struct LbmDomain {
     pub n_lod_own: usize, // The number of LOD data chunks that belong to this domain
 
     pub f: Option<Buffer<f32>>,
-    pub e: Option<Buffer<f32>>, // Optional Buffers
-    pub b: Option<Buffer<f32>>,
+    pub e_stat: Option<Buffer<f32>>, // Optional Buffers
+    pub b_stat: Option<Buffer<f32>>,
     pub e_dyn: Option<Buffer<f32>>,
     pub b_dyn: Option<Buffer<f32>>,
     pub fqi: Option<VariableFloatBuffer>,
@@ -144,10 +144,10 @@ impl LbmDomain {
 
         // MAGNETO_HYDRO extension
         // Electric field buffer as 3D Vectors
-        let e: Option<Buffer<f32>> =     if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
+        let e_stat: Option<Buffer<f32>> =     if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
         let e_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
         // Magnetic field buffers as 3D Vectors
-        let b: Option<Buffer<f32>> =     if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
+        let b_stat: Option<Buffer<f32>> =     if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
         let b_dyn: Option<Buffer<f32>> = if lbm_config.ext_magneto_hydro { Some(buffer!(&queue, [n * 3], 0f32)) } else { None };
         // Charge ddfs and charge field buffers
         let fqi: Option<VariableFloatBuffer> = if lbm_config.ext_magneto_hydro {
@@ -214,7 +214,7 @@ impl LbmDomain {
         if lbm_config.ext_force_field { kernel_args!(stream_collide_builder, ("F", f.as_ref().expect("F"))); }
         if lbm_config.ext_magneto_hydro {
             kernel_args!(stream_collide_builder, ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
-            kernel_args!(initialize_builder,     ("E", e.as_ref().expect("e")), ("B", b.as_ref().expect("b")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
+            kernel_args!(initialize_builder,     ("E", e_stat.as_ref().expect("e_stat")), ("B", b_stat.as_ref().expect("b_stat")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")));
             
             match fqi.as_ref().expect("fqi should be initialized") {
                 VariableFloatBuffer::U16(fqi_u16) => {kernel_args!(stream_collide_builder, ("fqi", fqi_u16)); kernel_args!(initialize_builder, ("fqi", fqi_u16));},
@@ -230,7 +230,7 @@ impl LbmDomain {
 
             // Dynamic E/B kernel
             kernel_update_e_b_dyn = Some(
-                kernel!(program, queue, "update_e_b_dynamic", [n], ("E_stat", e.as_ref().expect("e_stat")), ("B_stat", b.as_ref().expect("b_stat")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")), ("Q", q.as_ref().expect("q")), ("u", &u), ("QU_lod", qu_lod.as_ref().expect("QU_lod")), ("flags", &flags))
+                kernel!(program, queue, "update_e_b_dynamic", [n], ("E_stat", e_stat.as_ref().expect("e_stat")), ("B_stat", b_stat.as_ref().expect("b_stat")), ("E_dyn", e_dyn.as_ref().expect("e_dyn")), ("B_dyn", b_dyn.as_ref().expect("b_dyn")), ("Q", q.as_ref().expect("q")), ("u", &u), ("QU_lod", qu_lod.as_ref().expect("QU_lod")), ("flags", &flags))
             );
             // Clear LOD
             kernel_clear_qu_lod = Some(
@@ -341,7 +341,7 @@ impl LbmDomain {
             transfer_lod_host,
             n_lod_own,
 
-            f, e, b, e_dyn, b_dyn, fqi, ei, q, qu_lod, e_var, eti,
+            f, e_stat, b_stat, e_dyn, b_dyn, fqi, ei, q, qu_lod, e_var, eti,
 
             t,
             graphics,
@@ -494,8 +494,8 @@ impl LbmDomain {
         let mut u: Vec<f32> = vec![0.0; n as usize * 3];
         let mut flags: Vec<u8> = vec![0; n as usize];
         let mut q: Vec<f32> = vec![0.0; n as usize];
-        let mut e: Vec<f32> = vec![0.0; n as usize * 3];
-        let mut b: Vec<f32> = vec![0.0; n as usize * 3];
+        let mut e_stat: Vec<f32> = vec![0.0; n as usize * 3];
+        let mut b_stat: Vec<f32> = vec![0.0; n as usize * 3];
         let mut e_dyn: Vec<f32> = vec![0.0; n as usize * 3];
         let mut b_dyn: Vec<f32> = vec![0.0; n as usize * 3];
 
@@ -508,15 +508,15 @@ impl LbmDomain {
             }
             None => {}
         }
-        match &self.e {
+        match &self.e_stat {
             Some(e_s) => {
-                e_s.read(&mut e).enq().unwrap();
+                e_s.read(&mut e_stat).enq().unwrap();
             }
             None => {}
         }
-        match &self.b {
+        match &self.b_stat {
             Some(b_s) => {
-                b_s.read(&mut b).enq().unwrap();
+                b_s.read(&mut b_stat).enq().unwrap();
             }
             None => {}
         }
@@ -537,15 +537,15 @@ impl LbmDomain {
         let u_x_si = cfg.units.speed_lu_si(u[c_x]);
         let u_y_si = cfg.units.speed_lu_si(u[c_y]);
         let u_z_si = cfg.units.speed_lu_si(u[c_z]);
-        let b_x_si = cfg.units.mag_flux_lu_si(b[c_x]);
-        let b_y_si = cfg.units.mag_flux_lu_si(b[c_y]);
-        let b_z_si = cfg.units.mag_flux_lu_si(b[c_z]);
+        let b_x_si = cfg.units.mag_flux_lu_si(b_stat[c_x]);
+        let b_y_si = cfg.units.mag_flux_lu_si(b_stat[c_y]);
+        let b_z_si = cfg.units.mag_flux_lu_si(b_stat[c_z]);
         let b_dyn_x_si = cfg.units.mag_flux_lu_si(b_dyn[c_x]);
         let b_dyn_y_si = cfg.units.mag_flux_lu_si(b_dyn[c_y]);
         let b_dyn_z_si = cfg.units.mag_flux_lu_si(b_dyn[c_z]);
-        let e_x_si = cfg.units.e_field_lu_si(e[c_x]);
-        let e_y_si = cfg.units.e_field_lu_si(e[c_y]);
-        let e_z_si = cfg.units.e_field_lu_si(e[c_z]);
+        let e_x_si = cfg.units.e_field_lu_si(e_stat[c_x]);
+        let e_y_si = cfg.units.e_field_lu_si(e_stat[c_y]);
+        let e_z_si = cfg.units.e_field_lu_si(e_stat[c_z]);
         let e_dyn_x_si = cfg.units.e_field_lu_si(e_dyn[c_x]);
         let e_dyn_y_si = cfg.units.e_field_lu_si(e_dyn[c_y]);
         let e_dyn_z_si = cfg.units.e_field_lu_si(e_dyn[c_z]);
@@ -557,8 +557,8 @@ impl LbmDomain {
     rho:    {} / {} kg/m³
     u:      {}, {}, {} / {}, {}, {} m/s
     flags:  {}
-    e:      {}, {}, {} / {}, {}, {} V/m
-    b:      {}, {}, {} / {}, {}, {} T
+    e_stat:      {}, {}, {} / {}, {}, {} V/m
+    b_stat:      {}, {}, {} / {}, {}, {} T
     e_dyn:  {}, {}, {} / {}, {}, {} V/m
     b_dyn:  {}, {}, {} / {}, {}, {} T
     charge: {} / {} As",
@@ -575,15 +575,15 @@ impl LbmDomain {
             u_y_si,
             u_z_si,
             flags[c],
-            e[c_x],
-            e[c_y],
-            e[c_z],
+            e_stat[c_x],
+            e_stat[c_y],
+            e_stat[c_z],
             e_x_si,
             e_y_si,
             e_z_si,
-            b[c_x],
-            b[c_y],
-            b[c_z],
+            b_stat[c_x],
+            b_stat[c_y],
+            b_stat[c_z],
             b_x_si,
             b_y_si,
             b_z_si,
