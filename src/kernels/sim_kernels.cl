@@ -583,7 +583,7 @@ __kernel void stream_collide(global fpxx* fi, global float* rho, global float* u
 			float Env_mag = length(Env - (dot(Env, Bn) / sq(length(B)))*Bn); // Magnitude of oscillating electric field components perpendicular to B, only these have effect for ECR
 
 			// Drift of gyrating electrons in magnetic field. We assume all kinetic energy from electron
-			// temperature is directed perpendicular to the magnetic field.
+			// temperature is directed perpendicular to the magnetic field. https://doi.org/10.1007/978-3-662-55236-0_1 2.2.4
 			// dv_∥/dt = (-0.5 * v_⟂^2 ∇ B)/B = (-1.5 * k_B * T_e * ∇ B)/(m_e * B)
 			float3 delta_u_par = (DEF_KKBME * Etn * grad_mag_v(n, B_dyn)) / length(Bn);
 			uxn_e += delta_u_par.x;
