@@ -256,11 +256,14 @@ impl LbmDomain {
         self.node_communicate_field(TransferField::Qi, bytes_per_cell, world);
     }
 
+    // Comunicate the charge/velocity LODs across domains. (needed for magnetohydrodynamics)
+    // Each node gathers data from all other nodes
     fn node_communicate_qu_lods(&mut self, world: &SimpleCommunicator) {
         let d_n = world.size(); // Number of nodes/domains
-        let dim = self.cfg.velocity_set.get_set_values().0 as u32;
-        let d = world.rank();
+        let dim = self.cfg.velocity_set.get_set_values().0 as u32; // Dimension of vekocity set (2D or 3D)
+        let d = world.rank(); // Number of this node/domain
 
+        // Get the offset for reading LOD buffers of set depth, depending on velocity set dimension
         fn get_offset(depth: i32, dim: u32) -> usize {
             let mut c = 0;
             for i in 0..=depth {c += ((1<<i) as usize).pow(dim)};
@@ -296,7 +299,7 @@ impl LbmDomain {
                     let (dx, dy, dz) = get_coordinates_sl(dc as u64, self.cfg.d_x, self.cfg.d_y); // Gather node coordinate
                     let dist: i32 = max((z as i32 - dz as i32).abs(), max((y as i32 - dy as i32).abs(), (x as i32 - dx as i32).abs()));
                     let depth = max(0, self.cfg.mhd_lod_depth as i32 - dist);
-                    // This is the range of relevant LOD data for the current foreign domain
+                    // This is the range of LOD data for the current foreign domain within the own LOD bufffer
                     let range_s = get_offset(depth - 1, dim); // Range start
                     let range_e = get_offset(depth, dim); // Range end
                     gather_node.gather_varcount_into(&self.transfer_lod_host.as_ref().expect("msg")[range_s*4..range_e*4])
