@@ -72,10 +72,10 @@ fn decode(buffer: &[u8], config: &mut LbmConfig) -> Result<Lbm, String> {
         _ => FloatType::FP16C, // should never happen
     };
 
-    config.units.m = stream.next_f32();
-    config.units.kg = stream.next_f32();
-    config.units.s = stream.next_f32();
-    config.units.a = stream.next_f32();
+    config.units.m_p_ll = stream.next_f32();
+    config.units.kg_p_lm = stream.next_f32();
+    config.units.s_p_lt = stream.next_f32();
+    config.units.a_p_lc = stream.next_f32();
 
     config.n_x = stream.next_u32();
     config.n_y = stream.next_u32();
@@ -197,10 +197,10 @@ fn encode(lbm: &Lbm) -> Vec<u8> {
     buffer.push(lbm.config.velocity_set as u8); // Enums as u8
     buffer.push(lbm.config.relaxation_time as u8);
     buffer.push(lbm.config.float_type as u8);
-    buffer.push32(lbm.config.units.m.to_bits()); // Units
-    buffer.push32(lbm.config.units.kg.to_bits());
-    buffer.push32(lbm.config.units.s.to_bits());
-    buffer.push32(lbm.config.units.a.to_bits());
+    buffer.push32(lbm.config.units.m_p_ll.to_bits()); // Units
+    buffer.push32(lbm.config.units.kg_p_lm.to_bits());
+    buffer.push32(lbm.config.units.s_p_lt.to_bits());
+    buffer.push32(lbm.config.units.a_p_lc.to_bits());
     buffer.push32(lbm.config.n_x); // Simulation sizes
     buffer.push32(lbm.config.n_y);
     buffer.push32(lbm.config.n_z);

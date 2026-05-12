@@ -12,16 +12,16 @@
 #[derive(Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 #[allow(non_snake_case)]
 pub struct Units {
-    /// meter
-    pub m: f32,
-    /// kilogram
-    pub kg: f32,
-    /// second
-    pub s: f32,
-    /// ampere
-    pub a: f32,
-    /// kelvin
-    pub k: f32,
+    /// meter per lattice length
+    pub m_p_ll: f32,
+    /// kilogram per lattice mass
+    pub kg_p_lm: f32,
+    /// second per lattice time
+    pub s_p_lt: f32,
+    /// ampere per lattice current
+    pub a_p_lc: f32,
+    /// kelvin per lattice temperature
+    pub k_p_lt: f32,
     // propellant gas
     pub prop: Propellant,
 }
@@ -29,11 +29,11 @@ pub struct Units {
 impl Units {
     pub fn new() -> Units {
         Units {
-            m: 1.0,
-            kg: 1.0,
-            s: 1.0,
-            a: 1.0,
-            k: 1.0,
+            m_p_ll: 1.0,
+            kg_p_lm: 1.0,
+            s_p_lt: 1.0,
+            a_p_lc: 1.0,
+            k_p_lt: 1.0,
             prop: Propellant::default(),
         }
     }
@@ -51,105 +51,105 @@ impl Units {
         si_charge: f32,
         si_temp: f32,
     ) {
-        self.m = si_length / lbm_length;
-        self.kg = si_rho / lbm_rho * cb(self.m);
-        self.s = self.m / (si_velocity / lbm_velocity);
-        self.a = si_charge / lbm_charge / self.s;
-        self.k = si_temp / lbm_temp;
+        self.m_p_ll = si_length / lbm_length;
+        self.kg_p_lm = si_rho / lbm_rho * cb(self.m_p_ll);
+        self.s_p_lt = self.m_p_ll / (si_velocity / lbm_velocity);
+        self.a_p_lc = si_charge / lbm_charge / self.s_p_lt;
+        self.k_p_lt = si_temp / lbm_temp;
     }
 
     // from lattice units to si units (need to be called after .set();)
     pub fn len_lu_si(&self, l: f32) -> f32 {
-        l * self.m
+        l * self.m_p_ll
     }
 
     pub fn mass_lu_si(&self, m: f32) -> f32 {
-        m * self.kg
+        m * self.kg_p_lm
     }
 
     pub fn dens_lu_si(&self, rho: f32) -> f32 {
-        rho * (self.kg / cb(self.m))
+        rho * (self.kg_p_lm / cb(self.m_p_ll))
     }
 
     pub fn time_lu_si(&self, t: f32) -> f32 {
-        t * self.s
+        t * self.s_p_lt
     }
 
     pub fn speed_lu_si(&self, v: f32) -> f32 {
-        v * (self.m / self.s)
+        v * (self.m_p_ll / self.s_p_lt)
     }
 
     pub fn force_lu_si(&self, f: f32) -> f32 {
-        f * (self.kg * (self.m / (self.s * self.s)))
+        f * (self.kg_p_lm * (self.m_p_ll / (self.s_p_lt * self.s_p_lt)))
     }
 
     pub fn charge_lu_si(&self, q: f32) -> f32 {
         // Unit: As
-        q * (self.a * self.s)
+        q * (self.a_p_lc * self.s_p_lt)
     }
 
     pub fn mag_flux_lu_si(&self, b: f32) -> f32 {
         // b unit is Tesla (T) = V * s / m^2 = ((kg * m^2 / (s^3 * A)) * s) / m^2 = kg / (A * s²)
-        b * (self.kg / (self.a * sq(self.s)))
+        b * (self.kg_p_lm / (self.a_p_lc * sq(self.s_p_lt)))
     }
 
     pub fn e_field_lu_si(&self, e: f32) -> f32 {
         // E unit: V/m = (kg * m^2 / (s^3 * A)) / m = (kg * m) / (A * s³)
-        e * ((self.kg * self.m) / (self.a * cb(self.s)))
+        e * ((self.kg_p_lm * self.m_p_ll) / (self.a_p_lc * cb(self.s_p_lt)))
     }
 
     // from si units to lattice units (need to be called after .set();)
     pub fn len_si_lu(&self, l: f32) -> f32 {
-        l / self.m
+        l / self.m_p_ll
     }
 
     pub fn mass_si_lu(&self, m: f32) -> f32 {
-        m / self.kg
+        m / self.kg_p_lm
     }
 
     pub fn dens_si_lu(&self, rho: f32) -> f32 {
-        rho / (self.kg / cb(self.m))
+        rho / (self.kg_p_lm / cb(self.m_p_ll))
     }
 
     pub fn time_si_lu(&self, t: f32) -> f32 {
-        t / self.s
+        t / self.s_p_lt
     }
 
     pub fn speed_si_lu(&self, v: f32) -> f32 {
-        v / (self.m / self.s)
+        v / (self.m_p_ll / self.s_p_lt)
     }
 
     pub fn force_si_lu(&self, f: f32) -> f32 {
-        f / (self.kg * (self.m / sq(self.s)))
+        f / (self.kg_p_lm * (self.m_p_ll / sq(self.s_p_lt)))
     }
 
     pub fn nu_si_lu(&self, nu: f32) -> f32 {
-        nu / (sq(self.m) / self.s)
+        nu / (sq(self.m_p_ll) / self.s_p_lt)
     }
 
     pub fn charge_si_lu(&self, q: f32) -> f32 {
         // unit: (A*s)
-        q / (self.a * self.s)
+        q / (self.a_p_lc * self.s_p_lt)
     }
 
     pub fn mag_flux_si_lu(&self, b: f32) -> f32 {
         // b unit is Tesla (T) = V * s / m^2 = ((kg * m^2 / (s^3 * A)) * s) / m^2 = kg / (A * s²)
-        b / (self.kg / (self.a * sq(self.s)))
+        b / (self.kg_p_lm / (self.a_p_lc * sq(self.s_p_lt)))
     }
 
     pub fn e_field_si_lu(&self, e: f32) -> f32 {
         // E unit: V/m = (kg * m^2 / (s^3 * A)) / m = (kg * m) / (A * s³)
-        e / ((self.kg * self.m) / (self.a * cb(self.s)))
+        e / ((self.kg_p_lm * self.m_p_ll) / (self.a_p_lc * cb(self.s_p_lt)))
     }
 
     pub fn magnetization_si_lu(&self, m: f32) -> f32 {
-        m / (self.a / self.m)
+        m / (self.a_p_lc / self.m_p_ll)
     }
 
     pub fn epsilon_0_lu(&self) -> f32 {
         // 8.8541878128E-12 F/m
         // Unit: F/m  ==  A * s / V * m  ==  A * s / (kg*m^2/s^3 * A) * m  ==  s^4 * A^2 / kg * m^3
-        8.8541878128E-12 / ((sq(self.a) * to4(self.s)) / (self.kg * cb(self.m)))
+        8.8541878128E-12 / ((sq(self.a_p_lc) * to4(self.s_p_lt)) / (self.kg_p_lm * cb(self.m_p_ll)))
     }
 
     pub fn ke_lu(&self) -> f32 {
@@ -163,7 +163,7 @@ impl Units {
     pub fn mu_0_lu(&self) -> f32 {
         // 1 / (epsilon_0 * c²) = mu_0 (Magnetic Field Constant)
         //1.25663706212E-6 / (self.kg * self.m / (self.c * self.c)) -- OLD
-        1.256637062E-6 / ((self.kg * self.m) / (sq(self.a) * sq(self.s)))
+        1.256637062E-6 / ((self.kg_p_lm * self.m_p_ll) / (sq(self.a_p_lc) * sq(self.s_p_lt)))
     }
 
     pub fn k_charge_expansion_lu(&self) -> f32 {
@@ -173,27 +173,27 @@ impl Units {
     }
 
     pub fn kkge_lu(&self) -> f32 { // Mass per charge constant for electrons
-        (9.109_383_713_9E-31_f64/-1.602_176_634E-19_f64) as f32 / (self.kg / (self.a * self.s))
+        (9.109_383_713_9E-31_f64/-1.602_176_634E-19_f64) as f32 / (self.kg_p_lm / (self.a_p_lc * self.s_p_lt))
     }
 
     pub fn kimg_lu(&self) -> f32 { // Inverse of mass of a propellant gas atom, scaled by 10^20
-        ((1.0/(self.prop.atom_mass() * 1e20)) / self.kg as f64) as f32
+        ((1.0/(self.prop.atom_mass() * 1e20)) / self.kg_p_lm as f64) as f32
     }
 
     pub fn kveV_lu(&self) -> f32 { // 9.10938356e-31kg / (2*1.6021766208e-19), velocity to eV for electrons
-        (9.109_383_713_9E-31_f64/(2.0_f64 * 1.602_176_634E-19_f64) / self.kg as f64) as f32
+        (9.109_383_713_9E-31_f64/(2.0_f64 * 1.602_176_634E-19_f64) / self.kg_p_lm as f64) as f32
     }
 
     pub fn kkBme_lu(&self) -> f32 { // -1.5 * 1.38064852e-23J/K / 9.10938356e-31kg -- m^2 * s^-2 * K^-1
-        (-22734499.72063751808909449412_f64 / (sqd(self.m as f64) / (sqd(self.s as f64) * self.k as f64)) ) as f32
+        (-22734499.72063751808909449412_f64 / (sqd(self.m_p_ll as f64) / (sqd(self.s_p_lt as f64) * self.k_p_lt as f64)) ) as f32
     }
 
     pub fn keabs_lu(&self) -> f32 { // -1.5 * 1.38064852e-23J/K / 9.10938356e-31kg -- m^2 * s^-2 * K^-1
-        (1.40897016100511360652E-8_f64 / (sqd(self.a as f64) * sqd(self.s as f64) / self.kg as f64 ) ) as f32
+        (1.40897016100511360652E-8_f64 / (sqd(self.a_p_lc as f64) * sqd(self.s_p_lt as f64) / self.kg_p_lm as f64 ) ) as f32
     }
 
     pub fn kme_lu(&self) -> f32 { // e / (m_e)
-        (5.68563006E-12_f64 / (self.kg as f64 / (self.a as f64 * self.s as f64))) as f32
+        (5.68563006E-12_f64 / (self.kg_p_lm as f64 / (self.a_p_lc as f64 * self.s_p_lt as f64))) as f32
     }
 
     /// From lbm.n_x and velocity u
